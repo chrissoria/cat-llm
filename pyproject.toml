@@ -1,0 +1,64 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "cat-llm"
+dynamic = ["version"]
+description = 'A tool for categorizing text data and images using LLMs and vision models'
+readme = "README.md"
+requires-python = ">=3.8"
+license = "MIT"
+keywords = ["llm","categorizer","survey data", "image classification", "structured output", "text classification"]
+authors = [
+  { name = "Christopher Soria", email = "chrissoria@berkeley.edu" },
+]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Programming Language :: Python",
+  "Programming Language :: Python :: 3.8",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: Implementation :: CPython",
+  "Programming Language :: Python :: Implementation :: PyPy",
+]
+dependencies = [
+  "pandas",
+  "tqdm"
+]
+
+[project.urls]
+Documentation = "https://github.com/Christopher Soria/cat-llm#readme"
+Issues = "https://github.com/Christopher Soria/cat-llm/issues"
+Source = "https://github.com/Christopher Soria/cat-llm"
+
+[tool.hatch.version]
+path = "src/cat_llm/__about__.py"
+
+[tool.hatch.envs.types]
+extra-dependencies = [
+  "mypy>=1.0.0",
+]
+[tool.hatch.envs.types.scripts]
+check = "mypy --install-types --non-interactive {args:src/cat_llm tests}"
+
+[tool.coverage.run]
+source_pkgs = ["cat_llm", "tests"]
+branch = true
+parallel = true
+omit = [
+  "src/cat_llm/__about__.py",
+]
+
+[tool.coverage.paths]
+cat_llm = ["src/cat_llm", "*/cat-llm/src/cat_llm"]
+tests = ["tests", "*/cat-llm/tests"]
+
+[tool.coverage.report]
+exclude_lines = [
+  "no cov",
+  "if __name__ == .__main__.:",
+  "if TYPE_CHECKING:",
+]
