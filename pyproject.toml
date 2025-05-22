@@ -31,29 +31,32 @@ dependencies = [
 
 [project.urls]
 Documentation = "https://github.com/Christopher Soria/cat-llm#readme"
-Issues = "https://github.com/Christopher Soria/cat-llm/issues"
-Source = "https://github.com/Christopher Soria/cat-llm"
+Issues = "https://github.com/chrissoria/cat-llm/issues"
+Source = "https://github.com/chrissoria/cat-llm"
 
 [tool.hatch.version]
-path = "src/cat_llm/__about__.py"
+path = "src/catllm/__about__.py"
 
 [tool.hatch.envs.types]
 extra-dependencies = [
   "mypy>=1.0.0",
 ]
 [tool.hatch.envs.types.scripts]
-check = "mypy --install-types --non-interactive {args:src/cat_llm tests}"
+check = "mypy --install-types --non-interactive {args:src/catllm tests}"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/catllm"]
 
 [tool.coverage.run]
-source_pkgs = ["cat_llm", "tests"]
+source_pkgs = ["catllm", "tests"]
 branch = true
 parallel = true
 omit = [
-  "src/cat_llm/__about__.py",
+  "src/catllm/__about__.py",
 ]
 
 [tool.coverage.paths]
-cat_llm = ["src/cat_llm", "*/cat-llm/src/cat_llm"]
+catllm = ["src/catllm", "*/cat-llm/src/catllm"]
 tests = ["tests", "*/cat-llm/tests"]
 
 [tool.coverage.report]
