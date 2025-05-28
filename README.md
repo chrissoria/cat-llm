@@ -1,4 +1,4 @@
-![catllm Logo](https://raw.githubusercontent.com/ChristopherSoria/cat-llm/main/src/catllm/images/logo.png)
+![catllm Logo](https://github.com/chrissoria/cat-llm/blob/main/images/logo.png)
 
 # cat_llm
 
