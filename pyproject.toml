@@ -46,6 +46,14 @@ check = "mypy --install-types --non-interactive {args:src/catllm tests}"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/catllm"]
+include = [
+    "src/catllm/images/*",
+]
+
+[tool.hatch.build.targets.sdist]
+include = [
+    "src/catllm/images/*",
+]
 
 [tool.coverage.run]
 source_pkgs = ["catllm", "tests"]
