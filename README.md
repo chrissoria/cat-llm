@@ -1,4 +1,7 @@
-![catllm Logo](https://github.com/chrissoria/cat-llm/blob/main/images/logo.png)
+<p style="float: right; width: 150px; margin: 0 0 10px 10px;">
+  <img src="https://github.com/chrissoria/cat-llm/blob/main/images/logo.png" alt="catllm Logo" style="width: 100%; height: auto;" />
+</p>
+
 
 # cat_llm
 
