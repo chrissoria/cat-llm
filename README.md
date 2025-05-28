@@ -1,9 +1,6 @@
-<p style="float: right; width: 150px; margin: 0 0 10px 10px;">
-  <img src="https://github.com/chrissoria/cat-llm/blob/main/images/logo.png" alt="catllm Logo" style="width: 100%; height: auto;" />
-</p>
+![catllm Logo](https://github.com/chrissoria/cat-llm/blob/main/images/logo.png?raw=True)
 
-
-# cat_llm
+# catllm
 
 [![PyPI - Version](https://img.shields.io/pypi/v/cat-llm.svg)](https://pypi.org/project/cat-llm)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/cat-llm.svg)](https://pypi.org/project/cat-llm)
