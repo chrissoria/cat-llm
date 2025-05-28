@@ -1,3 +1,5 @@
+![catllm Logo](https://raw.githubusercontent.com/ChristopherSoria/cat-llm/main/src/catllm/images/logo.png)
+
 # cat_llm
 
 [![PyPI - Version](https://img.shields.io/pypi/v/cat-llm.svg)](https://pypi.org/project/cat-llm)
