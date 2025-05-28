@@ -11,6 +11,4 @@ from .__about__ import (
     __license__,
 )
 
-
 from .cat_llm import *
-__version__ = "0.1.0"

@@ -1,5 +1,5 @@
 #multi-class text classification
-def llm_extract_multi_class(
+def extract_multi_class(
     survey_question, 
     survey_input,
     categories,
@@ -177,7 +177,7 @@ Provide your work in JSON format where the number belonging to each category is 
     return categorized_data
 
 # image multi-class (binary) function
-def llm_extract_image_multi_class(
+def extract_image_multi_class(
     image_description, 
     image_input,
     categories,
@@ -403,7 +403,7 @@ def llm_extract_image_multi_class(
     return categorized_data
 
 #image score function
-def llm_extract_image_score(
+def extract_image_score(
     reference_image_description,
     image_input,
     reference_image,
@@ -631,7 +631,7 @@ def llm_extract_image_score(
     return categorized_data
 
 # image features function
-def llm_extract_image_features(
+def extract_image_features(
     image_description, 
     image_input,
     features_to_extract,
@@ -865,3 +865,96 @@ def llm_extract_image_features(
         categorized_data.to_csv(os.path.join(save_directory, filename), index=False)
     
     return categorized_data
+
+#extract categories from corpus
+def explore_corpus(
+    survey_question, 
+    survey_input,
+    api_key,
+    cat_num=10,
+    divisions=5,
+    user_model="gpt-4o-2024-11-20",
+    creativity=0,
+    filename="corpus_exploration.csv",
+    model_source="OpenAI"
+):
+    import os
+    import pandas as pd
+    import random
+    from openai import OpenAI
+    from openai import OpenAI, BadRequestError
+    from tqdm import tqdm
+
+    print(f"Exploring class for question: '{survey_question}'.\n          {cat_num * divisions} unique categories to be extracted.")
+    print()
+
+    chunk_size = round(max(1, len(survey_input) / divisions),0)
+    chunk_size = int(chunk_size)
+
+    if chunk_size < (cat_num/2):
+        raise ValueError(f"Cannot extract {cat_num} categories from chunks of only {chunk_size} responses. \n" 
+                    f"Choose one solution: \n"
+                    f"(1) Reduce 'divisions' parameter (currently {divisions}) to create larger chunks, or \n"
+                    f"(2) Reduce 'cat_num' parameter (currently {cat_num}) to extract fewer categories per chunk.")
+
+    random_chunks = []
+    for i in range(divisions):
+        chunk = survey_input.sample(n=chunk_size).tolist()
+        random_chunks.append(chunk)
+    
+    responses = []
+    responses_list = []
+    
+    for i in tqdm(range(divisions), desc="Processing chunks"):
+        survey_participant_chunks = '; '.join(random_chunks[i])
+        prompt = f"""Identify {cat_num} broad categories of responses to the question "{survey_question}" in the following list of responses. \
+Responses are each separated by a semicolon. \
+Responses are contained within triple backticks here: ```{survey_participant_chunks}``` \
+Number your categories from 1 through {cat_num} and be concise with the category labels and provide no description of the categories."""
+        
+        if model_source == "OpenAI":
+            client = OpenAI(api_key=api_key)
+            try:
+                response_obj = client.chat.completions.create(
+                    model=user_model,
+                    messages=[{'role': 'user', 'content': prompt}],
+                    temperature=creativity
+                )
+                reply = response_obj.choices[0].message.content
+                responses.append(reply)
+            except BadRequestError as e:
+                if "context_length_exceeded" in str(e) or "maximum context length" in str(e):
+                    error_msg = (f"Token limit exceeded for model {user_model}. "
+                        f"Try increasing the 'iterations' parameter to create smaller chunks.")
+                    raise ValueError(error_msg)
+                else:
+                    print(f"OpenAI API error: {e}")
+            except Exception as e:
+                print(f"An error occurred: {e}")
+        else:
+            raise ValueError(f"Unsupported model_source: {model_source}")
+        
+        # Extract just the text as a list
+        items = []
+        for line in responses[i].split('\n'):
+            if '. ' in line:
+                try:
+                    items.append(line.split('. ', 1)[1])
+                except IndexError:
+                    pass
+
+        responses_list.append(items)
+
+    flat_list = [item.lower() for sublist in responses_list for item in sublist]
+
+    #convert flat_list to a df
+    df = pd.DataFrame(flat_list, columns=['Category'])
+    counts = pd.Series(flat_list).value_counts()  # Use original list before conversion
+    df['counts'] = df['Category'].map(counts)
+    df = df.sort_values(by='counts', ascending=False).reset_index(drop=True)
+    df = df.drop_duplicates(subset='Category', keep='first').reset_index(drop=True)
+
+    if filename is not None:
+        df.to_csv(filename, index=False)
+    
+    return df
