@@ -35,7 +35,7 @@ Our study uses the UC Berkeley Social Networks Study as a test case, comparing G
 The `academic_examples/` directory contains the exact methodology and code used in our research:
 
 academic_examples/
-├── ucnets_replication.py # Main replication script
+├── extract_multi_class_ucnets.py # Main replication script
 ├── model_comparison.py # Multi-model comparison analysis
 ├── performance_analysis.py # Accuracy and demographic analysis
 ├── methodology_documentation.md # Detailed methodology
@@ -145,7 +145,7 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 ## Contact
 
-- **Author**: Christopher Soria
+- **Author**: Chris Soria
 - **Email**: chrissoria@berkeley.edu
 - **Institution**: UC Berkeley
 - **GitHub**: [@chrissoria](https://github.com/chrissoria)
