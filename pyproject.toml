@@ -30,7 +30,7 @@ dependencies = [
 ]
 
 [project.urls]
-Documentation = "https://github.com/Christopher Soria/cat-llm#readme"
+Documentation = "https://github.com/chrissoria/cat-llm#readme"
 Issues = "https://github.com/chrissoria/cat-llm/issues"
 Source = "https://github.com/chrissoria/cat-llm"
 
@@ -45,13 +45,15 @@ extra-dependencies = [
 check = "mypy --install-types --non-interactive {args:src/catllm tests}"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/catllm"]
+packages = ["src/catllm"]  # Keep the src/ prefix for wheel
 include = [
+    "src/catllm/**/*.py",
     "src/catllm/images/*",
 ]
 
 [tool.hatch.build.targets.sdist]
 include = [
+    "src/catllm/**/*.py",
     "src/catllm/images/*",
 ]
 

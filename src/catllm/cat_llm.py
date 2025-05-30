@@ -25,12 +25,9 @@ def extract_multi_class(
     example_JSON = json.dumps(category_dict, indent=4)
 
     # ensure number of categories is what user wants
-    print("\nPlease verify the categories you entered:")
+    print("\nThe categories you entered:")
     for i, cat in enumerate(categories, 1):
         print(f"{i}. {cat}")
-    response = input("\nIf the list above is correct, type 'next' and press Enter to continue: ")
-    while response.strip().lower() != "next":
-        response = input("Please type 'next' to continue: ")
     
     link1 = []
     extracted_jsons = []
@@ -684,18 +681,9 @@ def extract_image_features(
     example_JSON = json.dumps(category_dict, indent=4)
 
     # ensure number of categories is what user wants
-    print("\nPlease verify the categories you entered:")
+    print("\nThe image features to be extracted are:")
     for i, cat in enumerate(features_to_extract, 1):
         print(f"{i}. {cat}")
-    print("\nIf the list above is correct, type 'next' and press Enter to continue.")
-    print("Type 'exit' to cancel the operation.")
-
-    print("\nPlease verify the categories you entered:")
-    for i, cat in enumerate(features_to_extract, 1):
-        print(f"{i}. {cat}")
-    response = input("\nIf the list above is correct, type 'next' and press Enter to continue: ")
-    while response.strip().lower() != "next":
-        response = input("Please type 'next' to continue: ")
     
     link1 = []
     extracted_jsons = []
@@ -871,6 +859,8 @@ def explore_corpus(
     survey_question, 
     survey_input,
     api_key,
+    research_question=None,
+    specificity="broad",
     cat_num=10,
     divisions=5,
     user_model="gpt-4o-2024-11-20",
@@ -892,7 +882,7 @@ def explore_corpus(
     chunk_size = int(chunk_size)
 
     if chunk_size < (cat_num/2):
-        raise ValueError(f"Cannot extract {cat_num} categories from chunks of only {chunk_size} responses. \n" 
+        raise ValueError(f"Cannot extract {cat_num} {specificity} categories from chunks of only {chunk_size} responses. \n" 
                     f"Choose one solution: \n"
                     f"(1) Reduce 'divisions' parameter (currently {divisions}) to create larger chunks, or \n"
                     f"(2) Reduce 'cat_num' parameter (currently {cat_num}) to extract fewer categories per chunk.")
@@ -907,7 +897,7 @@ def explore_corpus(
     
     for i in tqdm(range(divisions), desc="Processing chunks"):
         survey_participant_chunks = '; '.join(random_chunks[i])
-        prompt = f"""Identify {cat_num} broad categories of responses to the question "{survey_question}" in the following list of responses. \
+        prompt = f"""Identify {cat_num} {specificity} categories of responses to the question "{survey_question}" in the following list of responses. \
 Responses are each separated by a semicolon. \
 Responses are contained within triple backticks here: ```{survey_participant_chunks}``` \
 Number your categories from 1 through {cat_num} and be concise with the category labels and provide no description of the categories."""
@@ -917,7 +907,12 @@ Number your categories from 1 through {cat_num} and be concise with the category
             try:
                 response_obj = client.chat.completions.create(
                     model=user_model,
-                    messages=[{'role': 'user', 'content': prompt}],
+                    messages=[
+                        {'role': 'system', 'content': f"""You are a helpful assistant that extracts categories from survey responses. \
+                                                    The specific task is to identify {specificity} categories of responses to a survey question. \
+                         The research question is: {research_question}""" if research_question else "You are a helpful assistant."},
+                        {'role': 'user', 'content': prompt}
+                    ]
                     temperature=creativity
                 )
                 reply = response_obj.choices[0].message.content
@@ -958,3 +953,123 @@ Number your categories from 1 through {cat_num} and be concise with the category
         df.to_csv(filename, index=False)
     
     return df
+
+#extract top categories from corpus
+def explore_common_categories(
+    survey_question, 
+    survey_input,
+    api_key,
+    top_n=10,
+    cat_num=10,
+    divisions=5,
+    user_model="gpt-4o-2024-11-20",
+    creativity=0,
+    specificity="broad",
+    research_question=None,
+    filename=None,
+    model_source="OpenAI"
+):
+    import os
+    import pandas as pd
+    import random
+    from openai import OpenAI
+    from openai import OpenAI, BadRequestError
+    from tqdm import tqdm
+
+    print(f"Exploring class for question: '{survey_question}'.\n          {cat_num * divisions} unique categories to be extracted and {top_n} to be identified as the most common.")
+    print()
+
+    chunk_size = round(max(1, len(survey_input) / divisions),0)
+    chunk_size = int(chunk_size)
+
+    if chunk_size < (cat_num/2):
+        raise ValueError(f"Cannot extract {cat_num} categories from chunks of only {chunk_size} responses. \n" 
+                    f"Choose one solution: \n"
+                    f"(1) Reduce 'divisions' parameter (currently {divisions}) to create larger chunks, or \n"
+                    f"(2) Reduce 'cat_num' parameter (currently {cat_num}) to extract fewer categories per chunk.")
+
+    random_chunks = []
+    for i in range(divisions):
+        chunk = survey_input.sample(n=chunk_size).tolist()
+        random_chunks.append(chunk)
+    
+    responses = []
+    responses_list = []
+    
+    for i in tqdm(range(divisions), desc="Processing chunks"):
+        survey_participant_chunks = '; '.join(random_chunks[i])
+        prompt = f"""Identify {cat_num} {specificity} categories of responses to the question "{survey_question}" in the following list of responses. \
+Responses are each separated by a semicolon. \
+Responses are contained within triple backticks here: ```{survey_participant_chunks}``` \
+Number your categories from 1 through {cat_num} and be concise with the category labels and provide no description of the categories."""
+        
+        if model_source == "OpenAI":
+            client = OpenAI(api_key=api_key)
+            try:
+                response_obj = client.chat.completions.create(
+                    model=user_model,
+                    messages=[
+                        {'role': 'system', 'content': f"""You are a helpful assistant that extracts categories from survey responses. \
+                                                    The specific task is to identify {specificity} categories of responses to a survey question. \
+                         The research question is: {research_question}""" if research_question else "You are a helpful assistant."},
+                        {'role': 'user', 'content': prompt}
+                    ],
+                    temperature=creativity
+                )
+                reply = response_obj.choices[0].message.content
+                responses.append(reply)
+            except BadRequestError as e:
+                if "context_length_exceeded" in str(e) or "maximum context length" in str(e):
+                    error_msg = (f"Token limit exceeded for model {user_model}. "
+                        f"Try increasing the 'iterations' parameter to create smaller chunks.")
+                    raise ValueError(error_msg)
+                else:
+                    print(f"OpenAI API error: {e}")
+            except Exception as e:
+                print(f"An error occurred: {e}")
+        else:
+            raise ValueError(f"Unsupported model_source: {model_source}")
+        
+        # Extract just the text as a list
+        items = []
+        for line in responses[i].split('\n'):
+            if '. ' in line:
+                try:
+                    items.append(line.split('. ', 1)[1])
+                except IndexError:
+                    pass
+
+        responses_list.append(items)
+
+    flat_list = [item.lower() for sublist in responses_list for item in sublist]
+
+    #convert flat_list to a df
+    df = pd.DataFrame(flat_list, columns=['Category'])
+    counts = pd.Series(flat_list).value_counts()  # Use original list before conversion
+    df['counts'] = df['Category'].map(counts)
+    df = df.sort_values(by='counts', ascending=False).reset_index(drop=True)
+    df = df.drop_duplicates(subset='Category', keep='first').reset_index(drop=True)
+
+    second_prompt = f"""From this list of categories, extract the top {top_n} most common categories. \
+The categories are contained within triple backticks here: ```{df['Category'].tolist()}``` \
+Return the top {top_n} categories as a numbered list sorted from the most to least common and keep the categories {specificity}, with no additional text or explanation."""
+        
+    if model_source == "OpenAI":
+        client = OpenAI(api_key=api_key)
+        response_obj = client.chat.completions.create(
+            model=user_model,
+            messages=[{'role': 'user', 'content': second_prompt}],
+            temperature=creativity
+        )
+    top_categories = response_obj.choices[0].message.content
+    print(top_categories)
+
+    top_categories_final = []
+    for line in top_categories.split('\n'):
+        if '. ' in line:
+            try:
+                top_categories_final.append(line.split('. ', 1)[1])
+            except IndexError:
+                pass
+
+    return top_categories_final
