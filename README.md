@@ -10,6 +10,8 @@
 ## Table of Contents
 
 - [Installation](#installation)
+- [Quick Start](#quick-start)
+- [API Reference](#api-reference)
 - [License](#license)
 
 ## Installation
