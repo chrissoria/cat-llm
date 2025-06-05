@@ -11,6 +11,6 @@ from .__about__ import (
     __license__,
 )
 
-from .cat_llm import *
+from .text_functions import *
 from .CERAD_functions import * 
 from .image_functions import * 

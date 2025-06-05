@@ -72,7 +72,7 @@ def image_multi_class(
     
     # Handle extension safely
         ext = Path(img_path).suffix.lstrip(".").lower()
-        if model_source == "OpenAI":
+        if model_source == "OpenAI" or model_source == "Mistral":
             encoded_image = f"data:image/{ext};base64,{encoded}"
             prompt = [
                 {
@@ -309,7 +309,7 @@ def image_score(
         ext = Path(img_path).suffix.lstrip(".").lower()
         encoded_image = f"data:image/{ext};base64,{encoded}"
 
-        if model_source == "OpenAI":
+        if model_source == "OpenAI" or model_source == "Mistral":
             prompt = [
                 {
                     "type": "text",
@@ -575,7 +575,7 @@ def image_features(
         ext = Path(img_path).suffix.lstrip(".").lower()
         encoded_image = f"data:image/{ext};base64,{encoded}"
 
-        if model_source == "OpenAI":
+        if model_source == "OpenAI" or model_source == "Mistral":
             prompt = [
                 {
                     "type": "text",
