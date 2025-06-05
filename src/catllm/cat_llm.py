@@ -219,7 +219,7 @@ Return the top {top_n} categories as a numbered list sorted from the most to lea
     return top_categories_final
 
 #multi-class text classification
-def extract_multi_class(
+def multi_class(
     survey_question, 
     survey_input,
     categories,
@@ -392,4 +392,3 @@ Provide your work in JSON format where the number belonging to each category is 
         categorized_data.to_csv(os.path.join(save_directory, filename), index=False)
     
     return categorized_data
-

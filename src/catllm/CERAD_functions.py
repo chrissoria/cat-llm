@@ -130,28 +130,79 @@ def cerad_drawn_score(
             reference_text = f"This image contains a perfect reference image of a {shape}. Next to is a drawing that is meant to be similar to the reference {shape}.\n\n"
         else:
             reference_text = f"Image is expected to show within it a drawing of a {shape}.\n\n"
-    
-        prompt = [
-            {
-                "type": "text",
-                "text": (
-                    f"You are an image-tagging assistant trained in the CERAD Constructional Praxis test.\n"
-                    f"Task ► Examine the attached image and decide, **for each category below**, "
-                    f"whether it is PRESENT (1) or NOT PRESENT (0).\n\n"
-                    f"{reference_text}"
-                    f"Categories:\n{categories_str}\n\n"
-                    f"Output format ► Respond with **only** a JSON object whose keys are the "
-                    f"quoted category numbers ('1', '2', …) and whose values are 1 or 0. "
-                    f"No additional keys, comments, or text.\n\n"
-                    f"Example:\n"
-                    f"{example_JSON}"
-                ),
-            },
-            {
-                "type": "image_url",
-                "image_url": {"url": encoded_image, "detail": "high"},
-            },
-        ]
+
+        if model_source == "OpenAI":
+            prompt = [
+                {
+                    "type": "text",
+                    "text": (
+                        f"You are an image-tagging assistant trained in the CERAD Constructional Praxis test.\n"
+                        f"Task ► Examine the attached image and decide, **for each category below**, "
+                        f"whether it is PRESENT (1) or NOT PRESENT (0).\n\n"
+                        f"{reference_text}"
+                        f"Categories:\n{categories_str}\n\n"
+                        f"Output format ► Respond with **only** a JSON object whose keys are the "
+                        f"quoted category numbers ('1', '2', …) and whose values are 1 or 0. "
+                        f"No additional keys, comments, or text.\n\n"
+                        f"Example:\n"
+                        f"{example_JSON}"
+                        ),
+                        },
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": encoded_image, "detail": "high"},
+                            }
+            ]
+        elif model_source == "Anthropic":
+            prompt = [
+                {
+                    "type": "text",
+                    "text": (
+                        f"You are an image-tagging assistant trained in the CERAD Constructional Praxis test.\n"
+                        f"Task ► Examine the attached image and decide, **for each category below**, "
+                        f"whether it is PRESENT (1) or NOT PRESENT (0).\n\n"
+                        f"{reference_text}"
+                        f"Categories:\n{categories_str}\n\n"
+                        f"Output format ► Respond with **only** a JSON object whose keys are the "
+                        f"quoted category numbers ('1', '2', …) and whose values are 1 or 0. "
+                        f"No additional keys, comments, or text.\n\n"
+                        f"Example:\n"
+                        f"{example_JSON}"
+                    ),
+                },
+                {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/jpeg",
+                        "data": encoded
+                    }
+                    }
+            ]
+
+        elif model_source == "Mistral":
+            prompt = [
+                {
+                    "type": "text",
+                    "text": (
+                        f"You are an image-tagging assistant trained in the CERAD Constructional Praxis test.\n"
+                        f"Task ► Examine the attached image and decide, **for each category below**, "
+                        f"whether it is PRESENT (1) or NOT PRESENT (0).\n\n"
+                        f"{reference_text}"
+                        f"Categories:\n{categories_str}\n\n"
+                        f"Output format ► Respond with **only** a JSON object whose keys are the "
+                        f"quoted category numbers ('1', '2', …) and whose values are 1 or 0. "
+                        f"No additional keys, comments, or text.\n\n"
+                        f"Example:\n"
+                        f"{example_JSON}"
+                    ),
+                },
+                {
+                    "type": "image_url",
+                    "image_url": f"data:image/jpeg;base64,{encoded}"
+                }
+            ]
+            
         if model_source == "OpenAI":
             from openai import OpenAI
             client = OpenAI(api_key=api_key)
@@ -167,20 +218,6 @@ def cerad_drawn_score(
                 print(f"An error occurred: {e}")
                 link1.append(f"Error processing input: {e}")
 
-        elif model_source == "Perplexity":
-            from openai import OpenAI
-            client = OpenAI(api_key=api_key, base_url="https://api.perplexity.ai")
-            try:
-                response_obj = client.chat.completions.create(
-                    model=user_model,
-                    messages=[{'role': 'user', 'content': prompt}],
-                    temperature=creativity
-                )
-                reply = response_obj.choices[0].message.content
-                link1.append(reply)
-            except Exception as e:
-                print(f"An error occurred: {e}")
-                link1.append(f"Error processing input: {e}")
         elif model_source == "Anthropic":
             import anthropic
             client = anthropic.Anthropic(api_key=api_key)
@@ -196,8 +233,10 @@ def cerad_drawn_score(
             except Exception as e:
                 print(f"An error occurred: {e}")
                 link1.append(f"Error processing input: {e}")
+
         elif model_source == "Mistral":
             from mistralai import Mistral
+            reply = None
             client = Mistral(api_key=api_key)
             try:
                 response = client.chat.complete(
@@ -213,7 +252,7 @@ def cerad_drawn_score(
                 print(f"An error occurred: {e}")
                 link1.append(f"Error processing input: {e}")
         else:
-            raise ValueError("Unknown source! Choose from OpenAI, Anthropic, Perplexity, or Mistral")
+            raise ValueError("Unknown source! Choose from OpenAI, Perplexity, or Mistral")
             # in situation that no JSON is found
         if reply is not None:
             extracted_json = regex.findall(r'\{(?:[^{}]|(?R))*\}', reply, regex.DOTALL)
