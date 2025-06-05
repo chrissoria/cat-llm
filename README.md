@@ -12,7 +12,9 @@
 - [Installation](#installation)
 - [Quick Start](#quick-start)
 - [Configuration](#configuration)
+- [Supported Models](#supported-models)
 - [API Reference](#api-reference)
+- [Academic Research](#academic-research)
 - [License](#license)
 
 ## Installation
