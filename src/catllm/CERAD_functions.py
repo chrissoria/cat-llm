@@ -2,6 +2,12 @@
 # specifically for pictures of drawings of shapes like circles, diamonds, rectangles, and cubes
 
 """
+Ket features:
+1. Shape-specific scoring: The function can handle different shapes (circle, diamond, rectangles, cube) and provides tailored categories for each shape.
+2. Image input handling: It accepts image inputs either as file paths or a list of images.
+3. Model flexibility: The function allows users to specify different models (OpenAI, Anthropic, Perplexity, Mistral) for image analysis.
+4. Safety and progress saving: It can save progress to a CSV file, which is useful for long-running tasks or when processing many images.
+
 Areas for improvement:
 1. Prompt refinement: adjusting the prompt so that it produces a more accurate score.
 2. Image preprocessing: adjusting the images so that they are easier to be analyzed by the models.
@@ -19,7 +25,7 @@ def cerad_drawn_score(
     shape, 
     image_input,
     api_key,
-    user_model="gpt-4o-2024-11-20",
+    user_model="gpt-4o",
     creativity=0,
     reference_in_image=False,
     provide_reference=False,
@@ -40,8 +46,8 @@ def cerad_drawn_score(
 
     if shape == "circle":
         categories = ["The image contains a drawing that clearly represents a circle",
-                    "The drawing does not resemble a circle",
-                    "The drawing resembles a circle",
+                    "The image does NOT contain any drawing that resembles a circle",
+                    "The image contains a drawing that resembles a circle",
                     "The circle is closed",
                     "The circle is almost closed",
                     "The circle is circular",
@@ -58,12 +64,12 @@ def cerad_drawn_score(
                     "None of the above descriptions apply"]
     elif shape == "rectangles" or shape == "overlapping rectangles":
         categories = ["The image contains a drawing that clearly represents overlapping rectangles",
-                    "A drawn shape DOES NOT resemble a overlapping rectangles",
-                    "A drawn shape resembles a overlapping rectangles",
-                    "Rectangle 1 has 4 sides",
-                    "Rectangle 2 has 4 sides",
-                    "The rectangles are overlapping",
-                    "The rectangles overlap contains a longer vertical rectangle with top and bottom portruding",
+                    "The image does NOT contain any drawing that resembles overlapping rectangles",
+                    "The image contains a drawing that resembles overlapping rectangles",
+                    "If rectangle 1 is present it has 4 sides",
+                    "If rectablge 2 is present it has 4 sides",
+                    "The drawn rectangles are overlapping",
+                    "The drawn rectangles overlap to form a longer vertical rectangle with top and bottom sticking out",
                     "None of the above descriptions apply"]
     elif shape == "cube":
         categories = ["The image contains a drawing that clearly represents a cube (3D box shape)",
