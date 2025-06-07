@@ -41,9 +41,10 @@ def cerad_drawn_score(
     import glob
     import base64
     from pathlib import Path
+    import pkg_resources
 
     shape = shape.lower()
-
+    shape = "rectangles" if shape == "overlapping rectangles" else shape
     if shape == "circle":
         categories = ["The image contains a drawing that clearly represents a circle",
                     "The image does NOT contain any drawing that resembles a circle",
@@ -107,6 +108,17 @@ def cerad_drawn_score(
     cat_num = len(categories)
     category_dict = {str(i+1): "0" for i in range(cat_num)}
     example_JSON = json.dumps(category_dict, indent=4)
+
+    #pulling in the reference image if provided
+    if provide_reference:
+        reference_image_path = pkg_resources.resource_filename(
+            'catllm', 
+            f'images/{shape}.png'  # e.g., "circle.png"
+        )
+        ext = Path(reference_image_path).suffix[1:]
+        with open(reference_image_path, 'rb') as f:
+            encoded_ref = base64.b64encode(f.read()).decode('utf-8')
+        encoded_ref_image = f"data:image/{ext};base64,{encoded_ref}"
     
     link1 = []
     extracted_jsons = []
@@ -146,13 +158,21 @@ def cerad_drawn_score(
                         f"No additional keys, comments, or text.\n\n"
                         f"Example:\n"
                         f"{example_JSON}"
-                        ),
-                        },
-                        {
-                            "type": "image_url",
-                            "image_url": {"url": encoded_image, "detail": "high"},
-                            }
+                        )
+                }
             ]
+                        # Conditionally add reference image
+            if provide_reference:
+                prompt.append({
+                    "type": "image_url", 
+                    "image_url": {"url": encoded_ref_image, "detail": "high"}
+                })
+                                
+            prompt.append({
+                "type": "image_url",
+                "image_url": {"url": encoded_image, "detail": "high"}
+            })
+        
         elif model_source == "Anthropic":
             prompt = [
                 {
@@ -169,16 +189,29 @@ def cerad_drawn_score(
                         f"Example:\n"
                         f"{example_JSON}"
                     ),
-                },
-                {
+                }
+            ]
+
+            if provide_reference:
+                prompt.append({
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/png",
+                        "data": encoded_ref
+                    }
+                }
+                )
+
+            prompt.append({
                     "type": "image",
                     "source": {
                         "type": "base64",
                         "media_type": "image/jpeg",
                         "data": encoded
                     }
-                    }
-            ]
+            }
+            )
 
         elif model_source == "Mistral":
             prompt = [

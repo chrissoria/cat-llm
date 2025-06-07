@@ -26,7 +26,8 @@ classifiers = [
 ]
 dependencies = [
   "pandas",
-  "tqdm"
+  "tqdm",
+  "pkg_resources"
 ]
 
 [project.urls]
