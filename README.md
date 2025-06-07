@@ -371,4 +371,4 @@ This package implements methodology from research on LLM performance in social s
 
 ## License
 
-`cat-llm` is distributed under the terms of the [MIT](https://spdx.org/licenses/MIT.html) license.
+`cat-llm` is distributed under the terms of the [GNU](https://www.gnu.org/licenses/gpl-3.0.en.html) license.
