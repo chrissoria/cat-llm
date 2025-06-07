@@ -342,10 +342,10 @@ Processes each image individually, evaluating the drawn shapes based on CERAD cr
 - `user_model` (str, default="gpt-4o"): Specific model to use
 - `creativity` (float, default=0): Temperature/randomness setting (0.0-1.0)
 - `reference_in_image` (bool, default=False): Whether a reference shape is present in the image for comparison
-- `provide_reference` (bool, default=False): Whether to provide a reference example image or description
+- `provide_reference` (bool, default=False): Whether to provide a reference example image (built in reference image)
 - `safety` (bool, default=False): Enable safety checks and save results at each API call step
 - `filename` (str, default="categorized_data.csv"): Filename for CSV output
-- `model_source` (str, default="OpenAI"): Model provider ("OpenAI", "Anthropic", "Perplexity", "Mistral")
+- `model_source` (str, default="OpenAI"): Model provider ("OpenAI", "Anthropic", "Mistral")
 
 **Returns:**
 - `pandas.DataFrame`: DataFrame with image paths, CERAD scores, and analysis details

@@ -229,12 +229,18 @@ def cerad_drawn_score(
                         f"Example:\n"
                         f"{example_JSON}"
                     ),
-                },
-                {
-                    "type": "image_url",
-                    "image_url": f"data:image/jpeg;base64,{encoded}"
                 }
             ]
+            if provide_reference:
+                prompt.append({
+                    "type": "image_url",
+                    "image_url": f"data:image/{ext};base64,{encoded_ref}"
+                })
+
+            prompt.append({
+                "type": "image_url",
+                "image_url": f"data:image/{ext};base64,{encoded_image}"
+            })
             
         if model_source == "OpenAI":
             from openai import OpenAI
