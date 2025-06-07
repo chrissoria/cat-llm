@@ -347,7 +347,7 @@ def cerad_drawn_score(
         categorized_data['score'] = categorized_data['diamond_4_sides'] + categorized_data['diamond_equal_sides'] + categorized_data['similar']
 
         categorized_data.loc[categorized_data['none'] == 1, 'score'] = 0
-        categorized_data.loc[(categorized_data['diamond_square'] == 1) & (categorized_data['score'] == 0), 'score'] = 2
+        #categorized_data.loc[(categorized_data['diamond_square'] == 1) & (categorized_data['score'] == 0), 'score'] = 2
 
     elif shape == "rectangles" or shape == "overlapping rectangles":
 

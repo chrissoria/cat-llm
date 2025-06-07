@@ -14,6 +14,12 @@
 - [Configuration](#configuration)
 - [Supported Models](#supported-models)
 - [API Reference](#api-reference)
+  - [explore_corpus()](#explore_corpus)
+  - [explore_common_categories()](#explore_common_categories)
+  - [multi_class()](#multi_class)
+  - [image_score()](#image_score)
+  - [image_features()](#image_features)
+  - [cerad_drawn_score()](#cerad_drawn_score)
 - [Academic Research](#academic-research)
 - [License](#license)
 
@@ -155,7 +161,7 @@ print(categories)
 Performs multi-label classification of text responses into user-defined categories, returning structured results with optional CSV export.
 
 **Methodology:**
-Processes each text response individually, assigning one or more categories from the provided list. Supports flexible output formatting and optional saving of results to CSV for easy integration with data analysis workflows[2].
+Processes each text response individually, assigning one or more categories from the provided list. Supports flexible output formatting and optional saving of results to CSV for easy integration with data analysis workflows.
 
 **Parameters:**
 - `survey_question` (str): The survey question being analyzed
@@ -195,6 +201,169 @@ move_reasons = cat.multi_class(
     safety =TRUE,
     api_key="OPENAI_API_KEY")
 ```
+
+### `image_multi_class()`
+
+Performs multi-label image classification into user-defined categories, returning structured results with optional CSV export.
+
+**Methodology:**
+Processes each image individually, assigning one or more categories from the provided list. Supports flexible output formatting and optional saving of results to CSV for easy integration with data analysis workflows.
+
+**Parameters:**
+- `image_description` (str): A description of what the model should expect to see
+- `image_input` (list): List of file paths or a folder to pull file paths from
+- `categories` (list): List of predefined categories for classification
+- `api_key` (str): API key for the LLM service
+- `user_model` (str, default="gpt-4o"): Specific model to use
+- `creativity` (float, default=0): Temperature/randomness setting (0.0-1.0)
+- `safety` (bool, default=False): Enable safety checks on responses and saves to CSV at each API call step
+- `filename` (str, default="categorized_data.csv"): Filename for CSV output
+- `save_directory` (str, optional): Directory path to save the CSV file
+- `model_source` (str, default="OpenAI"): Model provider ("OpenAI", "Anthropic", "Perplexity", "Mistral")
+
+**Returns:**
+- `pandas.DataFrame`: DataFrame with classification results, columns formatted as specified
+
+**Example:**
+
+```
+import catllm as cat
+
+user_categories = ["has a cat somewhere in it",
+                   "looks cartoonish",
+                   "Adrian Brody is in it"]
+
+description = "Should be an image of a child's drawing"                   
+
+image_categories = cat.image_multi_class(
+    image_description=description, 
+    image_input= ['desktop/image1.jpg','desktop/image2.jpg', desktop/image3.jpg'], 
+    user_model="gpt-4o",
+    creativity=0,
+    categories=user_categories,
+    safety =TRUE,
+    api_key="OPENAI_API_KEY")
+```
+
+### `image_score()`
+
+Performs quality scoring of images against a reference description, returning structured results with optional CSV export.
+
+**Methodology:**
+Processes each image individually, assigning a quality score on a 5-point scale based on similarity to the expected description:
+
+- **1**: No meaningful similarity (fundamentally different)
+- **2**: Barely recognizable similarity (25% match)  
+- **3**: Partial match (50% key features)
+- **4**: Strong alignment (75% features)
+- **5**: Near-perfect match (90%+ similarity)
+
+Supports flexible output formatting and optional saving of results to CSV for easy integration with data analysis workflows[5].
+
+**Parameters:**
+- `reference_image_description` (str): A description of what the model should expect to see
+- `image_input` (list): List of image file paths or folder path containing images
+- `reference_image` (str): A file path to the reference image
+- `api_key` (str): API key for the LLM service
+- `user_model` (str, default="gpt-4o"): Specific vision model to use
+- `creativity` (float, default=0): Temperature/randomness setting (0.0-1.0)
+- `safety` (bool, default=False): Enable safety checks and save results at each API call step
+- `filename` (str, default="image_scores.csv"): Filename for CSV output
+- `save_directory` (str, optional): Directory path to save the CSV file
+- `model_source` (str, default="OpenAI"): Model provider ("OpenAI", "Anthropic", "Perplexity", "Mistral")
+
+**Returns:**
+- `pandas.DataFrame`: DataFrame with image paths, quality scores, and analysis details
+
+**Example:**
+
+```
+import catllm as cat          
+
+image_scores = cat.image_score(
+    reference_image_description='Adrien Brody sitting in a lawn chair, 
+    image_input= ['desktop/image1.jpg','desktop/image2.jpg', desktop/image3.jpg'], 
+    user_model="gpt-4o",
+    creativity=0,
+    safety =TRUE,
+    api_key="OPENAI_API_KEY")
+```
+
+### `image_features()`
+
+Extracts specific features and attributes from images, returning exact answers to user-defined questions (e.g., counts, colors, presence of objects).
+
+**Methodology:**
+Processes each image individually using vision models to extract precise information about specified features. Unlike scoring and multi-class functions, this returns factual data such as object counts, color identification, or presence/absence of specific elements. Supports flexible output formatting and optional CSV export for quantitative analysis workflows.
+
+**Parameters:**
+- `image_description` (str): A description of what the model should expect to see
+- `image_input` (list): List of image file paths or folder path containing images
+- `features_to_extract` (list): List of specific features to extract (e.g., ["number of people", "primary color", "contains text"])
+- `api_key` (str): API key for the LLM service
+- `user_model` (str, default="gpt-4o"): Specific vision model to use
+- `creativity` (float, default=0): Temperature/randomness setting (0.0-1.0)
+- `to_csv` (bool, default=False): Whether to save the output to a CSV file
+- `safety` (bool, default=False): Enable safety checks and save results at each API call step
+- `filename` (str, default="categorized_data.csv"): Filename for CSV output
+- `save_directory` (str, optional): Directory path to save the CSV file
+- `model_source` (str, default="OpenAI"): Model provider ("OpenAI", "Anthropic", "Perplexity", "Mistral")
+
+**Returns:**
+- `pandas.DataFrame`: DataFrame with image paths and extracted feature values for each specified attribute[1][4]
+
+**Example:**
+
+```
+import catllm as cat          
+
+image_scores = cat.image_features(
+    image_description='An AI generated image of Spongebob dancing with Patrick', 
+    features_to_extract=['Spongebob is yellow','Both are smiling','Patrick is chunky']
+    image_input= ['desktop/image1.jpg','desktop/image2.jpg', desktop/image3.jpg'], 
+    model_source= 'OpenAI',
+    user_model="gpt-4o",
+    creativity=0,
+    safety =TRUE,
+    api_key="OPENAI_API_KEY")
+```
+
+### `cerad_drawn_score()`
+
+Automatically scores drawings of circles, diamonds, overlapping rectangles, and cubes according to the official Consortium to Establish a Registry for Alzheimer's Disease (CERAD) scoring system, returning structured results with optional CSV export. Works even with images that contain other drawings or writing.
+
+**Methodology:**
+Processes each image individually, evaluating the drawn shapes based on CERAD criteria. Supports optional inclusion of reference shapes within images and can provide reference examples if requested. The function outputs standardized scores facilitating reproducible analysis and integrates optional safety checks and CSV export for research workflows.
+
+**Parameters:**
+- `shape` (str): The type of shape to score (e.g., "circle", "diamond", "overlapping rectangles", "cube")
+- `image_input` (list): List of image file paths or folder path containing images
+- `api_key` (str): API key for the LLM service
+- `user_model` (str, default="gpt-4o"): Specific model to use
+- `creativity` (float, default=0): Temperature/randomness setting (0.0-1.0)
+- `reference_in_image` (bool, default=False): Whether a reference shape is present in the image for comparison
+- `provide_reference` (bool, default=False): Whether to provide a reference example image or description
+- `safety` (bool, default=False): Enable safety checks and save results at each API call step
+- `filename` (str, default="categorized_data.csv"): Filename for CSV output
+- `model_source` (str, default="OpenAI"): Model provider ("OpenAI", "Anthropic", "Perplexity", "Mistral")
+
+**Returns:**
+- `pandas.DataFrame`: DataFrame with image paths, CERAD scores, and analysis details
+
+**Example:**
+
+```
+import catllm as cat  
+
+diamond_scores = cat.cerad_score(
+    shape="diamond",
+    image_input=df['diamond_pic_path'],
+    api_key=open_ai_key,
+    safety=True,
+    filename="diamond_gpt_score.csv",
+)
+```
+
 
 ## Academic Research
 
