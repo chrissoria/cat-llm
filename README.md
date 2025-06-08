@@ -369,6 +369,10 @@ diamond_scores = cat.cerad_score(
 
 This package implements methodology from research on LLM performance in social science applications, including the UC Berkeley Social Networks Study. The package addresses reproducibility challenges in LLM-assisted research by providing standardized interfaces and consistent output formatting.
 
+If you use this package for research, please cite:
+
+Soria, C. (2025). CatLLM (0.0.8). Zenodo. https://doi.org/10.5281/zenodo.15532317
+
 ## License
 
 `cat-llm` is distributed under the terms of the [GNU](https://www.gnu.org/licenses/gpl-3.0.en.html) license.
