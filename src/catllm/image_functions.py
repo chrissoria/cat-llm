@@ -239,7 +239,7 @@ def image_multi_class(
     return categorized_data
 
 #image score function
-def image_score(
+def image_score_drawing(
     reference_image_description,
     image_input,
     reference_image,

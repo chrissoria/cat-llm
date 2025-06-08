@@ -245,12 +245,12 @@ image_categories = cat.image_multi_class(
     api_key="OPENAI_API_KEY")
 ```
 
-### `image_score()`
+### `image_score_drawing()`
 
-Performs quality scoring of images against a reference description, returning structured results with optional CSV export.
+Performs quality scoring of images against a reference description and optional reference image, returning structured results with optional CSV export.
 
 **Methodology:**
-Processes each image individually, assigning a quality score on a 5-point scale based on similarity to the expected description:
+Processes each image individually, assigning a drawing quality score on a 5-point scale based on similarity to the expected description:
 
 - **1**: No meaningful similarity (fundamentally different)
 - **2**: Barely recognizable similarity (25% match)  
