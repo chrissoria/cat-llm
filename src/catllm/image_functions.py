@@ -66,8 +66,23 @@ def image_multi_class(
             continue  # Skip the rest of the loop iteration
         
     # Only open the file if path is valid
-        with open(img_path, "rb") as f:
-            encoded = base64.b64encode(f.read()).decode("utf-8")
+        if os.path.isdir(img_path):
+            encoded = "Not a Valid Image, contains file path"
+        else:
+            try:
+                with open(img_path, "rb") as f:
+                    encoded = base64.b64encode(f.read()).decode("utf-8")
+            except Exception as e:
+                    encoded = f"Error: {str(e)}"
+    # Handle extension safely
+        if encoded.startswith("Error:") or encoded == "Not a Valid Image, contains file path":
+            encoded_image = encoded
+            valid_image = False
+            extracted_jsons.append("""{"no_valid_path": 1}""")
+        else:
+            ext = Path(img_path).suffix.lstrip(".").lower()
+            encoded_image = f"data:image/{ext};base64,{encoded}"
+            valid_image = True
     
     # Handle extension safely
         ext = Path(img_path).suffix.lstrip(".").lower()
@@ -169,23 +184,31 @@ def image_multi_class(
             except Exception as e:
                 print(f"An error occurred: {e}")
                 link1.append(f"Error processing input: {e}")
+        #if no valid image path is provided
+        elif  valid_image == False:
+            reply = "invalid image path"
+            print("Skipped NaN input or invalid path")
+            #extracted_jsons.append("""{"no_valid_path": 1}""")
+            link1.append("Error processing input: {e}")
         else:
-            raise ValueError("Unknown source! Choose from OpenAI, Anthropic, or Mistral")
+            raise ValueError("Unknown source! Choose from OpenAI, Perplexity, or Mistral")
             # in situation that no JSON is found
         if reply is not None:
-            extracted_json = regex.findall(r'\{(?:[^{}]|(?R))*\}', reply, regex.DOTALL)
-            if extracted_json:
-                cleaned_json = extracted_json[0].replace('[', '').replace(']', '').replace('\n', '').replace(" ", '').replace("  ", '')
-                extracted_jsons.append(cleaned_json)
-                #print(cleaned_json)
+            if reply == "invalid image path":
+                extracted_jsons.append("""{"no_valid_path": 1}""")
             else:
-                error_message = """{"1":"e"}"""
-                extracted_jsons.append(error_message)
-                print(error_message)
+                extracted_json = regex.findall(r'\{(?:[^{}]|(?R))*\}', reply, regex.DOTALL)
+                if extracted_json:
+                    cleaned_json = extracted_json[0].replace('[', '').replace(']', '').replace('\n', '').replace(" ", '').replace("  ", '')
+                    extracted_jsons.append(cleaned_json)
+                else:
+                    error_message = """{"1":"e"}"""
+                    extracted_jsons.append(error_message)
+                    print(error_message)
         else:
             error_message = """{"1":"e"}"""
             extracted_jsons.append(error_message)
-            #print(error_message)
+            print(error_message)
 
         # --- Safety Save ---
         if safety:
@@ -227,9 +250,6 @@ def image_multi_class(
         'json': pd.Series(extracted_jsons).reset_index(drop=True)
     })
     categorized_data = pd.concat([categorized_data, normalized_data], axis=1)
-    
-    if columns != "numbered": #if user wants text columns
-        categorized_data.columns = list(categorized_data.columns[:3]) + categories[:len(categorized_data.columns) - 3]
 
     if to_csv:
         if save_directory is None:
@@ -301,8 +321,23 @@ def image_score_drawing(
             continue  # Skip the rest of the loop iteration
         
     # Only open the file if path is valid
-        with open(img_path, "rb") as f:
-            encoded = base64.b64encode(f.read()).decode("utf-8")
+        if os.path.isdir(img_path):
+            encoded = "Not a Valid Image, contains file path"
+        else:
+            try:
+                with open(img_path, "rb") as f:
+                    encoded = base64.b64encode(f.read()).decode("utf-8")
+            except Exception as e:
+                    encoded = f"Error: {str(e)}"
+    # Handle extension safely
+        if encoded.startswith("Error:") or encoded == "Not a Valid Image, contains file path":
+            encoded_image = encoded
+            valid_image = False
+            
+        else:
+            ext = Path(img_path).suffix.lstrip(".").lower()
+            encoded_image = f"data:image/{ext};base64,{encoded}"
+            valid_image = True
     
     # Handle extension safely
         ext = Path(img_path).suffix.lstrip(".").lower()
@@ -436,23 +471,31 @@ def image_score_drawing(
             except Exception as e:
                 print(f"An error occurred: {e}")
                 link1.append(f"Error processing input: {e}")
+        #if no valid image path is provided
+        elif  valid_image == False:
+            reply = "invalid image path"
+            print("Skipped NaN input or invalid path")
+            #extracted_jsons.append("""{"no_valid_path": 1}""")
+            link1.append("Error processing input: {e}")
         else:
-            raise ValueError("Unknown source! Choose from OpenAI, Anthropic, Perplexity, or Mistral")
+            raise ValueError("Unknown source! Choose from OpenAI, Perplexity, or Mistral")
             # in situation that no JSON is found
         if reply is not None:
-            extracted_json = regex.findall(r'\{(?:[^{}]|(?R))*\}', reply, regex.DOTALL)
-            if extracted_json:
-                cleaned_json = extracted_json[0].replace('[', '').replace(']', '').replace('\n', '').replace(" ", '').replace("  ", '')
-                extracted_jsons.append(cleaned_json)
-                #print(cleaned_json)
+            if reply == "invalid image path":
+                extracted_jsons.append("""{"no_valid_path": 1}""")
             else:
-                error_message = """{"1":"e"}"""
-                extracted_jsons.append(error_message)
-                print(error_message)
+                extracted_json = regex.findall(r'\{(?:[^{}]|(?R))*\}', reply, regex.DOTALL)
+                if extracted_json:
+                    cleaned_json = extracted_json[0].replace('[', '').replace(']', '').replace('\n', '').replace(" ", '').replace("  ", '')
+                    extracted_jsons.append(cleaned_json)
+                else:
+                    error_message = """{"1":"e"}"""
+                    extracted_jsons.append(error_message)
+                    print(error_message)
         else:
             error_message = """{"1":"e"}"""
             extracted_jsons.append(error_message)
-            #print(error_message)
+            print(error_message)
 
         # --- Safety Save ---
         if safety:
@@ -697,6 +740,10 @@ def image_features(
             except Exception as e:
                 print(f"An error occurred: {e}")
                 link1.append(f"Error processing input: {e}")
+        elif  valid_image == False:
+            print("Skipped NaN input or invalid path")
+            reply = None
+            link1.append("Error processing input: {e}")
         else:
             raise ValueError("Unknown source! Choose from OpenAI, Anthropic, Perplexity, or Mistral")
             # in situation that no JSON is found

@@ -67,8 +67,8 @@ def cerad_drawn_score(
         categories = ["The image contains a drawing that clearly represents overlapping rectangles",
                     "The image does NOT contain any drawing that resembles overlapping rectangles",
                     "The image contains a drawing that resembles overlapping rectangles",
-                    "If rectangle 1 is present it has 4 sides",
-                    "If rectablge 2 is present it has 4 sides",
+                    "If rectangle 1 is present and it has 4 sides",
+                    "If rectangle 2 is present and it has 4 sides",
                     "The drawn rectangles are overlapping",
                     "The drawn rectangles overlap to form a longer vertical rectangle with top and bottom sticking out",
                     "None of the above descriptions apply"]
@@ -131,19 +131,30 @@ def cerad_drawn_score(
             continue  # Skip the rest of the loop iteration
         
     # Only open the file if path is valid
-        with open(img_path, "rb") as f:
-            encoded = base64.b64encode(f.read()).decode("utf-8")
-    
+        if os.path.isdir(img_path):
+            encoded = "Not a Valid Image, contains file path"
+        else:
+            try:
+                with open(img_path, "rb") as f:
+                    encoded = base64.b64encode(f.read()).decode("utf-8")
+            except Exception as e:
+                    encoded = f"Error: {str(e)}"
     # Handle extension safely
-        ext = Path(img_path).suffix.lstrip(".").lower()
-        encoded_image = f"data:image/{ext};base64,{encoded}"
+        if encoded.startswith("Error:") or encoded == "Not a Valid Image, contains file path":
+            encoded_image = encoded
+            valid_image = False
+            
+        else:
+            ext = Path(img_path).suffix.lstrip(".").lower()
+            encoded_image = f"data:image/{ext};base64,{encoded}"
+            valid_image = True
 
         if reference_in_image:
             reference_text = f"This image contains a perfect reference image of a {shape}. Next to is a drawing that is meant to be similar to the reference {shape}.\n\n"
         else:
             reference_text = f"Image is expected to show within it a drawing of a {shape}.\n\n"
 
-        if model_source == "OpenAI":
+        if model_source == "OpenAI" and valid_image:
             prompt = [
                 {
                     "type": "text",
@@ -154,8 +165,8 @@ def cerad_drawn_score(
                         f"{reference_text}"
                         f"Categories:\n{categories_str}\n\n"
                         f"Output format ► Respond with **only** a JSON object whose keys are the "
-                        f"quoted category numbers ('1', '2', …) and whose values are 1 or 0. "
-                        f"No additional keys, comments, or text.\n\n"
+                        f"quoted category numbers ('1', '2', …) and whose values are 1 if present or 0 if not present. "
+                        f"No additional keys, comments, numbers beyond 0 or 1, or text.\n\n"
                         f"Example:\n"
                         f"{example_JSON}"
                         )
@@ -173,7 +184,7 @@ def cerad_drawn_score(
                 "image_url": {"url": encoded_image, "detail": "high"}
             })
         
-        elif model_source == "Anthropic":
+        elif model_source == "Anthropic" and valid_image:
             prompt = [
                 {
                     "type": "text",
@@ -184,8 +195,8 @@ def cerad_drawn_score(
                         f"{reference_text}"
                         f"Categories:\n{categories_str}\n\n"
                         f"Output format ► Respond with **only** a JSON object whose keys are the "
-                        f"quoted category numbers ('1', '2', …) and whose values are 1 or 0. "
-                        f"No additional keys, comments, or text.\n\n"
+                        f"quoted category numbers ('1', '2', …) and whose values are 1 if present or 0 if not present. "
+                        f"No additional keys, comments, numbers beyond 0 or 1, or text.\n\n"
                         f"Example:\n"
                         f"{example_JSON}"
                     ),
@@ -213,7 +224,7 @@ def cerad_drawn_score(
             }
             )
 
-        elif model_source == "Mistral":
+        elif model_source == "Mistral" and valid_image:
             prompt = [
                 {
                     "type": "text",
@@ -224,8 +235,8 @@ def cerad_drawn_score(
                         f"{reference_text}"
                         f"Categories:\n{categories_str}\n\n"
                         f"Output format ► Respond with **only** a JSON object whose keys are the "
-                        f"quoted category numbers ('1', '2', …) and whose values are 1 or 0. "
-                        f"No additional keys, comments, or text.\n\n"
+                        f"quoted category numbers ('1', '2', …) and whose values are 1 if present or 0 if not present. "
+                        f"No additional keys, comments, numbers beyond 0 or 1, or text.\n\n"
                         f"Example:\n"
                         f"{example_JSON}"
                     ),
@@ -241,8 +252,8 @@ def cerad_drawn_score(
                 "type": "image_url",
                 "image_url": f"data:image/{ext};base64,{encoded_image}"
             })
-            
-        if model_source == "OpenAI":
+
+        if model_source == "OpenAI" and valid_image:
             from openai import OpenAI
             client = OpenAI(api_key=api_key)
             try:
@@ -254,10 +265,10 @@ def cerad_drawn_score(
                 reply = response_obj.choices[0].message.content
                 link1.append(reply)
             except Exception as e:
-                print(f"An error occurred: {e}")
-                link1.append(f"Error processing input: {e}")
+                print("An error occurred: {e}")
+                link1.append("Error processing input: {e}")
 
-        elif model_source == "Anthropic":
+        elif model_source == "Anthropic"  and valid_image:
             import anthropic
             client = anthropic.Anthropic(api_key=api_key)
             try:
@@ -270,10 +281,10 @@ def cerad_drawn_score(
                 reply = message.content[0].text  # Anthropic returns content as list
                 link1.append(reply)
             except Exception as e:
-                print(f"An error occurred: {e}")
-                link1.append(f"Error processing input: {e}")
+                print("An error occurred: {e}")
+                link1.append("Error processing input: {e}")
 
-        elif model_source == "Mistral":
+        elif model_source == "Mistral"  and valid_image:
             from mistralai import Mistral
             reply = None
             client = Mistral(api_key=api_key)
@@ -288,25 +299,34 @@ def cerad_drawn_score(
                 reply = response.choices[0].message.content
                 link1.append(reply)
             except Exception as e:
-                print(f"An error occurred: {e}")
-                link1.append(f"Error processing input: {e}")
+                reply = None
+                print("An error occurred: {e}")
+                link1.append("Error processing input: {e}")
+        #if no valid image path is provided
+        elif  valid_image == False:
+            reply = "invalid image path"
+            print("Skipped NaN input or invalid path")
+            #extracted_jsons.append("""{"no_valid_path": 1}""")
+            link1.append("Error processing input: {e}")
         else:
             raise ValueError("Unknown source! Choose from OpenAI, Perplexity, or Mistral")
             # in situation that no JSON is found
         if reply is not None:
-            extracted_json = regex.findall(r'\{(?:[^{}]|(?R))*\}', reply, regex.DOTALL)
-            if extracted_json:
-                cleaned_json = extracted_json[0].replace('[', '').replace(']', '').replace('\n', '').replace(" ", '').replace("  ", '')
-                extracted_jsons.append(cleaned_json)
-                #print(cleaned_json)
+            if reply == "invalid image path":
+                extracted_jsons.append("""{"no_valid_path": 1}""")
             else:
-                error_message = """{"1":"e"}"""
-                extracted_jsons.append(error_message)
-                print(error_message)
+                extracted_json = regex.findall(r'\{(?:[^{}]|(?R))*\}', reply, regex.DOTALL)
+                if extracted_json:
+                    cleaned_json = extracted_json[0].replace('[', '').replace(']', '').replace('\n', '').replace(" ", '').replace("  ", '')
+                    extracted_jsons.append(cleaned_json)
+                else:
+                    error_message = """{"1":"e"}"""
+                    extracted_jsons.append(error_message)
+                    print(error_message)
         else:
             error_message = """{"1":"e"}"""
             extracted_jsons.append(error_message)
-            #print(error_message)
+            print(error_message)
 
         # --- Safety Save ---
         if safety:
@@ -369,6 +389,8 @@ def cerad_drawn_score(
         categorized_data['score'] = categorized_data['cir_almost_closed'] + categorized_data['cir_closed'] + categorized_data['cir_round'] + categorized_data['cir_almost_round']
         categorized_data.loc[categorized_data['none'] == 1, 'score'] = 0
         categorized_data.loc[(categorized_data['drawing_present'] == 0) & (categorized_data['score'] == 0), 'score'] = 0
+        #this score should never be greater than 2
+        categorized_data.loc[categorized_data['score'] > 2, 'score'] = 2
 
     elif shape == "diamond":
 
@@ -382,11 +404,12 @@ def cerad_drawn_score(
             "7": "complex_diamond",
             "8": "none"
         })
-
-        categorized_data['score'] = categorized_data['diamond_4_sides'] + categorized_data['diamond_equal_sides'] + categorized_data['similar']
+        categorized_data['diamond_4_sides'] = np.where(categorized_data['diamond_4_sides'] > 1, 1, categorized_data['diamond_4_sides'])
+        categorized_data['score'] = categorized_data['diamond_4_sides'] + categorized_data['diamond_equal_sides'] + categorized_data['similar'] + categorized_data['diamond_square']
 
         categorized_data.loc[categorized_data['none'] == 1, 'score'] = 0
-        #categorized_data.loc[(categorized_data['diamond_square'] == 1) & (categorized_data['score'] == 0), 'score'] = 2
+        #this score should never be greater than 3
+        categorized_data.loc[categorized_data['score'] > 3, 'score'] = 3
 
     elif shape == "rectangles" or shape == "overlapping rectangles":
 
@@ -401,10 +424,12 @@ def cerad_drawn_score(
             "8": "none"
         })
 
-        categorized_data['score'] = 0
-        categorized_data.loc[(categorized_data['r1_4_sides'] == 1) & (categorized_data['r2_4_sides'] == 1), 'score'] = 1
-        categorized_data.loc[(categorized_data['rectangles_overlap'] == 1) & (categorized_data['rectangles_cross'] == 1), 'score'] += 1
+        #TODO: check to this logic, it might be skewing scores to be more often 2 than should be
+        categorized_data['score'] = categorized_data['rectangles_overlap'] + categorized_data['similar'] + categorized_data['rectangles_cross']
         categorized_data.loc[categorized_data['none'] == 1, 'score'] = 0
+
+        #this score should never be greater than 2
+        categorized_data.loc[categorized_data['score'] > 2, 'score'] = 2
 
     elif shape == "cube":
 
@@ -424,12 +449,14 @@ def cerad_drawn_score(
         categorized_data.loc[categorized_data['none'] == 1, 'score'] = 0
         categorized_data.loc[(categorized_data['drawing_present'] == 0) & (categorized_data['score'] == 0), 'score'] = 0
         categorized_data.loc[(categorized_data['not_similar'] == 1) & (categorized_data['score'] == 0), 'score'] = 0
+        #this score should never be greater than 4
         categorized_data.loc[categorized_data['score'] > 4, 'score'] = 4
 
     else:
         raise ValueError("Invalid shape! Choose from 'circle', 'diamond', 'rectangles', or 'cube'.")
 
     categorized_data.loc[categorized_data['no_valid_image'] == 1, 'score'] = None
+    categorized_data['image_file'] = categorized_data['image_input'].apply(lambda x: Path(x).name)
 
     if filename is not None:
         categorized_data.to_csv(filename, index=False)

@@ -31,20 +31,11 @@ pip install cat-llm
 
 ## Quick Start
 
-The `explore_corpus` function extracts a list of all categories present in the corpus as identified by the model.
-```
-import catllm as cat
-import os
+CatLLM helps social scientists and demographers automatically categorize open-ended survey responses using AI models like GPT-4 and Claude.
 
-categories = cat.explore_corpus(
-survey_question="What motivates you most at work?",
-survey_input=["flexible schedule", "good pay", "interesting projects"],
-api_key="OPENAI_API_KEY",
-cat_num=5,
-divisions=10
-)
-print(categories)
-```
+Simply provide your survey responses and category list - the package handles the rest and outputs clean data ready for statistical analysis. It works with single or multiple categories per response and automatically skips missing data to save API costs.
+
+Perfect for turning messy text data into structured categories you can actually analyze.
 
 ## Configuration
 
