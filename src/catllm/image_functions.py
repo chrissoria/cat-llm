@@ -148,8 +148,11 @@ def image_multi_class(
                 reply = response_obj.choices[0].message.content
                 link1.append(reply)
             except Exception as e:
-                print(f"An error occurred: {e}")
-                link1.append(f"Error processing input: {e}")
+                if "model" in str(e).lower():
+                    raise ValueError(f"Invalid OpenAI model '{user_model}': {e}")
+                else:
+                    print("An error occurred: {e}")
+                    link1.append("Error processing input: {e}")
 
         elif model_source == "Anthropic":
             import anthropic
@@ -165,8 +168,11 @@ def image_multi_class(
                 reply = message.content[0].text
                 link1.append(reply)
             except Exception as e:
-                print(f"An error occurred: {e}")
-                link1.append(f"Error processing input: {e}")
+                if "model" in str(e).lower():
+                    raise ValueError(f"Invalid OpenAI model '{user_model}': {e}")
+                else:
+                    print("An error occurred: {e}")
+                    link1.append("Error processing input: {e}")
 
         elif model_source == "Mistral":
             from mistralai import Mistral
@@ -182,8 +188,11 @@ def image_multi_class(
                 reply = response.choices[0].message.content
                 link1.append(reply)
             except Exception as e:
-                print(f"An error occurred: {e}")
-                link1.append(f"Error processing input: {e}")
+                if "model" in str(e).lower():
+                    raise ValueError(f"Invalid OpenAI model '{user_model}': {e}")
+                else:
+                    print("An error occurred: {e}")
+                    link1.append("Error processing input: {e}")
         #if no valid image path is provided
         elif  valid_image == False:
             reply = "invalid image path"
@@ -436,8 +445,11 @@ def image_score_drawing(
                 reply = response_obj.choices[0].message.content
                 link1.append(reply)
             except Exception as e:
-                print(f"An error occurred: {e}")
-                link1.append(f"Error processing input: {e}")
+                if "model" in str(e).lower():
+                    raise ValueError(f"Invalid OpenAI model '{user_model}': {e}")
+                else:
+                    print("An error occurred: {e}")
+                    link1.append("Error processing input: {e}")
 
         elif model_source == "Anthropic":
             import anthropic
@@ -452,8 +464,11 @@ def image_score_drawing(
                 reply = message.content[0].text  # Anthropic returns content as list
                 link1.append(reply)
             except Exception as e:
-                print(f"An error occurred: {e}")
-                link1.append(f"Error processing input: {e}")
+                if "model" in str(e).lower():
+                    raise ValueError(f"Invalid OpenAI model '{user_model}': {e}")
+                else:
+                    print("An error occurred: {e}")
+                    link1.append("Error processing input: {e}")
 
         elif model_source == "Mistral":
             from mistralai import Mistral
@@ -469,8 +484,11 @@ def image_score_drawing(
                 reply = response.choices[0].message.content
                 link1.append(reply)
             except Exception as e:
-                print(f"An error occurred: {e}")
-                link1.append(f"Error processing input: {e}")
+                if "model" in str(e).lower():
+                    raise ValueError(f"Invalid OpenAI model '{user_model}': {e}")
+                else:
+                    print("An error occurred: {e}")
+                    link1.append("Error processing input: {e}")
         #if no valid image path is provided
         elif  valid_image == False:
             reply = "invalid image path"
@@ -567,10 +585,6 @@ def image_features(
     import base64
     from pathlib import Path
 
-    if save_directory is not None and not os.path.isdir(save_directory):
-    # Directory doesn't exist - raise an exception to halt execution
-        raise FileNotFoundError(f"Directory {save_directory} doesn't exist")
-
     image_extensions = [
     '*.png', '*.jpg', '*.jpeg',
     '*.gif', '*.webp', '*.svg', '*.svgz', '*.avif', '*.apng',
@@ -595,26 +609,35 @@ def image_features(
     cat_num = len(features_to_extract)
     category_dict = {str(i+1): "0" for i in range(cat_num)}
     example_JSON = json.dumps(category_dict, indent=4)
-
-    # ensure number of categories is what user wants
-    print("\nThe image features to be extracted are:")
-    for i, cat in enumerate(features_to_extract, 1):
-        print(f"{i}. {cat}")
     
     link1 = []
     extracted_jsons = []
 
-    for i, img_path in enumerate(
-        tqdm(image_files, desc="Categorising images"), start=0):
+    for i, img_path in enumerate(tqdm(image_files, desc="Scoring images"), start=0):
+    # Check validity first
         if img_path is None or not os.path.exists(img_path):
             link1.append("Skipped NaN input or invalid path")
             extracted_jsons.append("""{"no_valid_image": 1}""")
             continue  # Skip the rest of the loop iteration
-    # encode this specific image once
-        with open(img_path, "rb") as f:
-            encoded = base64.b64encode(f.read()).decode("utf-8")
-        ext = Path(img_path).suffix.lstrip(".").lower()
-        encoded_image = f"data:image/{ext};base64,{encoded}"
+        
+    # Only open the file if path is valid
+        if os.path.isdir(img_path):
+            encoded = "Not a Valid Image, contains file path"
+        else:
+            try:
+                with open(img_path, "rb") as f:
+                    encoded = base64.b64encode(f.read()).decode("utf-8")
+            except Exception as e:
+                    encoded = f"Error: {str(e)}"
+    # Handle extension safely
+        if encoded.startswith("Error:") or encoded == "Not a Valid Image, contains file path":
+            encoded_image = encoded
+            valid_image = False
+            
+        else:
+            ext = Path(img_path).suffix.lstrip(".").lower()
+            encoded_image = f"data:image/{ext};base64,{encoded}"
+            valid_image = True
 
         if model_source == "OpenAI" or model_source == "Mistral":
             prompt = [
@@ -692,8 +715,11 @@ def image_features(
                 reply = response_obj.choices[0].message.content
                 link1.append(reply)
             except Exception as e:
-                print(f"An error occurred: {e}")
-                link1.append(f"Error processing input: {e}")
+                if "model" in str(e).lower():
+                    raise ValueError(f"Invalid OpenAI model '{user_model}': {e}")
+                else:
+                    print("An error occurred: {e}")
+                    link1.append("Error processing input: {e}")
 
         elif model_source == "Perplexity":
             from openai import OpenAI
@@ -707,8 +733,12 @@ def image_features(
                 reply = response_obj.choices[0].message.content
                 link1.append(reply)
             except Exception as e:
-                print(f"An error occurred: {e}")
-                link1.append(f"Error processing input: {e}")
+                if "model" in str(e).lower():
+                    raise ValueError(f"Invalid OpenAI model '{user_model}': {e}")
+                else:
+                    print("An error occurred: {e}")
+                    link1.append("Error processing input: {e}")
+
         elif model_source == "Anthropic":
             import anthropic
             client = anthropic.Anthropic(api_key=api_key)
@@ -722,8 +752,12 @@ def image_features(
                 reply = message.content[0].text  # Anthropic returns content as list
                 link1.append(reply)
             except Exception as e:
-                print(f"An error occurred: {e}")
-                link1.append(f"Error processing input: {e}")
+                if "model" in str(e).lower():
+                    raise ValueError(f"Invalid OpenAI model '{user_model}': {e}")
+                else:
+                    print("An error occurred: {e}")
+                    link1.append("Error processing input: {e}")
+
         elif model_source == "Mistral":
             from mistralai import Mistral
             client = Mistral(api_key=api_key)
@@ -738,8 +772,12 @@ def image_features(
                 reply = response.choices[0].message.content
                 link1.append(reply)
             except Exception as e:
-                print(f"An error occurred: {e}")
-                link1.append(f"Error processing input: {e}")
+                if "model" in str(e).lower():
+                    raise ValueError(f"Invalid OpenAI model '{user_model}': {e}")
+                else:
+                    print("An error occurred: {e}")
+                    link1.append("Error processing input: {e}")
+
         elif  valid_image == False:
             print("Skipped NaN input or invalid path")
             reply = None

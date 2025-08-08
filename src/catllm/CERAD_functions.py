@@ -21,6 +21,7 @@ Areas for improvement:
 10. Test variety: expanding or adding functions to handle score more tests relevant for cogntive assesment, such as the MMSE.
 11. Error handling: improving error handling to better manage unexpected inputs or model failures.
 """
+
 def cerad_drawn_score(
     shape, 
     image_input,
@@ -265,8 +266,11 @@ def cerad_drawn_score(
                 reply = response_obj.choices[0].message.content
                 link1.append(reply)
             except Exception as e:
-                print("An error occurred: {e}")
-                link1.append("Error processing input: {e}")
+                if "model" in str(e).lower():
+                    raise ValueError(f"Invalid OpenAI model '{user_model}': {e}")
+                else:
+                    print("An error occurred: {e}")
+                    link1.append("Error processing input: {e}")
 
         elif model_source == "Anthropic"  and valid_image:
             import anthropic
@@ -281,8 +285,11 @@ def cerad_drawn_score(
                 reply = message.content[0].text  # Anthropic returns content as list
                 link1.append(reply)
             except Exception as e:
-                print("An error occurred: {e}")
-                link1.append("Error processing input: {e}")
+                if "model" in str(e).lower():
+                    raise ValueError(f"Invalid OpenAI model '{user_model}': {e}")
+                else:
+                    print("An error occurred: {e}")
+                    link1.append("Error processing input: {e}")
 
         elif model_source == "Mistral"  and valid_image:
             from mistralai import Mistral
@@ -299,13 +306,15 @@ def cerad_drawn_score(
                 reply = response.choices[0].message.content
                 link1.append(reply)
             except Exception as e:
-                reply = None
-                print("An error occurred: {e}")
-                link1.append("Error processing input: {e}")
+                if "model" in str(e).lower():
+                    raise ValueError(f"Invalid OpenAI model '{user_model}': {e}")
+                else:
+                    print("An error occurred: {e}")
+                    link1.append("Error processing input: {e}")
         #if no valid image path is provided
         elif  valid_image == False:
             reply = "invalid image path"
-            print("Skipped NaN input or invalid path")
+            #print("Skipped NaN input or invalid path")
             #extracted_jsons.append("""{"no_valid_path": 1}""")
             link1.append("Error processing input: {e}")
         else:
@@ -404,7 +413,8 @@ def cerad_drawn_score(
             "7": "complex_diamond",
             "8": "none"
         })
-        categorized_data['diamond_4_sides'] = np.where(categorized_data['diamond_4_sides'] > 1, 1, categorized_data['diamond_4_sides'])
+        #sometimes the model will get confused and output the number 4 instead of a 1 or 0
+        categorized_data.loc[categorized_data['diamond_4_sides'] > 1, 'diamond_4_sides'] = 1
         categorized_data['score'] = categorized_data['diamond_4_sides'] + categorized_data['diamond_equal_sides'] + categorized_data['similar'] + categorized_data['diamond_square']
 
         categorized_data.loc[categorized_data['none'] == 1, 'score'] = 0
