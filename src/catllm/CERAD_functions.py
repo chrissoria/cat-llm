@@ -374,7 +374,10 @@ def cerad_drawn_score(
     normalized_data = pd.concat(normalized_data_list, ignore_index=True)
 
     categorized_data = pd.DataFrame({
-        'image_input': image_files,
+        'image_input': (
+            image_files.reset_index(drop=True) if isinstance(image_files, (pd.DataFrame, pd.Series)) 
+            else pd.Series(image_files)
+        ),
         'link1': pd.Series(link1).reset_index(drop=True),
         'json': pd.Series(extracted_jsons).reset_index(drop=True)
     })

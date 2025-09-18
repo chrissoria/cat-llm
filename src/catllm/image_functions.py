@@ -252,9 +252,11 @@ def image_multi_class(
         except json.JSONDecodeError:
             normalized_data_list.append(pd.DataFrame({"1": ["e"]}))
     normalized_data = pd.concat(normalized_data_list, ignore_index=True)
-
     categorized_data = pd.DataFrame({
-        'image_input': image_files,
+        'image_input': (
+            image_files.reset_index(drop=True) if isinstance(image_files, (pd.DataFrame, pd.Series)) 
+            else pd.Series(image_files)
+        ),
         'link1': pd.Series(link1).reset_index(drop=True),
         'json': pd.Series(extracted_jsons).reset_index(drop=True)
     })
@@ -549,7 +551,10 @@ def image_score_drawing(
     normalized_data = pd.concat(normalized_data_list, ignore_index=True)
 
     categorized_data = pd.DataFrame({
-        'image_input': image_files,
+        'image_input': (
+            image_files.reset_index(drop=True) if isinstance(image_files, (pd.DataFrame, pd.Series)) 
+            else pd.Series(image_files)
+        ),
         'link1': pd.Series(link1).reset_index(drop=True),
         'json': pd.Series(extracted_jsons).reset_index(drop=True)
     })
@@ -835,7 +840,10 @@ def image_features(
     normalized_data = pd.concat(normalized_data_list, ignore_index=True)
 
     categorized_data = pd.DataFrame({
-        'image_input': image_files,
+        'image_input': (
+            image_files.reset_index(drop=True) if isinstance(image_files, (pd.DataFrame, pd.Series)) 
+            else pd.Series(image_files)
+        ),
         'link1': pd.Series(link1).reset_index(drop=True),
         'json': pd.Series(extracted_jsons).reset_index(drop=True)
     })

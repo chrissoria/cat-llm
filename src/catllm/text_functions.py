@@ -373,20 +373,14 @@ Provide your work in JSON format where the number belonging to each category is 
         except json.JSONDecodeError:
             normalized_data_list.append(pd.DataFrame({"1": ["e"]}))
     normalized_data = pd.concat(normalized_data_list, ignore_index=True)
-
     categorized_data = pd.DataFrame({
-        'survey_response': survey_input.reset_index(drop=True),
+        'image_input': (
+            survey_input.reset_index(drop=True) if isinstance(survey_input, (pd.DataFrame, pd.Series)) 
+            else pd.Series(survey_input)
+        ),
         'link1': pd.Series(link1).reset_index(drop=True),
         'json': pd.Series(extracted_jsons).reset_index(drop=True)
     })
     categorized_data = pd.concat([categorized_data, normalized_data], axis=1)
-    
-    if columns != "numbered": #if user wants text columns
-        categorized_data.columns = list(categorized_data.columns[:3]) + categories[:len(categorized_data.columns) - 3]
-
-    if to_csv:
-        if save_directory is None:
-            save_directory = os.getcwd()
-        categorized_data.to_csv(os.path.join(save_directory, filename), index=False)
     
     return categorized_data
