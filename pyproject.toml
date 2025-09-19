@@ -11,7 +11,7 @@ requires-python = ">=3.8"
 license = "MIT"
 keywords = ["llm","categorizer","survey data", "image classification", "structured output", "text classification"]
 authors = [
-  { name = "Christopher Soria", email = "chrissoria@berkeley.edu" },
+  { name = "Chris Soria", email = "chrissoria@berkeley.edu" },
 ]
 classifiers = [
   "Development Status :: 4 - Beta",
@@ -26,7 +26,9 @@ classifiers = [
 ]
 dependencies = [
   "pandas",
-  "tqdm"
+  "tqdm",
+  "requests",
+  "openai"
 ]
 
 [project.urls]

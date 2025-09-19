@@ -307,6 +307,37 @@ Provide your work in JSON format where the number belonging to each category is 
                 except Exception as e:
                     print(f"An error occurred: {e}")
                     link1.append(f"Error processing input: {e}")
+                    
+            elif model_source == "Google":
+                import requests
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
+                try:
+                    headers = {
+                        "x-goog-api-key": api_key,
+                        "Content-Type": "application/json"
+                        }
+                    
+                    payload = {
+                        "contents": [{
+                            "parts": [{"text": prompt}]
+                            }]
+                            }
+                    
+                    response = requests.post(url, headers=headers, json=payload)
+                    response.raise_for_status()  # Raise exception for HTTP errors
+                    result = response.json()
+
+                    if "candidates" in result and result["candidates"]:
+                        reply = result["candidates"][0]["content"]["parts"][0]["text"]
+                    else:
+                        reply = "No response generated"
+
+                    link1.append(reply)
+                    print(reply)
+                except Exception as e:
+                    print(f"An error occurred: {e}")
+                    link1.append(f"Error processing input: {e}")
+
             elif model_source == "Mistral":
                 from mistralai import Mistral
                 client = Mistral(api_key=api_key)
