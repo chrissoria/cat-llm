@@ -88,13 +88,42 @@ def build_web_research_dataset(
                         if getattr(block, "type", "") == "text"
                     ).strip()
                     link1.append(reply)
-                    print(reply)
                     
                 except Exception as e:
                     print(f"An error occurred: {e}")
                     link1.append(f"Error processing input: {e}")
+
+            elif model_source == "Google":
+                import requests
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
+                try:
+                    headers = {
+                        "x-goog-api-key": api_key,
+                        "Content-Type": "application/json"
+                    }
+                    payload = {
+                        "contents": [{"parts": [{"text": prompt}]}],
+                        "tools": [{"google_search": {}}]  # Enable search grounding
+                    }
+        
+                    response = requests.post(url, headers=headers, json=payload)
+                    response.raise_for_status()
+                    result = response.json()
+        
+                    # extract reply from Google's response structure
+                    if "candidates" in result and result["candidates"]:
+                        reply = result["candidates"][0]["content"]["parts"][0]["text"]
+                    else:
+                        reply = "No response generated"
+            
+                    link1.append(reply)
+        
+                except Exception as e:
+                    print(f"An error occurred: {e}")
+                    link1.append(f"Error processing input: {e}")
+
             else:
-                raise ValueError("Unknown source! Currently this function only supports 'Anthropic' as model_source.")
+                raise ValueError("Unknown source! Currently this function only supports 'Anthropic' or 'Google' as model_source.")
             # in situation that no JSON is found
             if reply is not None:
                 extracted_json = regex.findall(r'\{(?:[^{}]|(?R))*\}', reply, regex.DOTALL)
@@ -126,7 +155,7 @@ def build_web_research_dataset(
             # Save progress so far
             temp_df = pd.DataFrame({
                 'survey_response': search_input[:idx+1],
-                'link1': link1,
+                'model_response': link1,
                 'json': extracted_jsons
             })
             # Normalize processed jsons so far
