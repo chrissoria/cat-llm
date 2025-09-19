@@ -19,6 +19,7 @@
   - [multi_class()](#multi_class)
   - [image_score()](#image_score)
   - [image_features()](#image_features)
+  - [build_web_research_dataset()](#build_web_research_dataset)
   - [cerad_drawn_score()](#cerad_drawn_score)
 - [Academic Research](#academic-research)
 - [License](#license)
@@ -317,6 +318,60 @@ image_scores = cat.image_features(
     creativity=0,
     safety =TRUE,
     api_key="OPENAI_API_KEY")
+```
+
+### `build_web_research_dataset()`
+
+Conducts automated web research on specified topics and compiles the findings into a structured dataset, extracting answers and source URLs for comprehensive research workflows. 
+
+NOTE: This function currently only works with Anthropic models and requires an Anthropic API key. It is strongly recommended to increase your API rate limits before using this function to avoid interruptions during web research tasks.
+
+SECOND NOTE: This function works best if you are specific with your search question. For example, instead of search_question="Hottest temperature in 2024?" you should use "Hottest temperature in 2024 from extremeweatherwatch.com?" or "Hottest temperature in 2024 from weatherundeground.com?". Another example is use "Where these UC Berkeley professors got their PhD according to Linkedin?" instead of "Where they got their PhD according to Linkedin?" to avoid matching people with the same name. 
+
+THIRD NOTE: This function works by scraping data from the web. Be aware that not all websites allow webscraping from Anthropic and therefore the function won't be able to retrieve information from these sites.
+
+**Methodology:**
+Performs systematic web searches using the specified search questions and processes the results through Anthropic's language models to extract relevant information. The function handles multiple search queries sequentially, applying time delays between requests to respect rate limits. Results are categorized according to user-defined criteria and can be exported to CSV format for further analysis and research documentation.
+
+**Rate Limits:**
+Before using this function, review and increase your Anthropic API rate limits at: https://console.anthropic.com/settings/limits. For general information about API rate limits, consult the Anthropic documentation at: https://docs.anthropic.com/claude/reference/rate-limits
+
+**Parameters:**
+- `search_question` (str): Primary research question or topic to guide the search strategy
+- `search_input` (list): List of specific search queries or questions to investigate
+- `features_to_extract` (list): List of specific features to extract (e.g., ["number of people", "primary color", "contains text"])
+- `api_key` (str): API key for the LLM service
+- `answer_format`: (str, default="concise"): Response detail level ("concise", "detailed", "comprehensive")
+- `additional_instructions` (str, default="claude-3-7-sonnet-20250219"): Specific Anthropic model to use for processing results
+- `user_model` (str, default="gpt-4o"): Specific vision model to use
+- `creativity` (float, default=0): Temperature/randomness setting (0.0-1.0)
+- `safety` (bool, default=False): Enable safety checks and save results at each API call step
+- `filename` (str, default="categorized_data.csv"): Filename for CSV output
+- `save_directory` (str, optional): Directory path to save the CSV file
+- `model_source` (str, default="OpenAI"): Model provider ("OpenAI", "Anthropic", "Perplexity", "Mistral")
+- `time_delay` (int, default=15): Delay in seconds between search requests to manage API rate limits
+
+**Returns:**
+- `pandas.DataFrame`: DataFrame with image paths and extracted feature values for each specified attribute[1][4]
+
+**Example:**
+
+```
+import catllm as cat          
+
+research_data = cat.build_web_research_dataset(
+    search_question="What are the latest developments in renewable energy technology?",
+    search_input=["solar panel efficiency 2025", "wind turbine innovations", "battery storage breakthroughs"],
+    api_key="ANTHROPIC_API_KEY",
+    answer_format="detailed",
+    additional_instructions="Focus on recent technological advances and commercial applications",
+    categories=['Answer', 'URL', 'Date', 'Key_Technology'],
+    model_source="Anthropic",
+    user_model="claude-3-7-sonnet-20250219",
+    creativity=0.1,
+    safety=True,
+    time_delay=3
+)
 ```
 
 ### `cerad_drawn_score()`

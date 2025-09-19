@@ -6,13 +6,13 @@ def build_web_research_dataset(
     answer_format = "concise",
     additional_instructions = "",
     categories = ['Answer','URL'],
-    user_model="claude-3-7-sonnet-20250219",
+    user_model="claude-sonnet-4-20250514",
     creativity=0,
     safety=False,
     filename="categorized_data.csv",
     save_directory=None,
     model_source="Anthropic",
-    time_delay=5
+    time_delay=15
 ):
     import os
     import json
