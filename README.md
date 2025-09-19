@@ -32,11 +32,15 @@ pip install cat-llm
 
 ## Quick Start
 
-CatLLM helps social scientists and demographers automatically categorize open-ended survey responses using AI models like GPT-4 and Claude.
+CatLLM helps social scientists and researchers automatically categorize open-ended survey responses, images, and web-scraped data using AI models like GPT-4 and Claude.
 
-Simply provide your survey responses and category list - the package handles the rest and outputs clean data ready for statistical analysis. It works with single or multiple categories per response and automatically skips missing data to save API costs.
+Text Analysis: Simply provide your survey responses and category list - the package handles the rest and outputs clean data ready for statistical analysis. It works with single or multiple categories per response and automatically skips missing data to save API costs.
 
-Perfect for turning messy text data into structured categories you can actually analyze.
+Image Categorization: Uses the same intelligent categorization method to analyze images, extracting specific features, counting objects, identifying colors, or determining the presence of elements based on your research questions.
+
+Web Data Collection: Builds comprehensive datasets by scraping web data and using Large Language Models to extract exactly the information you need. The function searches across multiple sources, processes the findings through AI models, and structures everything into clean dataframe format ready for export to CSV.
+
+Whether you're working with messy text responses, analyzing visual content, or gathering information from across the web, CatLLM consistently transforms unstructured data into structured categories and datasets you can actually analyze. All outputs are formatted for immediate statistical analysis and can be exported directly to CSV for further research workflows.
 
 ## Configuration
 

@@ -28,8 +28,7 @@ dependencies = [
   "pandas",
   "tqdm",
   "requests",
-  "openai",
-  "random"
+  "openai"
 ]
 
 [project.urls]

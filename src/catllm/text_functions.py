@@ -334,7 +334,6 @@ Provide your work in JSON format where the number belonging to each category is 
                         reply = "No response generated"
 
                     link1.append(reply)
-                    print(reply)
                 except Exception as e:
                     print(f"An error occurred: {e}")
                     link1.append(f"Error processing input: {e}")
