@@ -227,6 +227,7 @@ def multi_class(
     user_model="gpt-4o",
     creativity=0,
     safety=False,
+    to_csv=False,
     filename="categorized_data.csv",
     save_directory=None,
     model_source="OpenAI"
@@ -390,7 +391,7 @@ Provide your work in JSON format where the number belonging to each category is 
                     normalized_data_list.append(pd.DataFrame({"1": ["e"]}))
             normalized_data = pd.concat(normalized_data_list, ignore_index=True)
             temp_df = pd.concat([temp_df, normalized_data], axis=1)
-            # Save to CSV
+            # save to CSV
             if save_directory is None:
                 save_directory = os.getcwd()
             temp_df.to_csv(os.path.join(save_directory, filename), index=False)
@@ -405,13 +406,18 @@ Provide your work in JSON format where the number belonging to each category is 
             normalized_data_list.append(pd.DataFrame({"1": ["e"]}))
     normalized_data = pd.concat(normalized_data_list, ignore_index=True)
     categorized_data = pd.DataFrame({
-        'image_input': (
+        'survey_input': (
             survey_input.reset_index(drop=True) if isinstance(survey_input, (pd.DataFrame, pd.Series)) 
             else pd.Series(survey_input)
         ),
-        'link1': pd.Series(link1).reset_index(drop=True),
+        'model_response': pd.Series(link1).reset_index(drop=True),
         'json': pd.Series(extracted_jsons).reset_index(drop=True)
     })
     categorized_data = pd.concat([categorized_data, normalized_data], axis=1)
+
+    if to_csv:
+        if save_directory is None:
+            save_directory = os.getcwd()
+        categorized_data.to_csv(os.path.join(save_directory, filename), index=False)
     
     return categorized_data
