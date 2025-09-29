@@ -8,7 +8,7 @@ def explore_corpus(
     cat_num=10,
     divisions=5,
     user_model="gpt-4o-2024-11-20",
-    creativity=0,
+    creativity=None,
     filename="corpus_exploration.csv",
     model_source="OpenAI"
 ):
@@ -57,7 +57,7 @@ Number your categories from 1 through {cat_num} and be concise with the category
                          The research question is: {research_question}""" if research_question else "You are a helpful assistant."},
                         {'role': 'user', 'content': prompt}
                     ],
-                    temperature=creativity
+                    **({"temperature": creativity} if creativity is not None else {})
                 )
                 reply = response_obj.choices[0].message.content
                 responses.append(reply)
@@ -107,7 +107,7 @@ def explore_common_categories(
     cat_num=10,
     divisions=5,
     user_model="gpt-4o",
-    creativity=0,
+    creativity=None,
     specificity="broad",
     research_question=None,
     filename=None,
@@ -158,7 +158,7 @@ Number your categories from 1 through {cat_num} and be concise with the category
                          The research question is: {research_question}""" if research_question else "You are a helpful assistant."},
                         {'role': 'user', 'content': prompt}
                     ],
-                    temperature=creativity
+                    **({"temperature": creativity} if creativity is not None else {})
                 )
                 reply = response_obj.choices[0].message.content
                 responses.append(reply)
@@ -225,7 +225,7 @@ def multi_class(
     categories,
     api_key,
     user_model="gpt-4o",
-    creativity=0,
+    creativity=None,
     safety=False,
     to_csv=False,
     filename="categorized_data.csv",
@@ -272,7 +272,7 @@ Provide your work in JSON format where the number belonging to each category is 
                     response_obj = client.chat.completions.create(
                     model=user_model,
                     messages=[{'role': 'user', 'content': prompt}],
-                    temperature=creativity
+                    **({"temperature": creativity} if creativity is not None else {})
                 )
                     reply = response_obj.choices[0].message.content
                     link1.append(reply)
@@ -286,7 +286,7 @@ Provide your work in JSON format where the number belonging to each category is 
                     response_obj = client.chat.completions.create(
                         model=user_model,
                         messages=[{'role': 'user', 'content': prompt}],
-                        temperature=creativity
+                        **({"temperature": creativity} if creativity is not None else {})
                     )
                     reply = response_obj.choices[0].message.content
                     link1.append(reply)
@@ -300,7 +300,7 @@ Provide your work in JSON format where the number belonging to each category is 
                     message = client.messages.create(
                     model=user_model,
                     max_tokens=1024,
-                    temperature=creativity,
+                    **({"temperature": creativity} if creativity is not None else {})
                     messages=[{"role": "user", "content": prompt}]
                 )
                     reply = message.content[0].text  # Anthropic returns content as list
@@ -321,7 +321,8 @@ Provide your work in JSON format where the number belonging to each category is 
                     payload = {
                         "contents": [{
                             "parts": [{"text": prompt}]
-                            }]
+                            }],
+                            **({"generationConfig": {"temperature": creativity}} if creativity is not None else {})
                             }
                     
                     response = requests.post(url, headers=headers, json=payload)
@@ -347,7 +348,7 @@ Provide your work in JSON format where the number belonging to each category is 
                     messages=[
                         {'role': 'user', 'content': prompt}
                     ],
-                    temperature=creativity
+                    **({"temperature": creativity} if creativity is not None else {})
                 )
                     reply = response.choices[0].message.content
                     link1.append(reply)

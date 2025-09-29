@@ -7,7 +7,7 @@ def build_web_research_dataset(
     additional_instructions = "",
     categories = ['Answer','URL'],
     user_model="claude-sonnet-4-20250514",
-    creativity=0,
+    creativity=None,
     safety=False,
     filename="categorized_data.csv",
     save_directory=None,
@@ -75,8 +75,8 @@ def build_web_research_dataset(
                     message = client.messages.create(
                     model=user_model,
                     max_tokens=1024,
-                    temperature=creativity,
                     messages=[{"role": "user", "content": prompt}],
+                    **({"temperature": creativity} if creativity is not None else {}),
                     tools=[{
                     "type": "web_search_20250305", 
                     "name": "web_search"
@@ -103,7 +103,8 @@ def build_web_research_dataset(
                     }
                     payload = {
                         "contents": [{"parts": [{"text": prompt}]}],
-                        "tools": [{"google_search": {}}]  # Enable search grounding
+                        "tools": [{"google_search": {}}],
+                        **({"generationConfig": {"temperature": creativity}} if creativity is not None else {})
                     }
         
                     response = requests.post(url, headers=headers, json=payload)

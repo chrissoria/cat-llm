@@ -5,7 +5,7 @@ def image_multi_class(
     categories,
     api_key,
     user_model="gpt-4o",
-    creativity=0,
+    creativity=None,
     to_csv=False,
     safety=False,
     filename="categorized_data.csv",
@@ -143,7 +143,7 @@ def image_multi_class(
                 response_obj = client.chat.completions.create(
                     model=user_model,
                     messages=[{'role': 'user', 'content': prompt}],
-                    temperature=creativity
+                    **({"temperature": creativity} if creativity is not None else {})
                 )
                 reply = response_obj.choices[0].message.content
                 link1.append(reply)
@@ -162,8 +162,8 @@ def image_multi_class(
                 message = client.messages.create(
                     model=user_model,
                     max_tokens=1024,
-                    temperature=creativity,
-                    messages=[{"role": "user", "content": prompt}]
+                    messages=[{"role": "user", "content": prompt}],
+                    **({"temperature": creativity} if creativity is not None else {})
                 )
                 reply = message.content[0].text
                 link1.append(reply)
@@ -183,7 +183,7 @@ def image_multi_class(
                     messages=[
                     {'role': 'user', 'content': prompt}
                 ],
-                temperature=creativity
+                **({"temperature": creativity} if creativity is not None else {})
                 )
                 reply = response.choices[0].message.content
                 link1.append(reply)
@@ -277,7 +277,7 @@ def image_score_drawing(
     api_key,
     columns="numbered",
     user_model="gpt-4o-2024-11-20",
-    creativity=0,
+    creativity=None,
     to_csv=False,
     safety=False,
     filename="categorized_data.csv",
@@ -442,7 +442,7 @@ def image_score_drawing(
                 response_obj = client.chat.completions.create(
                     model=user_model,
                     messages=[{'role': 'user', 'content': prompt}],
-                    temperature=creativity
+                    **({"temperature": creativity} if creativity is not None else {})
                 )
                 reply = response_obj.choices[0].message.content
                 link1.append(reply)
@@ -460,8 +460,8 @@ def image_score_drawing(
                 message = client.messages.create(
                     model=user_model,
                     max_tokens=1024,
-                    temperature=creativity,
-                    messages=[{"role": "user", "content": prompt}]
+                    messages=[{"role": "user", "content": prompt}],
+                    **({"temperature": creativity} if creativity is not None else {})
                 )
                 reply = message.content[0].text  # Anthropic returns content as list
                 link1.append(reply)
@@ -481,7 +481,7 @@ def image_score_drawing(
                     messages=[
                     {'role': 'user', 'content': prompt}
                 ],
-                temperature=creativity
+                **({"temperature": creativity} if creativity is not None else {})
                 )
                 reply = response.choices[0].message.content
                 link1.append(reply)
@@ -574,7 +574,7 @@ def image_features(
     features_to_extract,
     api_key,
     user_model="gpt-4o-2024-11-20",
-    creativity=0,
+    creativity=None,
     to_csv=False,
     safety=False,
     filename="categorized_data.csv",
@@ -715,7 +715,7 @@ def image_features(
                 response_obj = client.chat.completions.create(
                     model=user_model,
                     messages=[{'role': 'user', 'content': prompt}],
-                    temperature=creativity
+                    **({"temperature": creativity} if creativity is not None else {})
                 )
                 reply = response_obj.choices[0].message.content
                 link1.append(reply)
@@ -733,7 +733,7 @@ def image_features(
                 response_obj = client.chat.completions.create(
                     model=user_model,
                     messages=[{'role': 'user', 'content': prompt}],
-                    temperature=creativity
+                    **({"temperature": creativity} if creativity is not None else {})
                 )
                 reply = response_obj.choices[0].message.content
                 link1.append(reply)
@@ -751,8 +751,8 @@ def image_features(
                 message = client.messages.create(
                     model=user_model,
                     max_tokens=1024,
-                    temperature=creativity,
-                    messages=[{"role": "user", "content": prompt}]
+                    messages=[{"role": "user", "content": prompt}],
+                    **({"temperature": creativity} if creativity is not None else {})
                 )
                 reply = message.content[0].text  # Anthropic returns content as list
                 link1.append(reply)
@@ -772,7 +772,7 @@ def image_features(
                     messages=[
                     {'role': 'user', 'content': prompt}
                 ],
-                temperature=creativity
+                **({"temperature": creativity} if creativity is not None else {})
                 )
                 reply = response.choices[0].message.content
                 link1.append(reply)

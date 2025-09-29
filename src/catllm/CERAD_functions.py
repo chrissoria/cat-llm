@@ -27,7 +27,7 @@ def cerad_drawn_score(
     image_input,
     api_key,
     user_model="gpt-4o",
-    creativity=0,
+    creativity=None,
     reference_in_image=False,
     provide_reference=False,
     safety=False,
@@ -261,7 +261,7 @@ def cerad_drawn_score(
                 response_obj = client.chat.completions.create(
                     model=user_model,
                     messages=[{'role': 'user', 'content': prompt}],
-                    temperature=creativity
+                    **({"temperature": creativity} if creativity is not None else {})
                 )
                 reply = response_obj.choices[0].message.content
                 link1.append(reply)
@@ -279,8 +279,8 @@ def cerad_drawn_score(
                 message = client.messages.create(
                     model=user_model,
                     max_tokens=1024,
-                    temperature=creativity,
-                    messages=[{"role": "user", "content": prompt}]
+                    messages=[{"role": "user", "content": prompt}],
+                    **({"temperature": creativity} if creativity is not None else {})
                 )
                 reply = message.content[0].text  # Anthropic returns content as list
                 link1.append(reply)
@@ -301,7 +301,7 @@ def cerad_drawn_score(
                     messages=[
                     {'role': 'user', 'content': prompt}
                 ],
-                temperature=creativity
+                **({"temperature": creativity} if creativity is not None else {})
                 )
                 reply = response.choices[0].message.content
                 link1.append(reply)
