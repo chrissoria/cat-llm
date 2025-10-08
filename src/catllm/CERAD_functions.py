@@ -44,6 +44,8 @@ def cerad_drawn_score(
     from pathlib import Path
     import pkg_resources
 
+    model_source = model_source.lower() # eliminating case sensitivity 
+
     shape = shape.lower()
     shape = "rectangles" if shape == "overlapping rectangles" else shape
     if shape == "circle":
@@ -155,7 +157,7 @@ def cerad_drawn_score(
         else:
             reference_text = f"Image is expected to show within it a drawing of a {shape}.\n\n"
 
-        if model_source == "OpenAI" and valid_image:
+        if model_source == "openai" and valid_image:
             prompt = [
                 {
                     "type": "text",
@@ -185,7 +187,7 @@ def cerad_drawn_score(
                 "image_url": {"url": encoded_image, "detail": "high"}
             })
         
-        elif model_source == "Anthropic" and valid_image:
+        elif model_source == "anthropic" and valid_image:
             prompt = [
                 {
                     "type": "text",
@@ -225,7 +227,7 @@ def cerad_drawn_score(
             }
             )
 
-        elif model_source == "Mistral" and valid_image:
+        elif model_source == "mistral" and valid_image:
             prompt = [
                 {
                     "type": "text",
@@ -254,7 +256,7 @@ def cerad_drawn_score(
                 "image_url": f"data:image/{ext};base64,{encoded_image}"
             })
 
-        if model_source == "OpenAI" and valid_image:
+        if model_source == "openai" and valid_image:
             from openai import OpenAI
             client = OpenAI(api_key=api_key)
             try:
@@ -272,7 +274,7 @@ def cerad_drawn_score(
                     print("An error occurred: {e}")
                     link1.append("Error processing input: {e}")
 
-        elif model_source == "Anthropic"  and valid_image:
+        elif model_source == "anthropic"  and valid_image:
             import anthropic
             client = anthropic.Anthropic(api_key=api_key)
             try:
@@ -291,7 +293,7 @@ def cerad_drawn_score(
                     print("An error occurred: {e}")
                     link1.append("Error processing input: {e}")
 
-        elif model_source == "Mistral"  and valid_image:
+        elif model_source == "mistral"  and valid_image:
             from mistralai import Mistral
             reply = None
             client = Mistral(api_key=api_key)

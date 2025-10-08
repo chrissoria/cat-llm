@@ -33,6 +33,8 @@ def image_multi_class(
     '*.psd'
     ]
 
+    model_source = model_source.lower() # eliminating case sensitivity 
+
     if not isinstance(image_input, list):
         # If image_input is a filepath (string)
         image_files = []
@@ -86,7 +88,7 @@ def image_multi_class(
     
     # Handle extension safely
         ext = Path(img_path).suffix.lstrip(".").lower()
-        if model_source == "OpenAI" or model_source == "Mistral":
+        if model_source == "openai" or model_source == "mistral":
             encoded_image = f"data:image/{ext};base64,{encoded}"
             prompt = [
                 {
@@ -110,7 +112,7 @@ def image_multi_class(
                 },
             ]
             
-        elif model_source == "Anthropic":
+        elif model_source == "anthropic":
             encoded_image = f"data:image/{ext};base64,{encoded}"
             prompt = [
                 {"type": "text",
@@ -136,7 +138,7 @@ def image_multi_class(
                     }
                 }
             ]
-        if model_source == "OpenAI":
+        if model_source == "openAI":
             from openai import OpenAI
             client = OpenAI(api_key=api_key)
             try:
@@ -154,7 +156,7 @@ def image_multi_class(
                     print("An error occurred: {e}")
                     link1.append("Error processing input: {e}")
 
-        elif model_source == "Anthropic":
+        elif model_source == "anthropic":
             import anthropic
             reply = None
             client = anthropic.Anthropic(api_key=api_key)
@@ -174,7 +176,7 @@ def image_multi_class(
                     print("An error occurred: {e}")
                     link1.append("Error processing input: {e}")
 
-        elif model_source == "Mistral":
+        elif model_source == "mistral":
             from mistralai import Mistral
             client = Mistral(api_key=api_key)
             try:
@@ -305,6 +307,8 @@ def image_score_drawing(
     '*.psd'
     ]
 
+    model_source = model_source.lower() # eliminating case sensitivity 
+
     if not isinstance(image_input, list):
         # If image_input is a filepath (string)
         image_files = []
@@ -354,7 +358,7 @@ def image_score_drawing(
         ext = Path(img_path).suffix.lstrip(".").lower()
         encoded_image = f"data:image/{ext};base64,{encoded}"
 
-        if model_source == "OpenAI" or model_source == "Mistral":
+        if model_source == "openai" or model_source == "mistral":
             prompt = [
                 {
                     "type": "text",
@@ -390,7 +394,7 @@ def image_score_drawing(
                 }
             ]
 
-        elif model_source == "Anthropic":  # Changed to elif
+        elif model_source == "anthropic":  # Changed to elif
             prompt = [
                 {
                     "type": "text",
@@ -435,7 +439,7 @@ def image_score_drawing(
             ]
 
             
-        if model_source == "OpenAI":
+        if model_source == "openai":
             from openai import OpenAI
             client = OpenAI(api_key=api_key)
             try:
@@ -453,7 +457,7 @@ def image_score_drawing(
                     print("An error occurred: {e}")
                     link1.append("Error processing input: {e}")
 
-        elif model_source == "Anthropic":
+        elif model_source == "anthropic":
             import anthropic
             client = anthropic.Anthropic(api_key=api_key)
             try:
@@ -472,7 +476,7 @@ def image_score_drawing(
                     print("An error occurred: {e}")
                     link1.append("Error processing input: {e}")
 
-        elif model_source == "Mistral":
+        elif model_source == "mistral":
             from mistralai import Mistral
             client = Mistral(api_key=api_key)
             try:
@@ -598,6 +602,8 @@ def image_features(
     '*.psd'
     ]
 
+    model_source = model_source.lower() # eliminating case sensitivity 
+
     if not isinstance(image_input, list):
         # If image_input is a filepath (string)
         image_files = []
@@ -644,7 +650,7 @@ def image_features(
             encoded_image = f"data:image/{ext};base64,{encoded}"
             valid_image = True
 
-        if model_source == "OpenAI" or model_source == "Mistral":
+        if model_source == "openai" or model_source == "mistral":
             prompt = [
                 {
                     "type": "text",
@@ -674,7 +680,7 @@ def image_features(
                             "image_url": {"url": encoded_image, "detail": "high"},
                             },
             ]
-        elif model_source == "Anthropic":
+        elif model_source == "anthropic":
             prompt = [
                 {
                     "type": "text",
@@ -708,7 +714,7 @@ def image_features(
                     }
                 }
             ]
-        if model_source == "OpenAI":
+        if model_source == "openai":
             from openai import OpenAI
             client = OpenAI(api_key=api_key)
             try:
@@ -726,7 +732,7 @@ def image_features(
                     print("An error occurred: {e}")
                     link1.append("Error processing input: {e}")
 
-        elif model_source == "Perplexity":
+        elif model_source == "perplexity":
             from openai import OpenAI
             client = OpenAI(api_key=api_key, base_url="https://api.perplexity.ai")
             try:
@@ -744,7 +750,7 @@ def image_features(
                     print("An error occurred: {e}")
                     link1.append("Error processing input: {e}")
 
-        elif model_source == "Anthropic":
+        elif model_source == "anthropic":
             import anthropic
             client = anthropic.Anthropic(api_key=api_key)
             try:
@@ -763,7 +769,7 @@ def image_features(
                     print("An error occurred: {e}")
                     link1.append("Error processing input: {e}")
 
-        elif model_source == "Mistral":
+        elif model_source == "mistral":
             from mistralai import Mistral
             client = Mistral(api_key=api_key)
             try:

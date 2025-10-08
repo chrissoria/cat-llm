@@ -22,6 +22,8 @@ def explore_corpus(
     print(f"Exploring class for question: '{survey_question}'.\n          {cat_num * divisions} unique categories to be extracted.")
     print()
 
+    model_source = model_source.lower() # eliminating case sensitivity 
+
     chunk_size = round(max(1, len(survey_input) / divisions),0)
     chunk_size = int(chunk_size)
 
@@ -46,7 +48,7 @@ Responses are each separated by a semicolon. \
 Responses are contained within triple backticks here: ```{survey_participant_chunks}``` \
 Number your categories from 1 through {cat_num} and be concise with the category labels and provide no description of the categories."""
         
-        if model_source == "OpenAI":
+        if model_source == "openai":
             client = OpenAI(api_key=api_key)
             try:
                 response_obj = client.chat.completions.create(
@@ -123,6 +125,8 @@ def explore_common_categories(
     print(f"Exploring class for question: '{survey_question}'.\n          {cat_num * divisions} unique categories to be extracted and {top_n} to be identified as the most common.")
     print()
 
+    model_source = model_source.lower() # eliminating case sensitivity 
+
     chunk_size = round(max(1, len(survey_input) / divisions),0)
     chunk_size = int(chunk_size)
 
@@ -147,7 +151,7 @@ Responses are each separated by a semicolon. \
 Responses are contained within triple backticks here: ```{survey_participant_chunks}``` \
 Number your categories from 1 through {cat_num} and be concise with the category labels and provide no description of the categories."""
         
-        if model_source == "OpenAI":
+        if model_source == "openai":
             client = OpenAI(api_key=api_key)
             try:
                 response_obj = client.chat.completions.create(
@@ -198,7 +202,7 @@ Number your categories from 1 through {cat_num} and be concise with the category
 The categories are contained within triple backticks here: ```{df['Category'].tolist()}``` \
 Return the top {top_n} categories as a numbered list sorted from the most to least common and keep the categories {specificity}, with no additional text or explanation."""
         
-    if model_source == "OpenAI":
+    if model_source == "openai":
         client = OpenAI(api_key=api_key)
         response_obj = client.chat.completions.create(
             model=user_model,
@@ -237,6 +241,8 @@ def multi_class(
     import pandas as pd
     import regex
     from tqdm import tqdm
+
+    model_source = model_source.lower() # eliminating case sensitivity 
     
     categories_str = "\n".join(f"{i + 1}. {cat}" for i, cat in enumerate(categories))
     cat_num = len(categories)
@@ -265,7 +271,7 @@ Categorize this survey response "{response}" into the following categories that 
 {categories_str} \
 Provide your work in JSON format where the number belonging to each category is the key and a 1 if the category is present and a 0 if it is not present as key values."""
             #print(prompt)
-            if model_source == ("OpenAI"):
+            if model_source == ("openai"):
                 from openai import OpenAI
                 client = OpenAI(api_key=api_key)
                 try:
@@ -279,7 +285,7 @@ Provide your work in JSON format where the number belonging to each category is 
                 except Exception as e:
                     print(f"An error occurred: {e}")
                     link1.append(f"Error processing input: {e}")
-            elif model_source == "Perplexity":
+            elif model_source == "perplexity":
                 from openai import OpenAI
                 client = OpenAI(api_key=api_key, base_url="https://api.perplexity.ai")
                 try:
@@ -293,14 +299,14 @@ Provide your work in JSON format where the number belonging to each category is 
                 except Exception as e:
                     print(f"An error occurred: {e}")
                     link1.append(f"Error processing input: {e}")
-            elif model_source == "Anthropic":
+            elif model_source == "anthropic":
                 import anthropic
                 client = anthropic.Anthropic(api_key=api_key)
                 try:
                     message = client.messages.create(
                     model=user_model,
                     max_tokens=1024,
-                    **({"temperature": creativity} if creativity is not None else {})
+                    **({"temperature": creativity} if creativity is not None else {}),
                     messages=[{"role": "user", "content": prompt}]
                 )
                     reply = message.content[0].text  # Anthropic returns content as list
@@ -309,7 +315,7 @@ Provide your work in JSON format where the number belonging to each category is 
                     print(f"An error occurred: {e}")
                     link1.append(f"Error processing input: {e}")
                     
-            elif model_source == "Google":
+            elif model_source == "google":
                 import requests
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
                 try:
@@ -339,7 +345,7 @@ Provide your work in JSON format where the number belonging to each category is 
                     print(f"An error occurred: {e}")
                     link1.append(f"Error processing input: {e}")
 
-            elif model_source == "Mistral":
+            elif model_source == "mistral":
                 from mistralai import Mistral
                 client = Mistral(api_key=api_key)
                 try:

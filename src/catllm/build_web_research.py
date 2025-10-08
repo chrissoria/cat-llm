@@ -20,6 +20,8 @@ def build_web_research_dataset(
     import regex
     from tqdm import tqdm
     import time
+
+    model_source = model_source.lower() # eliminating case sensitivity 
     
     categories_str = "\n".join(f"{i + 1}. {cat}" for i, cat in enumerate(categories))
     print(categories_str)
@@ -34,6 +36,8 @@ def build_web_research_dataset(
     
     link1 = []
     extracted_jsons = []
+
+    max_retries = 5 #API rate limit error handler retries
 
     for idx, item in enumerate(tqdm(search_input, desc="Building dataset")):
         if idx > 0:  # Skip delay for first item only
@@ -68,32 +72,43 @@ def build_web_research_dataset(
         }}
         </format>"""
             #print(prompt)
-            if model_source == "Anthropic":
+            if model_source == "anthropic":
                 import anthropic
                 client = anthropic.Anthropic(api_key=api_key)
-                try:
-                    message = client.messages.create(
-                    model=user_model,
-                    max_tokens=1024,
-                    messages=[{"role": "user", "content": prompt}],
-                    **({"temperature": creativity} if creativity is not None else {}),
-                    tools=[{
-                    "type": "web_search_20250305", 
-                    "name": "web_search"
-                    }]
-                )
-                    reply = " ".join(
-                        block.text
-                        for block in message.content
-                        if getattr(block, "type", "") == "text"
-                    ).strip()
-                    link1.append(reply)
-                    
-                except Exception as e:
-                    print(f"An error occurred: {e}")
-                    link1.append(f"Error processing input: {e}")
 
-            elif model_source == "Google":
+                attempt = 0
+                while attempt < max_retries:
+                    try:
+                        message = client.messages.create(
+                        model=user_model,
+                        max_tokens=1024,
+                        messages=[{"role": "user", "content": prompt}],
+                        **({"temperature": creativity} if creativity is not None else {}),
+                        tools=[{
+                        "type": "web_search_20250305", 
+                        "name": "web_search"
+                        }]
+                    )
+                        reply = " ".join(
+                            block.text
+                            for block in message.content
+                            if getattr(block, "type", "") == "text"
+                        ).strip()
+                        link1.append(reply)
+                        break
+                    except anthropic.error.RateLimitError as e:
+                        wait_time = 2 ** attempt  # Exponential backoff, keeps doubling after each attempt
+                        print(f"Rate limit error encountered. Retrying in {wait_time} seconds...")
+                        time.sleep(wait_time) #in case user wants to try and buffer the amount of errors by adding a wait time before attemps
+                        attempt += 1
+                    except Exception as e:
+                        print(f"A Non-rate-limit error occurred: {e}")
+                        link1.append(f"Error processing input: {e}")
+                        break #stop retrying 
+                else:
+                    link1.append("Max retries exceeded for rate limit errors.")
+
+            elif model_source == "google":
                 import requests
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
                 try:
