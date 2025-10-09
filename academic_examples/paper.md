@@ -31,13 +31,16 @@ new opportunities for automated text and image analysis in social
 science research [@schulze_buschoff_visual_2025; @yang_large_2024;
 @sachdeva_normative_2025]. Researchers increasingly use these tools to
 code open-ended survey responses, categorize qualitative data, and
-analyze visual content at scale. However, challenges remain due to
+analyze visual content at scale. Yet challenges persist due to
 inconsistent output formats, diverse API interfaces, and the lack of
-standardized workflows for integrating model outputs into traditional
-statistical analysis pipelines [@rossi_problems_2024]. CatLLM addresses
-these issues by providing a modular framework with specialized functions
-that enable researchers to work with consistent data structures across
-text and image analysis workflows while maintaining compatibility with
+standardized workflows for integrating both model outputs and external
+data sources into traditional statistical analysis pipelines
+[@rossi_problems_2024]. CatLLM addresses these issues by providing a
+modular framework with specialized functions that not only ensure
+consistent data structures across text and image analysis workflows, but
+also facilitate the automated retrieval of structured data from the web.
+This integration allows researchers to seamlessly combine large model
+outputs with real-world datasets, maintaining compatibility with
 standard statistical analysis tools.
 
 # Statement of need
@@ -68,18 +71,19 @@ begun using large language models (LLMs) directly through web
 interfaces, this approach lacks standardization, reproducibility, and
 systematic output formatting necessary for quantitative analysis.
 
-`CatLLM` addresses these gaps by providing a standardized, free-to-use,
+`CatLLM` addresses these gaps by providing a standardized, free-to-use
 interface for applying state-of-the-art language and vision models to
 common research tasks without requiring machine learning expertise. The
-package enables researchers to transform qualitative data into
-quantitative datasets suitable for statistical analysis, bridging the
-gap between traditional qualitative methods and computational
-approaches. Recent research demonstrates that LLMs from OpenAI and
-Anthropic, particularly GPT-4, can effectively replicate human analysis
-performance in content analysis tasks, with some studies showing LLMs
-achieving higher inter-rater reliability than human annotators in
-sentiment analysis and political leaning assessments
-[@bojic_comparing_2025]. Unlike existing tools, CatLLM improves
+package enables researchers to transform diverse data sources—from
+open-ended survey responses and qualitative interviews to unstructured
+web content—into quantitative datasets suitable for statistical
+analysis, bridging the gap between traditional research methods and
+computational approaches. Recent research demonstrates that LLMs from
+OpenAI and Anthropic, particularly GPT-4, can effectively replicate
+human analysis performance in content analysis tasks, with some studies
+showing LLMs achieving higher inter-rater reliability than human
+annotators in sentiment analysis and political leaning assessments
+[@bojic_comparing_2025]. Unlike existing tools, CatLLM provides
 reproducible, structured outputs while supporting multiple AI providers
 and maintaining cost efficiency through built-in optimization features.
 
@@ -87,12 +91,13 @@ and maintaining cost efficiency through built-in optimization features.
 Responses](move_reasons.png)
 
 The software has demonstrated practical impact across diverse research
-domains. It has been successfully applied in studies examining
-demographic differences in LLM performance using the UC Berkeley Social
-Networks Study [@soria_empirical_2025], categorizing occupational data
-according to Standard Occupational Classification codes, and
-implementing automated scoring for cognitive assessments in the
-Caribbean-American Dementia and Aging Study
+domains. It has been successfully applied by institutional researchers
+at UC Berkeley to track student experience and outcomes, in studies
+examining demographic differences in LLM performance using the UC
+Berkeley Social Networks Study [@soria_empirical_2025], categorizing
+occupational data according to Standard Occupational Classification
+codes, and implementing automated scoring for cognitive assessments in
+the Caribbean-American Dementia and Aging Study
 [@llibre-guerra_caribbean-american_2021]. These applications demonstrate
 the package's versatility in addressing real-world research challenges
 that require systematic analysis of unstructured data at scale.
@@ -102,7 +107,7 @@ The package can be easily installed and implemented:
 ```         
 pip install cat-llm
 
-import catllm
+import catllm as cat
 ```
 
 For comprehensive documentation and detailed installation instructions,
@@ -110,14 +115,21 @@ see <https://github.com/chrissoria/cat-llm>.
 
 # Features
 
-The `CatLLm` package processes user-provided text (open-ended survey
-responses) or image data and returns structured data objects. The
-package enables users to customize function behavior by incorporating
-their specific research questions and background theoretical frameworks,
-allowing the language models to generate more contextually relevant and
-theoretically grounded outputs tailored to their analytical objectives.
+The `CatLLM` package processes diverse data sources—including
+user-provided text (open-ended survey responses), image data, and
+unstructured content retrieved from the web—and returns structured data
+objects. The package enables users to customize function behavior by
+incorporating their specific research questions and background
+theoretical frameworks, allowing the language models to generate more
+contextually relevant and theoretically grounded outputs tailored to
+their analytical objectives.
 
 The package extends this framework through specialized capabilities:
+
+-   **Web Data Collection**: Retrieves and structures unstructured
+    content from web sources, transforming raw online data into
+    standardized datasets suitable for analysis alongside survey and
+    qualitative data.
 
 -   **Binary Image Classification**: Applies classification frameworks
     to vision models, determining the presence or absence of specific
@@ -145,8 +157,10 @@ The package extends this framework through specialized capabilities:
     on their frequency and consistency across different sections.
 
 This modular approach provides researchers with consistent data
-structures across text and image analysis workflows while maintaining
-compatibility with standard statistical analysis tools.
+structures across text, image, and web data analysis workflows while
+maintaining compatibility with standard statistical analysis tools.
+
+![CatLLM Function Diagram](web_retrieval_flowchart.png)
 
 ![Scoring Drawings of Cubes According to CERAD Rules Using
 CatLLM](CERAD_diagram.png)
@@ -154,10 +168,10 @@ CatLLM](CERAD_diagram.png)
 # Acknowledgements
 
 This work was supported by the UC Berkeley Mentored Research Award. The
-author thanks Henry Tyler Dow for assistance in testing the functions on
-real data. The author also acknowledges the University of California,
-Berkeley for providing the institutional support that enabled this
-research.
+author thanks Matthew Stenberg, Sara Quigley, Madeline Arnold, and Henry
+Tyler Dow for assistance in testing the functions on real data. The
+author also acknowledges the University of California, Berkeley for
+providing the institutional support that enabled this research.
 
 Partial support was provided by the Center on the Economics and
 Demography of Aging, P30AG012839, and the Greater Good Science Center's
