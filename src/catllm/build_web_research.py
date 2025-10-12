@@ -12,9 +12,11 @@ def build_web_research_dataset(
     filename="categorized_data.csv",
     save_directory=None,
     model_source="Anthropic",
-    time_delay=15
+    max_retries = 7, #API rate limit error handler retries
+    time_delay=5
 ):
     import os
+    import re
     import json
     import pandas as pd
     import regex
@@ -22,6 +24,9 @@ def build_web_research_dataset(
     import time
 
     model_source = model_source.lower() # eliminating case sensitivity 
+
+    if model_source == "google" and user_model == "claude-sonnet-4-20250514":
+        user_model = "gemini-2.5-flash"
     
     categories_str = "\n".join(f"{i + 1}. {cat}" for i, cat in enumerate(categories))
     print(categories_str)
@@ -36,8 +41,7 @@ def build_web_research_dataset(
     
     link1 = []
     extracted_jsons = []
-
-    max_retries = 5 #API rate limit error handler retries
+    extracted_urls = []
 
     for idx, item in enumerate(tqdm(search_input, desc="Building dataset")):
         if idx > 0:  # Skip delay for first item only
@@ -46,6 +50,7 @@ def build_web_research_dataset(
 
         if pd.isna(item): 
             link1.append("Skipped NaN input")
+            extracted_urls.append([])
             default_json = example_JSON 
             extracted_jsons.append(default_json)
             #print(f"Skipped NaN input.")
@@ -59,7 +64,6 @@ def build_web_research_dataset(
             - Provide your answer as {answer_format}
             - Prioritize official sources when possible
             - If information is not found, state "Information not found"
-            - Include exactly one source URL where you found the information
             - Do not include any explanatory text or commentary beyond the JSON
                 {additional_instructions}
             </rules>
@@ -67,8 +71,7 @@ def build_web_research_dataset(
             <format>
             Return your response as valid JSON with this exact structure:
             {{
-            "answer": "Your factual answer or 'Information not found'",
-            "url": "Source URL or 'No source available'"
+            "answer": "Your factual answer or 'Information not found'"
         }}
         </format>"""
             #print(prompt)
@@ -95,6 +98,20 @@ def build_web_research_dataset(
                             if getattr(block, "type", "") == "text"
                         ).strip()
                         link1.append(reply)
+                        #print(message.content)
+                        
+                        urls = [
+                            item["url"]
+                            for block in message.content
+                            if getattr(block, "type", "") == "web_search_tool_result"
+                            for item in (getattr(block, "content", []) or [])
+                            if isinstance(item, dict) and item.get("type") == "web_search_result" and "url" in item
+                        ]
+
+                        seen = set()
+                        urls = [u for u in urls if not (u in seen or seen.add(u))]
+                        extracted_urls.append(urls)
+
                         break
                     except anthropic.error.RateLimitError as e:
                         wait_time = 2 ** attempt  # Exponential backoff, keeps doubling after each attempt
@@ -104,9 +121,11 @@ def build_web_research_dataset(
                     except Exception as e:
                         print(f"A Non-rate-limit error occurred: {e}")
                         link1.append(f"Error processing input: {e}")
+                        extracted_urls.append([])
                         break #stop retrying 
                 else:
                     link1.append("Max retries exceeded for rate limit errors.")
+                    extracted_urls.append([])
 
             elif model_source == "google":
                 import requests
@@ -121,10 +140,30 @@ def build_web_research_dataset(
                         "tools": [{"google_search": {}}],
                         **({"generationConfig": {"temperature": creativity}} if creativity is not None else {})
                     }
-        
+                    
                     response = requests.post(url, headers=headers, json=payload)
                     response.raise_for_status()
                     result = response.json()
+
+                    urls = []
+                    for cand in result.get("candidates", []):
+                        rendered_html = (
+                            cand.get("groundingMetadata", {})
+                            .get("searchEntryPoint", {})
+                            .get("renderedContent", "")
+                        )
+                        if rendered_html:
+                        # regex: capture href="..."; limited to class="chip"
+                            found = re.findall(
+                                r'<a[^>]*class=["\']chip["\'][^>]*href=["\']([^"\']+)["\']',
+                                rendered_html,
+                                flags=re.IGNORECASE
+                            )
+                            urls.extend(found)
+
+                    seen = set()
+                    urls = [u for u in urls if not (u in seen or seen.add(u))]
+                    extracted_urls.append(urls)
         
                     # extract reply from Google's response structure
                     if "candidates" in result and result["candidates"]:
@@ -137,6 +176,7 @@ def build_web_research_dataset(
                 except Exception as e:
                     print(f"An error occurred: {e}")
                     link1.append(f"Error processing input: {e}")
+                    extracted_urls.append([])
 
             else:
                 raise ValueError("Unknown source! Currently this function only supports 'Anthropic' or 'Google' as model_source.")
@@ -157,12 +197,12 @@ def build_web_research_dataset(
                         extracted_jsons.append(raw_json)
                 else:
                     # Use consistent schema for errors
-                    error_message = json.dumps({"answer": "e", "url": "e"})
+                    error_message = json.dumps({"answer": "e"})
                     extracted_jsons.append(error_message)
                     print(error_message)
             else:
                 # Handle None reply case
-                error_message = json.dumps({"answer": "e", "url": "e"})
+                error_message = json.dumps({"answer": "e"})
                 extracted_jsons.append(error_message)
                 #print(error_message)
 
@@ -170,9 +210,9 @@ def build_web_research_dataset(
         if safety:
             # Save progress so far
             temp_df = pd.DataFrame({
-                'survey_response': search_input[:idx+1],
-                'model_response': link1,
-                'json': extracted_jsons
+                'raw_response': search_input[:idx+1]
+                #'model_response': link1,
+                #'json': extracted_jsons
             })
             # Normalize processed jsons so far
             normalized_data_list = []
@@ -183,7 +223,9 @@ def build_web_research_dataset(
                 except json.JSONDecodeError:
                     normalized_data_list.append(pd.DataFrame({"1": ["e"]}))
             normalized_data = pd.concat(normalized_data_list, ignore_index=True)
+            temp_urls = pd.DataFrame(extracted_urls).add_prefix("url_")
             temp_df = pd.concat([temp_df, normalized_data], axis=1)
+            temp_df = pd.concat([temp_df, temp_urls], axis=1)
             # Save to CSV
             if save_directory is None:
                 save_directory = os.getcwd()
@@ -199,14 +241,19 @@ def build_web_research_dataset(
             normalized_data_list.append(pd.DataFrame({"1": ["e"]}))
     normalized_data = pd.concat(normalized_data_list, ignore_index=True)
 
+    # converting urls to dataframe and adding prefix
+    df_urls = pd.DataFrame(extracted_urls).add_prefix("url_")
+
     categorized_data = pd.DataFrame({
-        'survey_response': (
+        'search_input': (
             search_input.reset_index(drop=True) if isinstance(search_input, (pd.DataFrame, pd.Series)) 
             else pd.Series(search_input)
         ),
-        'link1': pd.Series(link1).reset_index(drop=True),
-        'json': pd.Series(extracted_jsons).reset_index(drop=True)
+        'raw_response': pd.Series(link1).reset_index(drop=True),
+        #'json': pd.Series(extracted_jsons).reset_index(drop=True),
+        #"all_urls": pd.Series(extracted_urls).reset_index(drop=True)
     })
     categorized_data = pd.concat([categorized_data, normalized_data], axis=1)
+    categorized_data = pd.concat([categorized_data, df_urls], axis=1)
     
     return categorized_data
