@@ -15,7 +15,7 @@ def build_web_research_dataset(
     start_date=None,
     end_date=None,
     search_depth="", #enables Tavily searches
-    advanced_search_api_key=None,
+    tavily_api=None,
     output_urls = True,
     max_retries = 6, #API rate limit error handler retries
     time_delay=5
@@ -60,6 +60,11 @@ def build_web_research_dataset(
 
     model_source = model_source.lower() # eliminating case sensitivity 
 
+    if model_source == "perplexity" and start_date is not None:
+        start_date = datetime.strptime(start_date, "%Y-%m-%d").strftime("%m/%d/%Y")
+    if model_source == "perplexity" and end_date is not None:  
+        end_date = datetime.strptime(end_date, "%Y-%m-%d").strftime("%m/%d/%Y")
+
     # in case user switches to google but doesn't switch model
     if model_source == "google" and user_model == "claude-sonnet-4-20250514":
         user_model = "gemini-2.5-flash"
@@ -102,6 +107,7 @@ def build_web_research_dataset(
             {{
             "answer": "Your factual answer or 'Information not found'",
             "second_best_answer": "Your second best factual answer or 'Information not found'",
+            "confidence": "confidence in response 0-5 or 'Information not found'"
         }}
 
         </format>"""
@@ -116,10 +122,10 @@ def build_web_research_dataset(
                 append_text = f"\n- Focus on webpages published before {end_date}."
                 prompt = prompt.replace("<rules>", "<rules>" + append_text)
 
-            if search_depth == "advanced":
+            if search_depth == "advanced" and model_source != "perplexity":
                 try:
                     from tavily import TavilyClient
-                    tavily_client = TavilyClient(advanced_search_api_key)
+                    tavily_client = TavilyClient(tavily_api)
                     tavily_response = tavily_client.search(
                         query=f"{item}'s {search_question}",
                         include_answer=True,
@@ -139,12 +145,16 @@ def build_web_research_dataset(
                     extracted_urls.append(urls)
         
                 except Exception as e:
-                    print(f"Tavily search error: {e}")
-                    link1.append(f"Error with Tavily search: {e}")
-                    extracted_urls.append([])
-                    continue 
+                    error_msg = str(e).lower()
+                    if "unauthorized" in error_msg or "403" in error_msg or "401" in error_msg or "api_key" in error_msg:
+                        raise ValueError("ERROR: Invalid or missing tavily_api required for advanced search. Get one at https://app.tavily.com/home. To install: pip install tavily-python") from e
+                    else:
+                        print(f"Tavily search error: {e}")
+                        link1.append(f"Error with Tavily search: {e}")
+                        extracted_urls.append([])
+                        continue 
 
-                print(tavily_response)
+                #print(tavily_response)
             
                 advanced_prompt = f"""Based on the following search results about {item}'s {search_question}, provide your answer in this EXACT JSON format and {answer_format}:
                 If you can't find the information, respond with 'Information not found'.
@@ -338,7 +348,8 @@ def build_web_research_dataset(
                     print(f"An error occurred: {e}")
                     link1.append(f"Error processing input: {e}")
 
-            elif model_source == "perplexity" and search_depth != "advanced":
+            elif model_source == "perplexity":
+
                 from perplexity import Perplexity
                 client = Perplexity(api_key=api_key)
                 try:
@@ -352,6 +363,9 @@ def build_web_research_dataset(
                         model=user_model,
                         max_tokens=1024,
                         **({"temperature": creativity} if creativity is not None else {}),
+                        web_search_options={"search_context_size": "high" if search_depth == "advanced" else "medium"},
+                        **({"search_after_date_filter": start_date} if start_date else {}),
+                        **({"search_before_date_filter": end_date} if end_date else {}),
                         response_format={ #requiring a JSON
                         "type": "json_schema",
                         "json_schema": {
@@ -359,7 +373,8 @@ def build_web_research_dataset(
                                 "type": "object",
                                 "properties": {
                                     "answer": {"type": "string"},
-                                    "second_best_answer": {"type": "string"}
+                                    "second_best_answer": {"type": "string"},
+                                    "confidence": {"type": "integer"}
                             },
                             "required": ["answer", "second_best_answer"]
                         }
@@ -368,7 +383,7 @@ def build_web_research_dataset(
             )
 
                     reply = response.choices[0].message.content
-                    print(response)
+                    #print(response)
                     link1.append(reply)
 
                     urls = list(response.citations) if hasattr(response, 'citations') else []

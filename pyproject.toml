@@ -29,7 +29,8 @@ dependencies = [
   "tqdm",
   "requests",
   "openai",
-  "anthropic"
+  "anthropic",
+  "perplexityai"
 ]
 
 [project.urls]
