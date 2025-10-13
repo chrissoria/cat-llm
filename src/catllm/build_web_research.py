@@ -5,14 +5,19 @@ def build_web_research_dataset(
     api_key,
     answer_format = "concise",
     additional_instructions = "",
-    categories = ['Answer','URL'],
+    categories = ['Answer'],
     user_model="claude-sonnet-4-20250514",
     creativity=None,
     safety=False,
     filename="categorized_data.csv",
     save_directory=None,
     model_source="Anthropic",
-    max_retries = 7, #API rate limit error handler retries
+    start_date=None,
+    end_date=None,
+    search_depth="", #enables Tavily searches
+    advanced_search_api_key=None,
+    output_urls = True,
+    max_retries = 6, #API rate limit error handler retries
     time_delay=5
 ):
     import os
@@ -22,22 +27,47 @@ def build_web_research_dataset(
     import regex
     from tqdm import tqdm
     import time
+    from datetime import datetime
+
+    #ensures proper date format
+    def _validate_date(date_str):
+        """Validates YYYY-MM-DD format"""
+        if date_str is None:
+            return True  # None is acceptable (means no date constraint)
+        
+        if not isinstance(date_str, str):
+            return False
+        
+        # Check pattern: YYYY_MM_DD
+        pattern = r'^\d{4}-\d{2}-\d{2}$'
+        if not re.match(pattern, date_str):
+            return False
+        
+        # Validate actual date
+        try:
+            year, month, day = date_str.split('-')
+            datetime(int(year), int(month), int(day))
+            return True
+        except (ValueError, OverflowError):
+            return False
+    
+    # Validate dates at the start of the function
+    if not _validate_date(start_date):
+        raise ValueError(f"start_date must be in YYYY-MM-DD format, got: {start_date}")
+    
+    if not _validate_date(end_date):
+        raise ValueError(f"end_date must be in YYYY-MM-DD format, got: {end_date}")
 
     model_source = model_source.lower() # eliminating case sensitivity 
 
+    # in case user switches to google but doesn't switch model
     if model_source == "google" and user_model == "claude-sonnet-4-20250514":
         user_model = "gemini-2.5-flash"
     
     categories_str = "\n".join(f"{i + 1}. {cat}" for i, cat in enumerate(categories))
-    print(categories_str)
     cat_num = len(categories)
     category_dict = {str(i+1): "0" for i in range(cat_num)}
     example_JSON = json.dumps(category_dict, indent=4)
-
-    # ensure number of categories is what user wants
-    #print("\nThe information to be extracted:")
-    #for i, cat in enumerate(categories, 1):
-        #print(f"{i}. {cat}")
     
     link1 = []
     extracted_jsons = []
@@ -53,7 +83,6 @@ def build_web_research_dataset(
             extracted_urls.append([])
             default_json = example_JSON 
             extracted_jsons.append(default_json)
-            #print(f"Skipped NaN input.")
         else:
             prompt = f"""<role>You are a research assistant specializing in finding current, factual information.</role>
 
@@ -71,14 +100,70 @@ def build_web_research_dataset(
             <format>
             Return your response as valid JSON with this exact structure:
             {{
-            "answer": "Your factual answer or 'Information not found'"
+            "answer": "Your factual answer or 'Information not found'",
+            "second_best_answer": "Your second best factual answer or 'Information not found'",
         }}
+
         </format>"""
-            #print(prompt)
-            if model_source == "anthropic":
+
+            if start_date is not None and end_date is not None:
+                append_text = f"\n- Focus on webpages with a page age between {start_date} and {end_date}."
+                prompt = prompt.replace("<rules>", "<rules>" + append_text)
+            elif start_date is not None:
+                append_text = f"\n- Focus on webpages published after {start_date}."
+                prompt = prompt.replace("<rules>", "<rules>" + append_text)
+            elif end_date is not None:
+                append_text = f"\n- Focus on webpages published before {end_date}."
+                prompt = prompt.replace("<rules>", "<rules>" + append_text)
+
+            if search_depth == "advanced":
+                try:
+                    from tavily import TavilyClient
+                    tavily_client = TavilyClient(advanced_search_api_key)
+                    tavily_response = tavily_client.search(
+                        query=f"{item}'s {search_question}",
+                        include_answer=True,
+                        max_results=15,
+                        search_depth="advanced",
+                        **({"start_date": start_date} if start_date is not None else {}),
+                        **({"end_date": end_date} if end_date is not None else {})
+                    )
+
+                    urls = [
+                        result['url'] 
+                        for result in tavily_response.get('results', []) 
+                        if 'url' in result
+                    ]
+                    seen = set()
+                    urls = [u for u in urls if not (u in seen or seen.add(u))]
+                    extracted_urls.append(urls)
+        
+                except Exception as e:
+                    print(f"Tavily search error: {e}")
+                    link1.append(f"Error with Tavily search: {e}")
+                    extracted_urls.append([])
+                    continue 
+
+                print(tavily_response)
+            
+                advanced_prompt = f"""Based on the following search results about {item}'s {search_question}, provide your answer in this EXACT JSON format and {answer_format}:
+                If you can't find the information, respond with 'Information not found'.
+                {{"answer": "your answer here or 'Information not found'",
+                "second_best_answer": "your second best answer here or 'Information not found'",
+                "confidence": "confidence in response 0-5 or 'Information not found'"}}
+
+                Search results:
+                {tavily_response}
+
+                Additional context from sources:
+                {chr(10).join([f"- {r.get('title', '')}: {r.get('content', '')}" for r in tavily_response.get('results', [])[:3]])}
+
+                Return ONLY the JSON object, no other text."""
+            
+            if model_source == "anthropic" and search_depth != "advanced":
                 import anthropic
                 client = anthropic.Anthropic(api_key=api_key)
-
+                #print(prompt)
                 attempt = 0
                 while attempt < max_retries:
                     try:
@@ -98,7 +183,6 @@ def build_web_research_dataset(
                             if getattr(block, "type", "") == "text"
                         ).strip()
                         link1.append(reply)
-                        #print(message.content)
                         
                         urls = [
                             item["url"]
@@ -113,7 +197,7 @@ def build_web_research_dataset(
                         extracted_urls.append(urls)
 
                         break
-                    except anthropic.error.RateLimitError as e:
+                    except anthropic.RateLimitError as e:
                         wait_time = 2 ** attempt  # Exponential backoff, keeps doubling after each attempt
                         print(f"Rate limit error encountered. Retrying in {wait_time} seconds...")
                         time.sleep(wait_time) #in case user wants to try and buffer the amount of errors by adding a wait time before attemps
@@ -127,7 +211,53 @@ def build_web_research_dataset(
                     link1.append("Max retries exceeded for rate limit errors.")
                     extracted_urls.append([])
 
-            elif model_source == "google":
+            elif model_source == "anthropic" and search_depth == "advanced":
+                import anthropic
+                claude_client = anthropic.Anthropic(api_key=api_key)
+
+                attempt = 0
+                while attempt < max_retries:
+                    try:
+                        message = claude_client.messages.create(
+                            model=user_model,
+                            max_tokens=1024,
+                            messages=[{"role": "user", "content": advanced_prompt}],
+                            **({"temperature": creativity} if creativity is not None else {})
+                            )
+            
+                        reply = " ".join(
+                            block.text
+                            for block in message.content
+                            if getattr(block, "type", "") == "text"
+                            ).strip()
+            
+                        try:
+                            import json
+                            json_response = json.loads(reply)
+                            final_answer = json_response.get('answer', reply)
+                            link1.append(final_answer)
+                        except json.JSONDecodeError:
+
+                            print(f"JSON parse error, using raw reply: {reply}")
+                            link1.append(reply)
+            
+                        break  # Success
+            
+                    except anthropic.RateLimitError as e:
+                        wait_time = 2 ** attempt
+                        print(f"Rate limit error encountered. Retrying in {wait_time} seconds...")
+                        time.sleep(wait_time)
+                        attempt += 1
+
+                    except Exception as e:
+                        print(f"A Non-rate-limit error occurred: {e}")
+                        link1.append(f"Error processing input: {e}")
+                        break
+                else:
+                    # Max retries exceeded
+                    link1.append("Max retries exceeded for rate limit errors.")
+
+            elif model_source == "google" and search_depth != "advanced":
                 import requests
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
                 try:
@@ -177,6 +307,36 @@ def build_web_research_dataset(
                     print(f"An error occurred: {e}")
                     link1.append(f"Error processing input: {e}")
                     extracted_urls.append([])
+
+            elif model_source == "google" and search_depth == "advanced":
+                import requests
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
+                try:
+                    headers = {
+                        "x-goog-api-key": api_key,
+                        "Content-Type": "application/json"
+                        }
+        
+                    payload = {
+                        "contents": [{"parts": [{"text": advanced_prompt}]}],
+                        **({"generationConfig": {"temperature": creativity}} if creativity is not None else {})
+                        }
+        
+                    response = requests.post(url, headers=headers, json=payload)
+                    response.raise_for_status()
+                    result = response.json()
+
+                    # extract reply from Google's response structure
+                    if "candidates" in result and result["candidates"]:
+                        reply = result["candidates"][0]["content"]["parts"][0]["text"]
+                    else:
+                        reply = "No response generated"
+            
+                    link1.append(reply)
+        
+                except Exception as e:
+                    print(f"An error occurred: {e}")
+                    link1.append(f"Error processing input: {e}")
 
             else:
                 raise ValueError("Unknown source! Currently this function only supports 'Anthropic' or 'Google' as model_source.")
@@ -255,5 +415,20 @@ def build_web_research_dataset(
     })
     categorized_data = pd.concat([categorized_data, normalized_data], axis=1)
     categorized_data = pd.concat([categorized_data, df_urls], axis=1)
+
+    # drop second best answer column if it exists
+    # we only ask for the second best answer to "force" the model to think more carefully about its best answer, but we don't actually need to keep it
+    categorized_data = categorized_data.drop(columns=["second_best_answer"], errors='ignore')
+
+    # dropping this column for advanced searches (this column is mostly useful for basic searches to see what the model saw)
+    if search_depth == "advanced":
+        categorized_data = categorized_data.drop(columns=["raw_response"], errors='ignore')
+
+    #for users who don't want the urls included in the final dataframe
+    if output_urls is False:
+        categorized_data = categorized_data.drop(columns=[col for col in categorized_data.columns if col.startswith("url_")])   
+
+    if save_directory is not None:
+        categorized_data.to_csv(os.path.join(save_directory, filename), index=False)
     
     return categorized_data
