@@ -338,6 +338,49 @@ def build_web_research_dataset(
                     print(f"An error occurred: {e}")
                     link1.append(f"Error processing input: {e}")
 
+            elif model_source == "perplexity" and search_depth != "advanced":
+                from perplexity import Perplexity
+                client = Perplexity(api_key=api_key)
+                try:
+                    response = client.chat.completions.create(
+                        messages=[
+                            {
+                                "role": "user",
+                                "content": prompt
+                            }
+                        ],
+                        model=user_model,
+                        max_tokens=1024,
+                        **({"temperature": creativity} if creativity is not None else {}),
+                        response_format={ #requiring a JSON
+                        "type": "json_schema",
+                        "json_schema": {
+                            "schema": {
+                                "type": "object",
+                                "properties": {
+                                    "answer": {"type": "string"},
+                                    "second_best_answer": {"type": "string"}
+                            },
+                            "required": ["answer", "second_best_answer"]
+                        }
+                    }
+                }
+            )
+
+                    reply = response.choices[0].message.content
+                    print(response)
+                    link1.append(reply)
+
+                    urls = list(response.citations) if hasattr(response, 'citations') else []
+                    
+                    seen = set()
+                    urls = [u for u in urls if not (u in seen or seen.add(u))]
+                    extracted_urls.append(urls)
+
+                except Exception as e:
+                    print(f"An error occurred: {e}")
+                    link1.append(f"Error processing input: {e}")
+                    extracted_urls.append([])
             else:
                 raise ValueError("Unknown source! Currently this function only supports 'Anthropic' or 'Google' as model_source.")
             # in situation that no JSON is found
@@ -381,7 +424,7 @@ def build_web_research_dataset(
                     parsed_obj = json.loads(json_str)
                     normalized_data_list.append(pd.json_normalize(parsed_obj))
                 except json.JSONDecodeError:
-                    normalized_data_list.append(pd.DataFrame({"1": ["e"]}))
+                    normalized_data_list.append(pd.DataFrame({"answer": ["e"]}))
             normalized_data = pd.concat(normalized_data_list, ignore_index=True)
             temp_urls = pd.DataFrame(extracted_urls).add_prefix("url_")
             temp_df = pd.concat([temp_df, normalized_data], axis=1)
@@ -398,7 +441,7 @@ def build_web_research_dataset(
             parsed_obj = json.loads(json_str)
             normalized_data_list.append(pd.json_normalize(parsed_obj))
         except json.JSONDecodeError:
-            normalized_data_list.append(pd.DataFrame({"1": ["e"]}))
+            normalized_data_list.append(pd.DataFrame({"answer": ["e"]}))
     normalized_data = pd.concat(normalized_data_list, ignore_index=True)
 
     # converting urls to dataframe and adding prefix
