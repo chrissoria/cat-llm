@@ -249,7 +249,7 @@ def multi_class(
     to_csv=False,
     filename="categorized_data.csv",
     save_directory=None,
-    model_source="OpenAI"
+    model_source="auto"
 ):
     import os
     import json
@@ -258,6 +258,29 @@ def multi_class(
     from tqdm import tqdm
 
     model_source = model_source.lower() # eliminating case sensitivity 
+
+    # auto-detect model source if not provided
+    if model_source is None or model_source == "auto":
+        user_model_lower = user_model.lower()
+    
+        if "gpt" in user_model_lower:
+            model_source = "openai"
+        elif "claude" in user_model_lower:
+            model_source = "anthropic"
+        elif "gemini" in user_model_lower or "gemma" in user_model_lower:
+            model_source = "google"
+        elif "llama" in user_model_lower or "meta" in user_model_lower:
+            model_source = "huggingface"
+        elif "mistral" in user_model_lower or "mixtral" in user_model_lower:
+            model_source = "mistral"
+        elif "sonar" in user_model_lower or "pplx" in user_model_lower:
+            model_source = "perplexity"
+        elif "deepseek" in user_model_lower:
+            model_source = "huggingface"
+        else:
+            raise ValueError(f"❌ Could not auto-detect model source from '{user_model}'. Please specify model_source explicitly: OpenAI, Anthropic, Perplexity, Google, Huggingface, or Mistral")
+    else:
+        model_source = model_source.lower()
     
     categories_str = "\n".join(f"{i + 1}. {cat}" for i, cat in enumerate(categories))
     cat_num = len(categories)
@@ -265,18 +288,19 @@ def multi_class(
     example_JSON = json.dumps(category_dict, indent=4)
 
     # ensure number of categories is what user wants
-    print("\nThe categories you entered:")
+    print(f"\nThe categories you entered to be coded by {model_source} {user_model}:")
     for i, cat in enumerate(categories, 1):
         print(f"{i}. {cat}")
     
     link1 = []
     extracted_jsons = []
+
     #handling example inputs
     examples = [example1, example2, example3, example4, example5, example6]
     examples_text = "\n".join(
     f"Example {i}: {ex}" for i, ex in enumerate(examples, 1) if ex is not None
 )
-
+    # allowing users to contextualize the survey question
     if survey_question != None:
         survey_question_context = f"A respondent was asked: {survey_question}."
     else:
@@ -300,11 +324,12 @@ def multi_class(
 
             if model_source in ["openai", "perplexity", "huggingface"]:
                 from openai import OpenAI
+                from openai import OpenAI, BadRequestError, AuthenticationError
                 # conditional base_url setting based on model source
                 base_url = (
                     "https://api.perplexity.ai" if model_source == "perplexity" 
                     else "https://router.huggingface.co/v1" if model_source == "huggingface"
-                    else None  # OpenAI default
+                    else None  # default
                 )
     
                 client = OpenAI(api_key=api_key, base_url=base_url)
@@ -318,6 +343,9 @@ def multi_class(
         
                     reply = response_obj.choices[0].message.content
                     link1.append(reply)
+                except BadRequestError as e:
+                    # Model doesn't exist - halt immediately
+                    raise ValueError(f"❌ Model '{user_model}' on {model_source} not found. Please check the model name and try again.") from e
                 except Exception as e:
                     print(f"An error occurred: {e}")
                     link1.append(f"Error processing input: {e}")
@@ -338,7 +366,7 @@ def multi_class(
                     print(f"An error occurred: {e}")
                     link1.append(f"Error processing input: {e}")
                     
-            elif model_source in ("google", "meta"):
+            elif model_source == "google":
                 import requests
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
                 try:
@@ -385,7 +413,7 @@ def multi_class(
                     print(f"An error occurred: {e}")
                     link1.append(f"Error processing input: {e}")
             else:
-                raise ValueError("Unknown source! Choose from OpenAI, Anthropic, Perplexity, Google, Meta, or Mistral")
+                raise ValueError("Unknown source! Choose from OpenAI, Anthropic, Perplexity, Google, Huggingface, or Mistral")
             # in situation that no JSON is found
             if reply is not None:
                 extracted_json = regex.findall(r'\{(?:[^{}]|(?R))*\}', reply, regex.DOTALL)
