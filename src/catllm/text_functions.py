@@ -7,7 +7,7 @@ def explore_corpus(
     specificity="broad",
     cat_num=10,
     divisions=5,
-    user_model="gpt-4o-2024-11-20",
+    user_model="gpt-5",
     creativity=None,
     filename="corpus_exploration.csv",
     model_source="OpenAI"
@@ -108,7 +108,7 @@ def explore_common_categories(
     top_n=10,
     cat_num=10,
     divisions=5,
-    user_model="gpt-4o",
+    user_model="gpt-5",
     creativity=None,
     specificity="broad",
     research_question=None,
@@ -226,7 +226,7 @@ Return the top {top_n} categories as a numbered list sorted from the most to lea
 # what this function does:
 # does context prompting, giving the model a background on the task at hand and the user's survey question
 # system prompting, overall context and purpose for the language model
-# role promptingk, assings a spacific identity to the model
+# role prompting, assings a spacific identity to the model
 # also enables few shot prompting, allowing the user to input a few examples
 # provides POSITIVE INSTRUCTIONS reather than limitations/restrictions
 # GOAL: enable step-back prompting
@@ -236,7 +236,7 @@ def multi_class(
     survey_input,
     categories,
     api_key,
-    user_model="gpt-4o",
+    user_model="gpt-5",
     user_prompt = None,
     example1 = None,
     example2 = None,
