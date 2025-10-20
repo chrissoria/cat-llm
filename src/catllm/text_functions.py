@@ -223,12 +223,27 @@ Return the top {top_n} categories as a numbered list sorted from the most to lea
     return top_categories_final
 
 #multi-class text classification
+# what this function does:
+# does context prompting, giving the model a background on the task at hand and the user's survey question
+# system prompting, overall context and purpose for the language model
+# role promptingk, assings a spacific identity to the model
+# also enables few shot prompting, allowing the user to input a few examples
+# provides POSITIVE INSTRUCTIONS reather than limitations/restrictions
+# GOAL: enable step-back prompting
+# GOAL 2: enable self-consistency
 def multi_class(
     survey_question, 
     survey_input,
     categories,
     api_key,
     user_model="gpt-4o",
+    user_prompt = None,
+    example1 = None,
+    example2 = None,
+    example3 = None,
+    example4 = None,
+    example5 = None,
+    example6 = None,
     creativity=None,
     safety=False,
     to_csv=False,
@@ -256,6 +271,11 @@ def multi_class(
     
     link1 = []
     extracted_jsons = []
+    #handling example inputs
+    examples = [example1, example2, example3, example4, example5, example6]
+    examples_text = "\n".join(
+    f"Example {i}: {ex}" for i, ex in enumerate(examples, 1) if ex is not None
+)
 
     for idx, response in enumerate(tqdm(survey_input, desc="Categorizing responses")):
         reply = None  
@@ -266,11 +286,13 @@ def multi_class(
             extracted_jsons.append(default_json)
             #print(f"Skipped NaN input.")
         else:
+
             prompt = f"""A respondent was asked: {survey_question}. \
-Categorize this survey response "{response}" into the following categories that apply: \
-{categories_str} \
-Provide your work in JSON format where the number belonging to each category is the key and a 1 if the category is present and a 0 if it is not present as key values."""
-            #print(prompt)
+            Categorize this survey response "{response}" into the following categories that apply: \
+            {categories_str}
+            {examples_text}
+            Provide your work in JSON format..."""
+
             if model_source == ("openai"):
                 from openai import OpenAI
                 client = OpenAI(api_key=api_key)
