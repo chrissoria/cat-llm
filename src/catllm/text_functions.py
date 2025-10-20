@@ -232,12 +232,12 @@ Return the top {top_n} categories as a numbered list sorted from the most to lea
 # GOAL: enable step-back prompting
 # GOAL 2: enable self-consistency
 def multi_class(
-    survey_question, 
     survey_input,
     categories,
     api_key,
     user_model="gpt-5",
     user_prompt = None,
+    survey_question = "",
     example1 = None,
     example2 = None,
     example3 = None,
@@ -277,6 +277,11 @@ def multi_class(
     f"Example {i}: {ex}" for i, ex in enumerate(examples, 1) if ex is not None
 )
 
+    if survey_question != None:
+        survey_question_context = f"A respondent was asked: {survey_question}."
+    else:
+        survey_question_context = ""
+
     for idx, response in enumerate(tqdm(survey_input, desc="Categorizing responses")):
         reply = None  
 
@@ -287,40 +292,36 @@ def multi_class(
             #print(f"Skipped NaN input.")
         else:
 
-            prompt = f"""A respondent was asked: {survey_question}. \
+            prompt = f"""{survey_question_context} \
             Categorize this survey response "{response}" into the following categories that apply: \
             {categories_str}
             {examples_text}
             Provide your work in JSON format..."""
 
-            if model_source == ("openai"):
+            if model_source in ["openai", "perplexity", "huggingface"]:
                 from openai import OpenAI
-                client = OpenAI(api_key=api_key)
+                # conditional base_url setting based on model source
+                base_url = (
+                    "https://api.perplexity.ai" if model_source == "perplexity" 
+                    else "https://router.huggingface.co/v1" if model_source == "huggingface"
+                    else None  # OpenAI default
+                )
+    
+                client = OpenAI(api_key=api_key, base_url=base_url)
+                
                 try:
                     response_obj = client.chat.completions.create(
                     model=user_model,
                     messages=[{'role': 'user', 'content': prompt}],
                     **({"temperature": creativity} if creativity is not None else {})
-                )
-                    reply = response_obj.choices[0].message.content
-                    link1.append(reply)
-                except Exception as e:
-                    print(f"An error occurred: {e}")
-                    link1.append(f"Error processing input: {e}")
-            elif model_source == "perplexity":
-                from openai import OpenAI
-                client = OpenAI(api_key=api_key, base_url="https://api.perplexity.ai")
-                try:
-                    response_obj = client.chat.completions.create(
-                        model=user_model,
-                        messages=[{'role': 'user', 'content': prompt}],
-                        **({"temperature": creativity} if creativity is not None else {})
                     )
+        
                     reply = response_obj.choices[0].message.content
                     link1.append(reply)
                 except Exception as e:
                     print(f"An error occurred: {e}")
                     link1.append(f"Error processing input: {e}")
+
             elif model_source == "anthropic":
                 import anthropic
                 client = anthropic.Anthropic(api_key=api_key)
@@ -337,7 +338,7 @@ def multi_class(
                     print(f"An error occurred: {e}")
                     link1.append(f"Error processing input: {e}")
                     
-            elif model_source == "google":
+            elif model_source in ("google", "meta"):
                 import requests
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
                 try:
@@ -384,7 +385,7 @@ def multi_class(
                     print(f"An error occurred: {e}")
                     link1.append(f"Error processing input: {e}")
             else:
-                raise ValueError("Unknown source! Choose from OpenAI, Anthropic, Perplexity, or Mistral")
+                raise ValueError("Unknown source! Choose from OpenAI, Anthropic, Perplexity, Google, Meta, or Mistral")
             # in situation that no JSON is found
             if reply is not None:
                 extracted_json = regex.findall(r'\{(?:[^{}]|(?R))*\}', reply, regex.DOTALL)
