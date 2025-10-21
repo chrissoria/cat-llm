@@ -345,7 +345,7 @@ def multi_class(
             Categorize this survey response "{response}" into the following categories that apply: \
             {categories_str}
             {examples_text}
-            Provide your work in JSON format..."""
+            Provide your work in JSON format where the number belonging to each category is the key and a 1 if the category is present and a 0 if it is not present as key values."""
 
             if chain_of_verification:
                 step2_prompt = f"""You provided this initial categorization:
@@ -410,11 +410,11 @@ def multi_class(
                         try:
                             initial_reply = reply
                             #STEP 2: Generate verification questions
-                            step2_prompt = step2_prompt.replace('<<INITIAL_REPLY>>', initial_reply)
+                            step2_filled = step2_prompt.replace('<<INITIAL_REPLY>>', initial_reply)
 
                             verification_response = client.chat.completions.create(
                                 model=user_model,
-                                messages=[{'role': 'user', 'content': step2_prompt}],
+                                messages=[{'role': 'user', 'content': step2_filled}],
                                 **({"temperature": creativity} if creativity is not None else {})
                                 )
                             
@@ -456,14 +456,15 @@ def multi_class(
                                 **({"temperature": creativity} if creativity is not None else {})
                             )
 
-                            cove_reply = final_response.choices[0].message.content
+                            reply = final_response.choices[0].message.content
     
                             print("Chain of verification completed. Final response generated.\n")
-                            link1.append(cove_reply)
+                            link1.append(reply)
 
                         except Exception as e:
                             print(f"ERROR in Chain of Verification: {str(e)}")
                             print("Falling back to initial response.\n")
+                            link1.append(reply)
                     else:
                         #if chain of verification is not enabled, just append initial reply
                         link1.append(reply)
@@ -476,23 +477,112 @@ def multi_class(
                     link1.append(f"Error processing input: {e}")
 
             elif model_source == "anthropic":
+
                 import anthropic
                 client = anthropic.Anthropic(api_key=api_key)
+                
                 try:
-                    message = client.messages.create(
+                    response_obj = client.messages.create(
                     model=user_model,
-                    max_tokens=1024,
-                    **({"temperature": creativity} if creativity is not None else {}),
-                    messages=[{"role": "user", "content": prompt}]
-                )
-                    reply = message.content[0].text  # Anthropic returns content as list
-                    link1.append(reply)
+                    max_tokens=4096,
+                    messages=[{'role': 'user', 'content': prompt}],
+                    **({"temperature": creativity} if creativity is not None else {})
+                    )
+        
+                    reply = response_obj.content[0].text
+                    
+                    if chain_of_verification:
+                        try:
+                            initial_reply = reply
+                            #STEP 2: Generate verification questions
+                            step2_filled = step2_prompt.replace('<<INITIAL_REPLY>>', initial_reply)
+
+                            verification_response = client.messages.create(
+                                model=user_model,
+                                messages=[{'role': 'user', 'content': step2_filled}],
+                                max_tokens=4096,
+                                **({"temperature": creativity} if creativity is not None else {})
+                                )
+                            
+                            verification_questions = verification_response.content[0].text
+                            #STEP 3: Answer verification questions
+                            questions_list = [
+                                remove_numbering(q) 
+                                for q in verification_questions.split('\n') 
+                                if q.strip()
+                                ]
+                            print(f"Verification questions:\n{questions_list}\n")
+                            verification_qa = []
+
+                            #prompting each question individually
+                            for question in questions_list:
+
+                                step3_filled = step3_prompt.replace('<<QUESTION>>', question)
+
+                                answer_response = client.messages.create(
+                                    model=user_model,
+                                    messages=[{'role': 'user', 'content': step3_filled}],
+                                    max_tokens=4096,
+                                    **({"temperature": creativity} if creativity is not None else {})
+                                    )
+
+                                answer = answer_response.content[0].text
+                                verification_qa.append(f"Q: {question}\nA: {answer}")
+
+                            #STEP 4: Final corrected categorization
+                            verification_qa_text = "\n\n".join(verification_qa)
+                            
+                            step4_filled = (step4_prompt
+                            .replace('<<INITIAL_REPLY>>', initial_reply)
+                            .replace('<<VERIFICATION_QA>>', verification_qa_text))
+
+                            print(f"Final prompt:\n{step4_filled}\n")
+
+                            final_response = client.messages.create(
+                                model=user_model,
+                                messages=[{'role': 'user', 'content': step4_filled}],
+                                max_tokens=4096,
+                                **({"temperature": creativity} if creativity is not None else {})
+                            )
+
+                            reply = final_response.content[0].text
+    
+                            print("Chain of verification completed. Final response generated.\n")
+                            link1.append(reply)
+
+                        except Exception as e:
+                            print(f"ERROR in Chain of Verification: {str(e)}")
+                            print("Falling back to initial response.\n")
+                            link1.append(reply)
+                    else:
+                        #if chain of verification is not enabled, just append initial reply
+                        link1.append(reply)
+                    
+                except anthropic.NotFoundError as e:
+                    # Model doesn't exist - halt immediately
+                    raise ValueError(f"❌ Model '{user_model}' on {model_source} not found. Please check the model name and try again.") from e
                 except Exception as e:
                     print(f"An error occurred: {e}")
                     link1.append(f"Error processing input: {e}")
                     
             elif model_source == "google":
                 import requests
+
+                def make_google_request(url, headers, payload, max_retries=3):
+                    """Make Google API request with exponential backoff on 429 errors"""
+                    for attempt in range(max_retries):
+                        try:
+                            response = requests.post(url, headers=headers, json=payload)
+                            response.raise_for_status()
+                            return response.json()
+                        except requests.exceptions.HTTPError as e:
+                            if e.response.status_code == 429 and attempt < max_retries - 1:
+                                wait_time = 10 * (2 ** attempt)
+                                print(f"⚠️ Rate limited. Waiting {wait_time}s...")
+                                time.sleep(wait_time)
+                            else:
+                                raise
+
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
                 try:
                     headers = {
@@ -507,16 +597,92 @@ def multi_class(
                             **({"generationConfig": {"temperature": creativity}} if creativity is not None else {})
                             }
                     
-                    response = requests.post(url, headers=headers, json=payload)
-                    response.raise_for_status()  # Raise exception for HTTP errors
-                    result = response.json()
+                    result = make_google_request(url, headers, payload)
 
                     if "candidates" in result and result["candidates"]:
                         reply = result["candidates"][0]["content"]["parts"][0]["text"]
                     else:
                         reply = "No response generated"
 
-                    link1.append(reply)
+                    if chain_of_verification:
+                        try:
+                            import time
+                            initial_reply = reply
+                            # STEP 2: Generate verification questions
+                            step2_filled = step2_prompt.replace('<<INITIAL_REPLY>>', initial_reply)
+                            
+                            payload_step2 = {
+                                "contents": [{
+                                    "parts": [{"text": step2_filled}]
+                                    }],
+                                    **({"generationConfig": {"temperature": creativity}} if creativity is not None else {})
+                                    }
+                
+                            result_step2 = make_google_request(url, headers, payload_step2)
+                
+                            verification_questions = result_step2["candidates"][0]["content"]["parts"][0]["text"]
+                
+                            # STEP 3: Answer verification questions
+                            questions_list = [
+                                remove_numbering(q) 
+                                for q in verification_questions.split('\n') 
+                                if q.strip()
+                            ]
+                            verification_qa = []
+                            
+                            for question in questions_list:
+                                time.sleep(2) # temporary rate limit handling
+                                step3_filled = step3_prompt.replace('<<QUESTION>>', question)
+                                payload_step3 = {
+                                    "contents": [{
+                                        "parts": [{"text": step3_filled}]
+                                        }],
+                                        **({"generationConfig": {"temperature": creativity}} if creativity is not None else {})
+                                }
+                    
+                                result_step3 = make_google_request(url, headers, payload_step3)
+                    
+                                answer = result_step3["candidates"][0]["content"]["parts"][0]["text"]
+                                verification_qa.append(f"Q: {question}\nA: {answer}")
+                
+                            # STEP 4: Final corrected categorization
+                            verification_qa_text = "\n\n".join(verification_qa)
+                
+                            step4_filled = (step4_prompt
+                            .replace('<<PROMPT>>', prompt)
+                            .replace('<<INITIAL_REPLY>>', initial_reply)
+                            .replace('<<VERIFICATION_QA>>', verification_qa_text))
+                
+                            payload_step4 = {
+                                "contents": [{
+                                    "parts": [{"text": step4_filled}]
+                                    }],
+                            **({"generationConfig": {"temperature": creativity}} if creativity is not None else {})
+                            }
+                
+                            result_step4 = make_google_request(url, headers, payload_step4)
+                
+                            reply = result_step4["candidates"][0]["content"]["parts"][0]["text"]
+                            print("Chain of verification completed. Final response generated.\n")
+
+                            link1.append(reply)
+                
+                        except Exception as e:
+                            print(f"ERROR in Chain of Verification: {str(e)}")
+                            print("Falling back to initial response.\n")
+        
+                    else:
+                        # if chain of verification is not enabled, just append initial reply
+                        link1.append(reply)
+                
+                except requests.exceptions.HTTPError as e:
+                    if e.response.status_code == 404:
+                        raise ValueError(f"❌ Model '{user_model}' not found. Please check the model name and try again.") from e
+                    elif e.response.status_code == 401 or e.response.status_code == 403:
+                        raise ValueError(f"❌ Authentication failed. Please check your Google API key.") from e
+                    else:
+                        print(f"HTTP error occurred: {e}")
+                        link1.append(f"Error processing input: {e}")
                 except Exception as e:
                     print(f"An error occurred: {e}")
                     link1.append(f"Error processing input: {e}")
