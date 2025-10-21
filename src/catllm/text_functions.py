@@ -410,7 +410,6 @@ def multi_class(
                 When uncertain, prioritize precision over recall."""
 
                 prompt = context + prompt
-                print(prompt)
 
             if chain_of_verification:
                 step2_prompt = f"""You provided this initial categorization:
@@ -721,20 +720,23 @@ def multi_class(
     #converting to numeric
     cat_cols = [col for col in categorized_data.columns if col.startswith('category_')]
 
-    categorized_data['processing_status'] = np.where(
-        categorized_data[cat_cols].isna().all(axis=1), 
-        'error', 
-        'success'
+    categorized_data['processing_status'] = (
+        categorized_data[cat_cols].isna().all(axis=1)
+        .map({True: 'error', False: 'success'})
     )
 
-    categorized_data.loc[categorized_data[cat_cols].apply(pd.to_numeric, errors='coerce').isna().any(axis=1), cat_cols] = np.nan
+    categorized_data.loc[
+        categorized_data[cat_cols].apply(pd.to_numeric, errors='coerce').isna().any(axis=1), 
+        cat_cols
+    ] = pd.NA
+
     categorized_data[cat_cols] = categorized_data[cat_cols].astype('Int64')
 
-    categorized_data['categories_present'] = categorized_data[cat_cols].apply(
+    categorized_data['categories_id'] = categorized_data[cat_cols].apply(
         lambda x: ','.join(x.dropna().astype(str)), axis=1
     )
 
-    categorized_data['categories_counted'] = categorized_data[cat_cols].count(axis=1)
+    categorized_data['categories_present'] = categorized_data[cat_cols].sum(axis=1)
 
     if to_csv:
         if save_directory is None:

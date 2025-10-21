@@ -1,6 +1,6 @@
 ![catllm Logo](https://github.com/chrissoria/cat-llm/blob/main/images/logo.png?raw=True)
 
-# catllm
+# cat-llm
 
 [![PyPI - Version](https://img.shields.io/pypi/v/cat-llm.svg)](https://pypi.org/project/cat-llm)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/cat-llm.svg)](https://pypi.org/project/cat-llm)
@@ -160,16 +160,22 @@ Performs multi-label classification of text responses into user-defined categori
 Processes each text response individually, assigning one or more categories from the provided list. Supports flexible output formatting and optional saving of results to CSV for easy integration with data analysis workflows.
 
 **Parameters:**
-- `survey_question` (str): The survey question being analyzed
 - `survey_input` (list): List of text responses to classify
 - `categories` (list): List of predefined categories for classification
 - `api_key` (str): API key for the LLM service
-- `user_model` (str, default="gpt-4o"): Specific model to use
-- `creativity` (float, default=0): Temperature/randomness setting (0.0-1.0)
+- `user_model` (str, default="gpt-5"): Specific model to use
+- `user_prompt` (str, optional): Custom prompt template to override default prompting
+- `survey_question` (str, default=""): The survey question being analyzed
+- `example1` through `example6` (dict, optional): Few-shot learning examples (format: {"response": "...", "categories": [...]})
+- `creativity` (float, optional): Temperature/randomness setting (0.0-1.0, varies by model)
 - `safety` (bool, default=False): Enable safety checks on responses and saves to CSV at each API call step
+- `to_csv` (bool, default=False): Whether to save results to CSV
+- `chain_of_verification` (bool, default=False): Enable Chain-of-Verification prompting technique for improved accuracy
+- `step_back_prompt` (bool, default=False): Enable step-back prompting to analyze higher-level context before classification
+- `context_prompt` (bool, default=False): Add expert role and behavioral guidelines to the prompt
 - `filename` (str, default="categorized_data.csv"): Filename for CSV output
 - `save_directory` (str, optional): Directory path to save the CSV file
-- `model_source` (str, default="OpenAI"): Model provider ("OpenAI", "Anthropic", "Perplexity", "Mistral")
+- `model_source` (str, default="auto"): Model provider ("auto", "OpenAI", "Anthropic", "Google", "Mistral", "Perplexity", "Huggingface")
 
 **Returns:**
 - `pandas.DataFrame`: DataFrame with classification results, columns formatted as specified
