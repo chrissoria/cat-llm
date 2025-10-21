@@ -73,6 +73,7 @@ mistral_models = [
 ]
 
 # meta list of models
+# list can be found here: https://huggingface.co/collections/meta-llama/llama-4-67f0c30d9fe03840bc9d0164
 meta_llama_models = [
     "meta/llama-3.1-8b-instruct",
     "meta/llama-3.1-70b-instruct",

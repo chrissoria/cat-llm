@@ -1,3 +1,15 @@
+from .calls.all_calls import (
+    get_stepback_insight_openai,
+    get_stepback_insight_anthropic,
+    get_stepback_insight_google,
+    get_stepback_insight_mistral,
+    chain_of_verification_openai,
+    chain_of_verification_google,
+    chain_of_verification_anthropic,
+    chain_of_verification_mistral
+)
+
+
 #extract categories from corpus
 def explore_corpus(
     survey_question, 
@@ -244,13 +256,15 @@ def multi_class(
     example4 = None,
     example5 = None,
     example6 = None,
-    creativity=None,
-    safety=False,
-    to_csv=False,
-    chain_of_verification=False,
-    filename="categorized_data.csv",
-    save_directory=None,
-    model_source="auto"
+    creativity = None,
+    safety = False,
+    to_csv = False,
+    chain_of_verification = False,
+    step_back_prompt = False,
+    context_prompt = False,
+    filename = "categorized_data.csv",
+    save_directory = None,
+    model_source = "auto"
 ):
     import os
     import json
@@ -331,6 +345,49 @@ def multi_class(
     else:
         survey_question_context = ""
 
+    # step back insight initializationif step_back_prompt:
+    if step_back_prompt:
+        if survey_question == "": # step back requires the survey question to function well
+            raise TypeError("survey_question is required when using step_back_prompt. Please provide the survey question you are analyzing.")
+                
+        stepback = f"""What are the underlying factors or dimensions that explain how people typically answer "{survey_question}"?"""
+
+        if model_source in ["openai", "perplexity", "huggingface"]:
+            stepback_insight, step_back_added = get_stepback_insight_openai(
+                stepback=stepback,
+                api_key=api_key,
+                user_model=user_model,
+                model_source=model_source,
+                creativity=creativity
+            )
+        elif model_source == "anthropic":
+            stepback_insight, step_back_added = get_stepback_insight_anthropic(
+                stepback=stepback,
+                api_key=api_key,
+                user_model=user_model,
+                model_source=model_source,
+                creativity=creativity
+            )
+        elif model_source == "google":
+            stepback_insight, step_back_added = get_stepback_insight_google(
+                stepback=stepback,
+                api_key=api_key,
+                user_model=user_model,
+                model_source=model_source,
+                creativity=creativity
+            )
+        elif model_source == "mistral":
+            stepback_insight, step_back_added = get_stepback_insight_mistral(
+                stepback=stepback,
+                api_key=api_key,
+                user_model=user_model,
+                model_source=model_source,
+                creativity=creativity
+            )
+    else:
+        stepback_insight = None
+        step_back_added = False
+
     for idx, response in enumerate(tqdm(survey_input, desc="Categorizing responses")):
         reply = None  
 
@@ -346,6 +403,14 @@ def multi_class(
             {categories_str}
             {examples_text}
             Provide your work in JSON format where the number belonging to each category is the key and a 1 if the category is present and a 0 if it is not present as key values."""
+
+            if context_prompt:
+                context = """You are an expert researcher in survey data categorization. 
+                Apply multi-label classification and base decisions on explicit and implicit meanings. 
+                When uncertain, prioritize precision over recall."""
+
+                prompt = context + prompt
+                print(prompt)
 
             if chain_of_verification:
                 step2_prompt = f"""You provided this initial categorization:
@@ -384,7 +449,7 @@ def multi_class(
                 If no categories are present, assign "0" to all categories.
                 Provide the final corrected categorization in the same JSON format:"""
 
-
+            # Main model interaction
             if model_source in ["openai", "perplexity", "huggingface"]:
                 from openai import OpenAI
                 from openai import OpenAI, BadRequestError, AuthenticationError
@@ -398,73 +463,33 @@ def multi_class(
                 client = OpenAI(api_key=api_key, base_url=base_url)
                 
                 try:
+                    messages = [
+                        *([{'role': 'user', 'content': stepback}] if step_back_prompt and step_back_added else []), # only if step back is enabled and successful
+                        *([{'role': 'assistant', 'content': stepback_insight}] if step_back_added else {}), # include insight if step back succeeded
+                        {'role': 'user', 'content': prompt}
+                    ]
+
                     response_obj = client.chat.completions.create(
                     model=user_model,
-                    messages=[{'role': 'user', 'content': prompt}],
+                    messages=messages,
                     **({"temperature": creativity} if creativity is not None else {})
                     )
         
                     reply = response_obj.choices[0].message.content
                     
                     if chain_of_verification:
-                        try:
-                            initial_reply = reply
-                            #STEP 2: Generate verification questions
-                            step2_filled = step2_prompt.replace('<<INITIAL_REPLY>>', initial_reply)
+                        reply = chain_of_verification_openai(
+                            initial_reply=reply,
+                            step2_prompt=step2_prompt,
+                            step3_prompt=step3_prompt,
+                            step4_prompt=step4_prompt,
+                            client=client,
+                            user_model=user_model,
+                            creativity=creativity,
+                            remove_numbering=remove_numbering
+                        )
 
-                            verification_response = client.chat.completions.create(
-                                model=user_model,
-                                messages=[{'role': 'user', 'content': step2_filled}],
-                                **({"temperature": creativity} if creativity is not None else {})
-                                )
-                            
-                            verification_questions = verification_response.choices[0].message.content
-                            #STEP 3: Answer verification questions
-                            questions_list = [
-                                remove_numbering(q) 
-                                for q in verification_questions.split('\n') 
-                                if q.strip()
-                                ]
-                            verification_qa = []
-
-                            #prompting each question individually
-                            for question in questions_list:
-
-                                step3_filled = step3_prompt.replace('<<QUESTION>>', question)
-
-                                answer_response = client.chat.completions.create(
-                                    model=user_model,
-                                    messages=[{'role': 'user', 'content': step3_filled}],
-                                    **({"temperature": creativity} if creativity is not None else {})
-                                    )
-
-                                answer = answer_response.choices[0].message.content
-                                verification_qa.append(f"Q: {question}\nA: {answer}")
-
-                            #STEP 4: Final corrected categorization
-                            verification_qa_text = "\n\n".join(verification_qa)
-                            
-                            step4_filled = (step4_prompt
-                            .replace('<<INITIAL_REPLY>>', initial_reply)
-                            .replace('<<VERIFICATION_QA>>', verification_qa_text))
-
-                            print(f"Final prompt:\n{step4_filled}\n")
-
-                            final_response = client.chat.completions.create(
-                                model=user_model,
-                                messages=[{'role': 'user', 'content': step4_filled}],
-                                **({"temperature": creativity} if creativity is not None else {})
-                            )
-
-                            reply = final_response.choices[0].message.content
-    
-                            print("Chain of verification completed. Final response generated.\n")
-                            link1.append(reply)
-
-                        except Exception as e:
-                            print(f"ERROR in Chain of Verification: {str(e)}")
-                            print("Falling back to initial response.\n")
-                            link1.append(reply)
+                        link1.append(reply)
                     else:
                         #if chain of verification is not enabled, just append initial reply
                         link1.append(reply)
@@ -492,68 +517,18 @@ def multi_class(
                     reply = response_obj.content[0].text
                     
                     if chain_of_verification:
-                        try:
-                            initial_reply = reply
-                            #STEP 2: Generate verification questions
-                            step2_filled = step2_prompt.replace('<<INITIAL_REPLY>>', initial_reply)
+                        reply = chain_of_verification_anthropic(
+                            initial_reply=reply,
+                            step2_prompt=step2_prompt,
+                            step3_prompt=step3_prompt,
+                            step4_prompt=step4_prompt,
+                            client=client,
+                            user_model=user_model,
+                            creativity=creativity,
+                            remove_numbering=remove_numbering
+                        )
 
-                            verification_response = client.messages.create(
-                                model=user_model,
-                                messages=[{'role': 'user', 'content': step2_filled}],
-                                max_tokens=4096,
-                                **({"temperature": creativity} if creativity is not None else {})
-                                )
-                            
-                            verification_questions = verification_response.content[0].text
-                            #STEP 3: Answer verification questions
-                            questions_list = [
-                                remove_numbering(q) 
-                                for q in verification_questions.split('\n') 
-                                if q.strip()
-                                ]
-                            print(f"Verification questions:\n{questions_list}\n")
-                            verification_qa = []
-
-                            #prompting each question individually
-                            for question in questions_list:
-
-                                step3_filled = step3_prompt.replace('<<QUESTION>>', question)
-
-                                answer_response = client.messages.create(
-                                    model=user_model,
-                                    messages=[{'role': 'user', 'content': step3_filled}],
-                                    max_tokens=4096,
-                                    **({"temperature": creativity} if creativity is not None else {})
-                                    )
-
-                                answer = answer_response.content[0].text
-                                verification_qa.append(f"Q: {question}\nA: {answer}")
-
-                            #STEP 4: Final corrected categorization
-                            verification_qa_text = "\n\n".join(verification_qa)
-                            
-                            step4_filled = (step4_prompt
-                            .replace('<<INITIAL_REPLY>>', initial_reply)
-                            .replace('<<VERIFICATION_QA>>', verification_qa_text))
-
-                            print(f"Final prompt:\n{step4_filled}\n")
-
-                            final_response = client.messages.create(
-                                model=user_model,
-                                messages=[{'role': 'user', 'content': step4_filled}],
-                                max_tokens=4096,
-                                **({"temperature": creativity} if creativity is not None else {})
-                            )
-
-                            reply = final_response.content[0].text
-    
-                            print("Chain of verification completed. Final response generated.\n")
-                            link1.append(reply)
-
-                        except Exception as e:
-                            print(f"ERROR in Chain of Verification: {str(e)}")
-                            print("Falling back to initial response.\n")
-                            link1.append(reply)
+                        link1.append(reply)
                     else:
                         #if chain of verification is not enabled, just append initial reply
                         link1.append(reply)
@@ -605,71 +580,20 @@ def multi_class(
                         reply = "No response generated"
 
                     if chain_of_verification:
-                        try:
-                            import time
-                            initial_reply = reply
-                            # STEP 2: Generate verification questions
-                            step2_filled = step2_prompt.replace('<<INITIAL_REPLY>>', initial_reply)
-                            
-                            payload_step2 = {
-                                "contents": [{
-                                    "parts": [{"text": step2_filled}]
-                                    }],
-                                    **({"generationConfig": {"temperature": creativity}} if creativity is not None else {})
-                                    }
-                
-                            result_step2 = make_google_request(url, headers, payload_step2)
-                
-                            verification_questions = result_step2["candidates"][0]["content"]["parts"][0]["text"]
-                
-                            # STEP 3: Answer verification questions
-                            questions_list = [
-                                remove_numbering(q) 
-                                for q in verification_questions.split('\n') 
-                                if q.strip()
-                            ]
-                            verification_qa = []
-                            
-                            for question in questions_list:
-                                time.sleep(2) # temporary rate limit handling
-                                step3_filled = step3_prompt.replace('<<QUESTION>>', question)
-                                payload_step3 = {
-                                    "contents": [{
-                                        "parts": [{"text": step3_filled}]
-                                        }],
-                                        **({"generationConfig": {"temperature": creativity}} if creativity is not None else {})
-                                }
-                    
-                                result_step3 = make_google_request(url, headers, payload_step3)
-                    
-                                answer = result_step3["candidates"][0]["content"]["parts"][0]["text"]
-                                verification_qa.append(f"Q: {question}\nA: {answer}")
-                
-                            # STEP 4: Final corrected categorization
-                            verification_qa_text = "\n\n".join(verification_qa)
-                
-                            step4_filled = (step4_prompt
-                            .replace('<<PROMPT>>', prompt)
-                            .replace('<<INITIAL_REPLY>>', initial_reply)
-                            .replace('<<VERIFICATION_QA>>', verification_qa_text))
-                
-                            payload_step4 = {
-                                "contents": [{
-                                    "parts": [{"text": step4_filled}]
-                                    }],
-                            **({"generationConfig": {"temperature": creativity}} if creativity is not None else {})
-                            }
-                
-                            result_step4 = make_google_request(url, headers, payload_step4)
-                
-                            reply = result_step4["candidates"][0]["content"]["parts"][0]["text"]
-                            print("Chain of verification completed. Final response generated.\n")
+                        reply = chain_of_verification_google(
+                            initial_reply=reply,
+                            prompt=prompt,
+                            step2_prompt=step2_prompt,
+                            step3_prompt=step3_prompt,
+                            step4_prompt=step4_prompt,
+                            url=url,
+                            headers=headers,
+                            creativity=creativity,
+                            remove_numbering=remove_numbering,
+                            make_google_request=make_google_request
+                        )
 
-                            link1.append(reply)
-                
-                        except Exception as e:
-                            print(f"ERROR in Chain of Verification: {str(e)}")
-                            print("Falling back to initial response.\n")
+                        link1.append(reply)
         
                     else:
                         # if chain of verification is not enabled, just append initial reply
@@ -703,59 +627,19 @@ def multi_class(
                     reply = response.choices[0].message.content
                     
                     if chain_of_verification:
-                        try:
-                            initial_reply = reply
-                            #STEP 2: Generate verification questions
-                            step2_filled = step2_prompt.replace('<<INITIAL_REPLY>>', initial_reply)
+                        reply = chain_of_verification_mistral(
+                            initial_reply=reply,
+                            step2_prompt=step2_prompt,
+                            step3_prompt=step3_prompt,
+                            step4_prompt=step4_prompt,
+                            client=client,
+                            user_model=user_model,
+                            creativity=creativity,
+                            remove_numbering=remove_numbering
+                        )
 
-                            verification_response = client.chat.complete(
-                                model=user_model,
-                                messages=[{'role': 'user', 'content': step2_filled}],
-                                **({"temperature": creativity} if creativity is not None else {})
-                                )
-                            
-                            verification_questions = verification_response.choices[0].message.content
-                            #STEP 3: Answer verification questions
-                            questions_list = [
-                                remove_numbering(q) 
-                                for q in verification_questions.split('\n') 
-                                if q.strip()
-                                ]
-                            verification_qa = []
+                        link1.append(reply)
 
-                            #prompting each question individually
-                            for question in questions_list:
-
-                                step3_filled = step3_prompt.replace('<<QUESTION>>', question)
-
-                                answer_response = client.chat.complete(
-                                    model=user_model,
-                                    messages=[{'role': 'user', 'content': step3_filled}],
-                                    **({"temperature": creativity} if creativity is not None else {})
-                                    )
-
-                                answer = answer_response.choices[0].message.content
-                                verification_qa.append(f"Q: {question}\nA: {answer}")
-
-                            #STEP 4: Final corrected categorization
-                            verification_qa_text = "\n\n".join(verification_qa)
-                            
-                            step4_filled = (step4_prompt
-                            .replace('<<INITIAL_REPLY>>', initial_reply)
-                            .replace('<<VERIFICATION_QA>>', verification_qa_text))
-
-                            final_response = client.chat.complete(
-                                model=user_model,
-                                messages=[{'role': 'user', 'content': step4_filled}],
-                                **({"temperature": creativity} if creativity is not None else {})
-                            )
-
-                            reply = final_response.choices[0].message.content
-    
-                            link1.append(reply)
-                        except Exception as e:
-                            print(f"ERROR in Chain of Verification: {str(e)}")
-                            print("Falling back to initial response.\n")
                     else:
                         #if chain of verification is not enabled, just append initial reply
                         link1.append(reply)
@@ -832,6 +716,25 @@ def multi_class(
         'json': pd.Series(extracted_jsons).reset_index(drop=True)
     })
     categorized_data = pd.concat([categorized_data, normalized_data], axis=1)
+    categorized_data = categorized_data.rename(columns=lambda x: f'category_{x}' if str(x).isdigit() else x)
+
+    #converting to numeric
+    cat_cols = [col for col in categorized_data.columns if col.startswith('category_')]
+
+    categorized_data['processing_status'] = np.where(
+        categorized_data[cat_cols].isna().all(axis=1), 
+        'error', 
+        'success'
+    )
+
+    categorized_data.loc[categorized_data[cat_cols].apply(pd.to_numeric, errors='coerce').isna().any(axis=1), cat_cols] = np.nan
+    categorized_data[cat_cols] = categorized_data[cat_cols].astype('Int64')
+
+    categorized_data['categories_present'] = categorized_data[cat_cols].apply(
+        lambda x: ','.join(x.dropna().astype(str)), axis=1
+    )
+
+    categorized_data['categories_counted'] = categorized_data[cat_cols].count(axis=1)
 
     if to_csv:
         if save_directory is None:
