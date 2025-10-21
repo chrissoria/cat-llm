@@ -260,6 +260,7 @@ def multi_class(
     safety = False,
     to_csv = False,
     chain_of_verification = False,
+    chain_of_thought = True,
     step_back_prompt = False,
     context_prompt = False,
     filename = "categorized_data.csv",
@@ -397,12 +398,27 @@ def multi_class(
             extracted_jsons.append(default_json)
             #print(f"Skipped NaN input.")
         else:
+            if chain_of_thought:
+                prompt = f"""{survey_question_context}
 
-            prompt = f"""{survey_question_context} \
-            Categorize this survey response "{response}" into the following categories that apply: \
-            {categories_str}
-            {examples_text}
-            Provide your work in JSON format where the number belonging to each category is the key and a 1 if the category is present and a 0 if it is not present as key values."""
+                Categorize this survey response "{response}" into the following categories that apply: 
+                {categories_str}
+
+                Let's think step by step:
+                1. First, identify the main themes mentioned in the response
+                2. Then, match each theme to the relevant categories
+                3. Finally, assign 1 to matching categories and 0 to non-matching categories
+
+                {examples_text}
+
+                Provide your reasoning for each category, then provide your final answer in JSON format where the number belonging to each category is the key and a 1 if the category is present and a 0 if it is not present as key values."""
+            else:
+
+                prompt = f"""{survey_question_context} \
+                Categorize this survey response "{response}" into the following categories that apply: \
+                {categories_str}
+                {examples_text}
+                Provide your work in JSON format where the number belonging to each category is the key and a 1 if the category is present and a 0 if it is not present as key values."""
 
             if context_prompt:
                 context = """You are an expert researcher in survey data categorization. 

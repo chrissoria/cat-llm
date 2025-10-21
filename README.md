@@ -171,6 +171,7 @@ Processes each text response individually, assigning one or more categories from
 - `safety` (bool, default=False): Enable safety checks on responses and saves to CSV at each API call step
 - `to_csv` (bool, default=False): Whether to save results to CSV
 - `chain_of_verification` (bool, default=False): Enable Chain-of-Verification prompting technique for improved accuracy
+- `chain_of_thought` (bool, default=False): Enable Chain-of-Thought prompting technique for improved accuracy
 - `step_back_prompt` (bool, default=False): Enable step-back prompting to analyze higher-level context before classification
 - `context_prompt` (bool, default=False): Add expert role and behavioral guidelines to the prompt
 - `filename` (str, default="categorized_data.csv"): Filename for CSV output
