@@ -689,6 +689,8 @@ def multi_class(
 
             elif model_source == "mistral":
                 from mistralai import Mistral
+                from mistralai.models import SDKError
+
                 client = Mistral(api_key=api_key)
                 try:
                     response = client.chat.complete(
@@ -699,10 +701,78 @@ def multi_class(
                     **({"temperature": creativity} if creativity is not None else {})
                 )
                     reply = response.choices[0].message.content
-                    link1.append(reply)
+                    
+                    if chain_of_verification:
+                        try:
+                            initial_reply = reply
+                            #STEP 2: Generate verification questions
+                            step2_filled = step2_prompt.replace('<<INITIAL_REPLY>>', initial_reply)
+
+                            verification_response = client.chat.complete(
+                                model=user_model,
+                                messages=[{'role': 'user', 'content': step2_filled}],
+                                **({"temperature": creativity} if creativity is not None else {})
+                                )
+                            
+                            verification_questions = verification_response.choices[0].message.content
+                            #STEP 3: Answer verification questions
+                            questions_list = [
+                                remove_numbering(q) 
+                                for q in verification_questions.split('\n') 
+                                if q.strip()
+                                ]
+                            verification_qa = []
+
+                            #prompting each question individually
+                            for question in questions_list:
+
+                                step3_filled = step3_prompt.replace('<<QUESTION>>', question)
+
+                                answer_response = client.chat.complete(
+                                    model=user_model,
+                                    messages=[{'role': 'user', 'content': step3_filled}],
+                                    **({"temperature": creativity} if creativity is not None else {})
+                                    )
+
+                                answer = answer_response.choices[0].message.content
+                                verification_qa.append(f"Q: {question}\nA: {answer}")
+
+                            #STEP 4: Final corrected categorization
+                            verification_qa_text = "\n\n".join(verification_qa)
+                            
+                            step4_filled = (step4_prompt
+                            .replace('<<INITIAL_REPLY>>', initial_reply)
+                            .replace('<<VERIFICATION_QA>>', verification_qa_text))
+
+                            final_response = client.chat.complete(
+                                model=user_model,
+                                messages=[{'role': 'user', 'content': step4_filled}],
+                                **({"temperature": creativity} if creativity is not None else {})
+                            )
+
+                            reply = final_response.choices[0].message.content
+    
+                            link1.append(reply)
+                        except Exception as e:
+                            print(f"ERROR in Chain of Verification: {str(e)}")
+                            print("Falling back to initial response.\n")
+                    else:
+                        #if chain of verification is not enabled, just append initial reply
+                        link1.append(reply)
+
+                except SDKError as e:
+                    error_str = str(e).lower()
+                    if "invalid_model" in error_str or "invalid model" in error_str:
+                        raise ValueError(f"❌ Model '{user_model}' not found.") from e
+                    elif "401" in str(e) or "unauthorized" in str(e).lower():
+                        raise ValueError(f"❌ Authentication failed. Please check your Mistral API key.") from e
+                    else:
+                        print(f"An error occurred: {e}")
+                        link1.append(f"Error processing input: {e}")
                 except Exception as e:
-                    print(f"An error occurred: {e}")
+                    print(f"An unexpected error occurred: {e}")
                     link1.append(f"Error processing input: {e}")
+
             else:
                 raise ValueError("Unknown source! Choose from OpenAI, Anthropic, Perplexity, Google, Huggingface, or Mistral")
             # in situation that no JSON is found
