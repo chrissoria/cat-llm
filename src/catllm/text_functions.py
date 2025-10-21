@@ -247,6 +247,7 @@ def multi_class(
     creativity=None,
     safety=False,
     to_csv=False,
+    chain_of_verification=False,
     filename="categorized_data.csv",
     save_directory=None,
     model_source="auto"
@@ -256,6 +257,30 @@ def multi_class(
     import pandas as pd
     import regex
     from tqdm import tqdm
+
+    def remove_numbering(line):
+        line = line.strip()
+    
+        # Handle bullet points
+        if line.startswith('- '):
+            return line[2:].strip()
+        if line.startswith('• '):
+            return line[2:].strip()
+    
+        # Handle numbered lists "1.", "10.", etc.
+        if line and line[0].isdigit():
+            # Find where the number ends
+            i = 0
+            while i < len(line) and line[i].isdigit():
+                i += 1
+        
+            # Check if followed by '.' or ')'
+            if i < len(line) and line[i] in '.':
+                return line[i+1:].strip()
+            elif i < len(line) and line[i] in ')':
+                return line[i+1:].strip()
+    
+        return line
 
     model_source = model_source.lower() # eliminating case sensitivity 
 
@@ -275,7 +300,7 @@ def multi_class(
             model_source = "mistral"
         elif "sonar" in user_model_lower or "pplx" in user_model_lower:
             model_source = "perplexity"
-        elif "deepseek" in user_model_lower:
+        elif "deepseek"  in user_model_lower or "qwen" in user_model_lower:
             model_source = "huggingface"
         else:
             raise ValueError(f"❌ Could not auto-detect model source from '{user_model}'. Please specify model_source explicitly: OpenAI, Anthropic, Perplexity, Google, Huggingface, or Mistral")
@@ -322,6 +347,44 @@ def multi_class(
             {examples_text}
             Provide your work in JSON format..."""
 
+            if chain_of_verification:
+                step2_prompt = f"""You provided this initial categorization:
+                <<INITIAL_REPLY>>
+                
+                Original task: {prompt}
+                
+                Generate a focused list of 3-5 verification questions to fact-check your categorization. Each question should:
+                - Be concise and specific (one sentence)
+                - Address a distinct aspect of the categorization
+                - Be answerable independently
+
+                Focus on verifying:
+                - Whether each category assignment is accurate
+                - Whether the categories match the criteria in the original task
+                - Whether there are any logical inconsistencies
+
+                Provide only the verification questions as a numbered list."""
+
+                step3_prompt = f"""Answer the following verification question based on the survey response provided.
+
+                Survey response: {response}
+
+                Verification question: <<QUESTION>>
+
+                Provide a brief, direct answer (1-2 sentences maximum).
+
+                Answer:"""
+
+
+                step4_prompt = f"""Original task: {prompt}
+                Initial categorization:
+                <<INITIAL_REPLY>>
+                Verification questions and answers:
+                <<VERIFICATION_QA>>
+                If no categories are present, assign "0" to all categories.
+                Provide the final corrected categorization in the same JSON format:"""
+
+
             if model_source in ["openai", "perplexity", "huggingface"]:
                 from openai import OpenAI
                 from openai import OpenAI, BadRequestError, AuthenticationError
@@ -342,7 +405,69 @@ def multi_class(
                     )
         
                     reply = response_obj.choices[0].message.content
-                    link1.append(reply)
+                    
+                    if chain_of_verification:
+                        try:
+                            initial_reply = reply
+                            #STEP 2: Generate verification questions
+                            step2_prompt = step2_prompt.replace('<<INITIAL_REPLY>>', initial_reply)
+
+                            verification_response = client.chat.completions.create(
+                                model=user_model,
+                                messages=[{'role': 'user', 'content': step2_prompt}],
+                                **({"temperature": creativity} if creativity is not None else {})
+                                )
+                            
+                            verification_questions = verification_response.choices[0].message.content
+                            #STEP 3: Answer verification questions
+                            questions_list = [
+                                remove_numbering(q) 
+                                for q in verification_questions.split('\n') 
+                                if q.strip()
+                                ]
+                            verification_qa = []
+
+                            #prompting each question individually
+                            for question in questions_list:
+
+                                step3_filled = step3_prompt.replace('<<QUESTION>>', question)
+
+                                answer_response = client.chat.completions.create(
+                                    model=user_model,
+                                    messages=[{'role': 'user', 'content': step3_filled}],
+                                    **({"temperature": creativity} if creativity is not None else {})
+                                    )
+
+                                answer = answer_response.choices[0].message.content
+                                verification_qa.append(f"Q: {question}\nA: {answer}")
+
+                            #STEP 4: Final corrected categorization
+                            verification_qa_text = "\n\n".join(verification_qa)
+                            
+                            step4_filled = (step4_prompt
+                            .replace('<<INITIAL_REPLY>>', initial_reply)
+                            .replace('<<VERIFICATION_QA>>', verification_qa_text))
+
+                            print(f"Final prompt:\n{step4_filled}\n")
+
+                            final_response = client.chat.completions.create(
+                                model=user_model,
+                                messages=[{'role': 'user', 'content': step4_filled}],
+                                **({"temperature": creativity} if creativity is not None else {})
+                            )
+
+                            cove_reply = final_response.choices[0].message.content
+    
+                            print("Chain of verification completed. Final response generated.\n")
+                            link1.append(cove_reply)
+
+                        except Exception as e:
+                            print(f"ERROR in Chain of Verification: {str(e)}")
+                            print("Falling back to initial response.\n")
+                    else:
+                        #if chain of verification is not enabled, just append initial reply
+                        link1.append(reply)
+                    
                 except BadRequestError as e:
                     # Model doesn't exist - halt immediately
                     raise ValueError(f"❌ Model '{user_model}' on {model_source} not found. Please check the model name and try again.") from e
