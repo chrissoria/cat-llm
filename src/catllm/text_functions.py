@@ -6,7 +6,9 @@ from .calls.all_calls import (
     chain_of_verification_openai,
     chain_of_verification_google,
     chain_of_verification_anthropic,
-    chain_of_verification_mistral
+    chain_of_verification_mistral,
+    get_openai_top_n,
+    get_anthropic_top_n,
 )
 
 
@@ -117,9 +119,9 @@ def explore_common_categories(
     survey_question, 
     survey_input,
     api_key,
-    top_n=10,
+    top_n=12,
     cat_num=10,
-    divisions=5,
+    divisions=10,
     user_model="gpt-5",
     creativity=None,
     specificity="broad",
@@ -164,20 +166,19 @@ Responses are contained within triple backticks here: ```{survey_participant_chu
 Number your categories from 1 through {cat_num} and be concise with the category labels and provide no description of the categories."""
         
         if model_source == "openai":
-            client = OpenAI(api_key=api_key)
             try:
-                response_obj = client.chat.completions.create(
-                    model=user_model,
-                    messages=[
-                        {'role': 'system', 'content': f"""You are a helpful assistant that extracts categories from survey responses. \
-                                                    The specific task is to identify {specificity} categories of responses to a survey question. \
-                         The research question is: {research_question}""" if research_question else "You are a helpful assistant."},
-                        {'role': 'user', 'content': prompt}
-                    ],
-                    **({"temperature": creativity} if creativity is not None else {})
+                reply = get_openai_top_n(
+                    prompt=prompt,
+                    user_model=user_model,
+                    specificity=specificity,
+                    api_key=api_key,
+                    model_source=model_source,
+                    research_question=research_question,
+                    creativity=creativity
                 )
-                reply = response_obj.choices[0].message.content
+
                 responses.append(reply)
+
             except BadRequestError as e:
                 if "context_length_exceeded" in str(e) or "maximum context length" in str(e):
                     error_msg = (f"Token limit exceeded for model {user_model}. "
@@ -187,6 +188,20 @@ Number your categories from 1 through {cat_num} and be concise with the category
                     print(f"OpenAI API error: {e}")
             except Exception as e:
                 print(f"An error occurred: {e}")
+
+        elif model_source == "anthropic":
+            
+            reply = get_anthropic_top_n(
+                prompt=prompt,
+                user_model=user_model,
+                specificity=specificity,
+                model_source=model_source,
+                api_key=api_key,
+                research_question=research_question,
+                creativity=creativity
+            )
+
+            responses.append(reply)
         else:
             raise ValueError(f"Unsupported model_source: {model_source}")
         
@@ -204,24 +219,87 @@ Number your categories from 1 through {cat_num} and be concise with the category
     flat_list = [item.lower() for sublist in responses_list for item in sublist]
 
     #convert flat_list to a df
-    df = pd.DataFrame(flat_list, columns=['Category'])
-    counts = pd.Series(flat_list).value_counts()  # Use original list before conversion
-    df['counts'] = df['Category'].map(counts)
-    df = df.sort_values(by='counts', ascending=False).reset_index(drop=True)
-    df = df.drop_duplicates(subset='Category', keep='first').reset_index(drop=True)
+    def normalize_category(cat):
+        if pd.isna(cat):
+            return cat
+        terms = sorted([term.strip().lower() for term in str(cat).split('/')])
+        return '/'.join(terms)
 
-    second_prompt = f"""From this list of categories, extract the top {top_n} most common categories. \
-The categories are contained within triple backticks here: ```{df['Category'].tolist()}``` \
-Return the top {top_n} categories as a numbered list sorted from the most to least common and keep the categories {specificity}, with no additional text or explanation."""
+    # normalized column
+    df = pd.DataFrame(flat_list, columns=['Category'])
+    df['normalized'] = df['Category'].apply(normalize_category)
+
+    # group by normalized, count, and keep most frequent original
+    result = (df.groupby('normalized')
+            .agg(Category=('Category', lambda x: x.value_counts().index[0]),
+                counts=('Category', 'size'))
+            .sort_values('counts', ascending=False)
+            .reset_index(drop=True))
+
+    df = result
+
+    second_prompt = f"""You are a data analyst reviewing categorized survey data.
+
+    Task: From the provided categories, identify and return the top {top_n} CONCEPTUALLY UNIQUE categories.
+
+    Critical Instructions:
+    1. The categories have already been deduplicated for exact string matches
+    2. However, some categories may still be SEMANTICALLY DUPLICATES (same concept, different wording):
+        - "closer to work" and "commute/proximity to work" mean the same thing
+        - "breakup/household conflict" and "relationship problems" mean the same thing
+    3. When you identify semantic duplicates:
+        - Combine their frequencies mentally
+        - Keep the version that appears most frequently OR is most clearly worded
+        - Each concept should appear ONLY ONCE in your final list
+    4. Keep category names {specificity}
+    5. Return ONLY a numbered list of {top_n} conceptually unique categories
+    6. No additional text, explanations, or commentary
+
+    Pre-processed Categories (sorted by frequency):
+    {df['Category'].head(top_n * 3).tolist()}
+
+    Note: More categories than needed are provided so you can identify and merge semantic duplicates.
+
+    Output Format:
+    1. category name
+    2. category name
+    3. category name
+
+    Top {top_n} Conceptually Unique Categories:"""
+
         
     if model_source == "openai":
-        client = OpenAI(api_key=api_key)
+    
+        base_url = (
+        "https://api.perplexity.ai" if model_source == "perplexity" 
+        else "https://router.huggingface.co/v1" if model_source == "huggingface"
+        else None
+        )
+
+        client = OpenAI(api_key=api_key, base_url=base_url)
+        
         response_obj = client.chat.completions.create(
             model=user_model,
             messages=[{'role': 'user', 'content': second_prompt}],
-            temperature=creativity
+            **({"temperature": creativity} if creativity is not None else {})
         )
-    top_categories = response_obj.choices[0].message.content
+
+        top_categories = response_obj.choices[0].message.content
+
+    elif model_source == "anthropic":
+        import anthropic
+
+        client = anthropic.Anthropic(api_key=api_key)
+
+        response_obj = client.messages.create(
+            model=user_model,
+            max_tokens=4096,
+            messages=[{'role': 'user', 'content': second_prompt}],
+            **({"temperature": creativity} if creativity is not None else {})
+        )
+
+        top_categories = response_obj.content[0].text
+
     print(top_categories)
 
     top_categories_final = []

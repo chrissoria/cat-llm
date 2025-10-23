@@ -431,3 +431,77 @@ def chain_of_verification_mistral(
         print(f"ERROR in Chain of Verification: {str(e)}")
         print("Falling back to initial response.\n")
         return initial_reply
+        
+# openai explore corpus call
+def get_openai_top_n(
+    prompt,
+    user_model,
+    specificity,
+    model_source,
+    api_key,
+    research_question,
+    creativity
+):
+    """
+    Get response from OpenAI API with system message.
+    """
+    from openai import OpenAI
+
+    base_url = (
+        "https://api.perplexity.ai" if model_source == "perplexity" 
+        else "https://router.huggingface.co/v1" if model_source == "huggingface"
+        else None
+    )
+
+    client = OpenAI(api_key=api_key, base_url=base_url)
+
+    response_obj = client.chat.completions.create(
+        model=user_model,
+        messages=[
+            {'role': 'system', 'content': f"""You are a helpful assistant that extracts categories from survey responses. \
+                                        The specific task is to identify {specificity} categories of responses to a survey question. \
+             The research question is: {research_question}""" if research_question else "You are a helpful assistant."},
+            {'role': 'user', 'content': prompt}
+        ],
+        **({"temperature": creativity} if creativity is not None else {})
+    )
+    
+    return response_obj.choices[0].message.content
+
+# anthropic explore corpus call
+def get_anthropic_top_n(
+    prompt,
+    user_model,
+    model_source,
+    specificity,
+    api_key,
+    research_question,
+    creativity
+):
+    """
+    Get response from Anthropic API with system prompt.
+    """
+    import anthropic
+    client = anthropic.Anthropic(api_key=api_key)
+
+    # build system prompt
+    if research_question:
+        system_content = (f"You are a helpful assistant that extracts categories from survey responses. "
+                        f"The specific task is to identify {specificity} categories of responses to a survey question. "
+                        f"The research question is: {research_question}")
+    else:
+        system_content = "You are a helpful assistant."
+    
+    response_obj = client.messages.create(
+        model=user_model,
+        max_tokens=4096,
+        system=system_content,
+        messages=[
+            {'role': 'user', 'content': prompt}
+        ],
+        **({"temperature": creativity} if creativity is not None else {})
+    )
+    
+    return response_obj.content[0].text
+
+
