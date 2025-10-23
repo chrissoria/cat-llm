@@ -341,6 +341,10 @@ def multi_class(
     chain_of_thought = True,
     step_back_prompt = False,
     context_prompt = False,
+    top_n = 12,
+    cat_num = 10,
+    divisions = 10,
+    research_question = None,
     filename = "categorized_data.csv",
     save_directory = None,
     model_source = "auto"
@@ -351,6 +355,7 @@ def multi_class(
     import regex
     from tqdm import tqdm
 
+    #used in chain of verification 
     def remove_numbering(line):
         line = line.strip()
     
@@ -399,16 +404,33 @@ def multi_class(
             raise ValueError(f"❌ Could not auto-detect model source from '{user_model}'. Please specify model_source explicitly: OpenAI, Anthropic, Perplexity, Google, Huggingface, or Mistral")
     else:
         model_source = model_source.lower()
-    
+
+    if categories == "auto":
+        if survey_question == "": # step back requires the survey question to function well
+            raise TypeError("survey_question is required when using step_back_prompt. Please provide the survey question you are analyzing.")
+            
+        categories = explore_common_categories(
+            survey_question=survey_question,
+            survey_input=survey_input,
+            research_question=research_question,
+            api_key=api_key,
+            top_n=top_n,
+            cat_num=cat_num,
+            divisions=divisions
+        )
+        
     categories_str = "\n".join(f"{i + 1}. {cat}" for i, cat in enumerate(categories))
     cat_num = len(categories)
     category_dict = {str(i+1): "0" for i in range(cat_num)}
     example_JSON = json.dumps(category_dict, indent=4)
 
-    # ensure number of categories is what user wants
     print(f"\nThe categories you entered to be coded by {model_source} {user_model}:")
-    for i, cat in enumerate(categories, 1):
-        print(f"{i}. {cat}")
+
+    if categories != "auto":
+    # ensure number of categories is what user wants
+
+        for i, cat in enumerate(categories, 1):
+            print(f"{i}. {cat}")
     
     link1 = []
     extracted_jsons = []
