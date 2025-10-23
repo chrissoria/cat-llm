@@ -468,7 +468,6 @@ def get_openai_top_n(
     
     return response_obj.choices[0].message.content
 
-# anthropic explore corpus call
 def get_anthropic_top_n(
     prompt,
     user_model,
@@ -484,7 +483,7 @@ def get_anthropic_top_n(
     import anthropic
     client = anthropic.Anthropic(api_key=api_key)
 
-    # build system prompt
+    # Build system prompt
     if research_question:
         system_content = (f"You are a helpful assistant that extracts categories from survey responses. "
                         f"The specific task is to identify {specificity} categories of responses to a survey question. "
@@ -503,5 +502,3 @@ def get_anthropic_top_n(
     )
     
     return response_obj.content[0].text
-
-

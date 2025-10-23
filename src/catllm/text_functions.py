@@ -8,7 +8,7 @@ from .calls.all_calls import (
     chain_of_verification_anthropic,
     chain_of_verification_mistral,
     get_openai_top_n,
-    get_anthropic_top_n,
+    get_anthropic_top_n
 )
 
 
@@ -167,15 +167,22 @@ Number your categories from 1 through {cat_num} and be concise with the category
         
         if model_source == "openai":
             try:
-                reply = get_openai_top_n(
-                    prompt=prompt,
-                    user_model=user_model,
-                    specificity=specificity,
-                    api_key=api_key,
-                    model_source=model_source,
-                    research_question=research_question,
-                    creativity=creativity
+                from openai import OpenAI
+
+                client = OpenAI(api_key=api_key)
+
+                response_obj = client.chat.completions.create(
+                    model=user_model,
+                    messages=[
+                        {'role': 'system', 'content': f"""You are a helpful assistant that extracts categories from survey responses. \
+                                        The specific task is to identify {specificity} categories of responses to a survey question. \
+                                        The research question is: {research_question}""" if research_question else "You are a helpful assistant."},
+                        {'role': 'user', 'content': prompt}
+                        ],
+                        **({"temperature": creativity} if creativity is not None else {})
                 )
+    
+                reply = response_obj.choices[0].message.content
 
                 responses.append(reply)
 
@@ -191,16 +198,29 @@ Number your categories from 1 through {cat_num} and be concise with the category
 
         elif model_source == "anthropic":
             
-            reply = get_anthropic_top_n(
-                prompt=prompt,
-                user_model=user_model,
-                specificity=specificity,
-                model_source=model_source,
-                api_key=api_key,
-                research_question=research_question,
-                creativity=creativity
+            import anthropic
+            client = anthropic.Anthropic(api_key=api_key)
+
+            # Build system prompt
+            if research_question:
+                system_content = (f"You are a helpful assistant that extracts categories from survey responses. "
+                        f"The specific task is to identify {specificity} categories of responses to a survey question. "
+                        f"The research question is: {research_question}")
+            else:
+                system_content = "You are a helpful assistant."
+    
+            response_obj = client.messages.create(
+                model=user_model,
+                max_tokens=4096,
+                system=system_content,
+                messages=[
+                    {'role': 'user', 'content': prompt}
+                ],
+                **({"temperature": creativity} if creativity is not None else {})
             )
 
+            reply = response_obj.content[0].text
+    
             responses.append(reply)
         else:
             raise ValueError(f"Unsupported model_source: {model_source}")
@@ -313,14 +333,7 @@ Number your categories from 1 through {cat_num} and be concise with the category
     return top_categories_final
 
 #multi-class text classification
-# what this function does:
-# does context prompting, giving the model a background on the task at hand and the user's survey question
-# system prompting, overall context and purpose for the language model
-# role prompting, assings a spacific identity to the model
-# also enables few shot prompting, allowing the user to input a few examples
-# provides POSITIVE INSTRUCTIONS reather than limitations/restrictions
-# GOAL: enable step-back prompting
-# GOAL 2: enable self-consistency
+# GOAL: enable self-consistency
 def multi_class(
     survey_input,
     categories,
@@ -408,12 +421,14 @@ def multi_class(
     if categories == "auto":
         if survey_question == "": # step back requires the survey question to function well
             raise TypeError("survey_question is required when using step_back_prompt. Please provide the survey question you are analyzing.")
-            
+
         categories = explore_common_categories(
             survey_question=survey_question,
             survey_input=survey_input,
             research_question=research_question,
             api_key=api_key,
+            model_source=model_source,
+            user_model=user_model,
             top_n=top_n,
             cat_num=cat_num,
             divisions=divisions
