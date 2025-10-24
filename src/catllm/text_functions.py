@@ -413,8 +413,10 @@ def multi_class(
             model_source = "perplexity"
         elif "deepseek"  in user_model_lower or "qwen" in user_model_lower:
             model_source = "huggingface"
+        elif "grok" in user_model_lower:
+            model_source = "xai"
         else:
-            raise ValueError(f"❌ Could not auto-detect model source from '{user_model}'. Please specify model_source explicitly: OpenAI, Anthropic, Perplexity, Google, Huggingface, or Mistral")
+            raise ValueError(f"❌ Could not auto-detect model source from '{user_model}'. Please specify model_source explicitly: OpenAI, Anthropic, Perplexity, Google, xAI, Huggingface, or Mistral")
     else:
         model_source = model_source.lower()
 
@@ -468,7 +470,7 @@ def multi_class(
                 
         stepback = f"""What are the underlying factors or dimensions that explain how people typically answer "{survey_question}"?"""
 
-        if model_source in ["openai", "perplexity", "huggingface"]:
+        if model_source in ["openai", "perplexity", "huggingface", "xai"]:
             stepback_insight, step_back_added = get_stepback_insight_openai(
                 stepback=stepback,
                 api_key=api_key,
@@ -580,13 +582,14 @@ def multi_class(
                 Provide the final corrected categorization in the same JSON format:"""
 
             # Main model interaction
-            if model_source in ["openai", "perplexity", "huggingface"]:
+            if model_source in ["openai", "perplexity", "huggingface", "xai"]:
                 from openai import OpenAI
                 from openai import OpenAI, BadRequestError, AuthenticationError
                 # conditional base_url setting based on model source
                 base_url = (
                     "https://api.perplexity.ai" if model_source == "perplexity" 
                     else "https://router.huggingface.co/v1" if model_source == "huggingface"
+                    else "https://api.x.ai/v1" if model_source == "xai"
                     else None  # default
                 )
     
@@ -788,7 +791,7 @@ def multi_class(
                     link1.append(f"Error processing input: {e}")
 
             else:
-                raise ValueError("Unknown source! Choose from OpenAI, Anthropic, Perplexity, Google, Huggingface, or Mistral")
+                raise ValueError("Unknown source! Choose from OpenAI, Anthropic, Perplexity, Google, xAI, Huggingface, or Mistral")
             # in situation that no JSON is found
             if reply is not None:
                 extracted_json = regex.findall(r'\{(?:[^{}]|(?R))*\}', reply, regex.DOTALL)

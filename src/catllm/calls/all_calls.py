@@ -12,6 +12,7 @@ def get_stepback_insight_openai(
     base_url = (
         "https://api.perplexity.ai" if model_source == "perplexity" 
         else "https://router.huggingface.co/v1" if model_source == "huggingface"
+        else "https://api.x.ai/v1" if model_source == "xai"
         else None
     )
     
@@ -450,6 +451,7 @@ def get_openai_top_n(
     base_url = (
         "https://api.perplexity.ai" if model_source == "perplexity" 
         else "https://router.huggingface.co/v1" if model_source == "huggingface"
+        else "https://api.x.ai/v1" if model_source == "xai"
         else None
     )
 
