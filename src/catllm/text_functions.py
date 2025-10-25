@@ -911,26 +911,30 @@ def multi_class(
     categorized_data = pd.concat([categorized_data, normalized_data], axis=1)
     categorized_data = categorized_data.rename(columns=lambda x: f'category_{x}' if str(x).isdigit() else x)
 
-    #converting to numeric
+    # Converting to numeric
     cat_cols = [col for col in categorized_data.columns if col.startswith('category_')]
 
-    categorized_data['processing_status'] = (
-        categorized_data[cat_cols].isna().all(axis=1)
-        .map({True: 'error', False: 'success'})
-    )
+    # Step 1: Identify rows with invalid strings (like "e")
+    has_invalid_strings = categorized_data[cat_cols].apply(
+        lambda col: pd.to_numeric(col, errors='coerce').isna() & col.notna()
+    ).any(axis=1)
 
-    categorized_data.loc[
-        categorized_data[cat_cols].apply(pd.to_numeric, errors='coerce').isna().any(axis=1), 
-        cat_cols
-    ] = pd.NA
+    # Step 2: Set processing status BEFORE modifying the data
+    categorized_data['processing_status'] = (~has_invalid_strings).map({True: 'success', False: 'error'})
 
+    # Step 3: Set invalid rows to NA
+    categorized_data.loc[has_invalid_strings, cat_cols] = pd.NA
+
+    # Step 4: Fill remaining NaN with 0 (valid but sparse JSONs)
+    categorized_data[cat_cols] = categorized_data[cat_cols].fillna(0)
+
+    # Step 5: Convert to Int64
     categorized_data[cat_cols] = categorized_data[cat_cols].astype('Int64')
 
+    # Step 6: Create categories_id
     categorized_data['categories_id'] = categorized_data[cat_cols].apply(
         lambda x: ','.join(x.dropna().astype(str)), axis=1
     )
-
-    categorized_data['categories_present'] = categorized_data[cat_cols].sum(axis=1)
 
     if filename:
         categorized_data.to_csv(filename, index=False)

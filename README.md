@@ -97,9 +97,10 @@ Whether you're working with messy text responses, analyzing visual content, or g
 - ✅ OpenAI (GPT-4, GPT-4o, GPT-3.5-turbo, etc.)
 - ✅ Anthropic (Claude 3.5 Sonnet, Haiku)
 - ✅ Perplexity (Sonar models)
+- ✅ Google Gemini - Free tier has severe rate limits (5 RPM). Requires Google AI Studio billing account for large-scale use.
 
 **Supported but Limited:**
-- ⚠️ Google Gemini - Free tier has severe rate limits (5 RPM). Requires billing account for production use.
+- 
 - ⚠️ Huggingface - API routing can be unstable
 
 **Note:** For beta testing, I recommend starting with OpenAI or Anthropic.
