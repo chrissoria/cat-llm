@@ -189,6 +189,7 @@ def chain_of_verification_openai(
         final_response = client.chat.completions.create(
             model=user_model,
             messages=[{'role': 'user', 'content': step4_filled}],
+            response_format={"type": "json_object"},
             **({"temperature": creativity} if creativity is not None else {})
         )
         
@@ -262,15 +263,29 @@ def chain_of_verification_anthropic(
             .replace('<<VERIFICATION_QA>>', verification_qa_text))
         
         print(f"Final prompt:\n{step4_filled}\n")
+
+        tools = [{
+            "name": "return_categories",
+            "description": "Return categorization results as 0 (not present) or 1 (present) for each category",
+            "input_schema": {
+                "type": "object",
+                "properties": properties,
+                "required": list(properties.keys())  # All categories required
+            }
+        }]
         
         final_response = client.messages.create(
             model=user_model,
             messages=[{'role': 'user', 'content': step4_filled}],
             max_tokens=4096,
+            tools=tools,
+            tool_choice={"type": "tool", "name": "return_categories"},
             **({"temperature": creativity} if creativity is not None else {})
         )
         
-        verified_reply = final_response.content[0].text
+        result_dict = final_response.content[0].input
+
+        verified_reply = json.dumps(result_dict)
         print("Chain of verification completed. Final response generated.\n")
         
         return verified_reply
@@ -306,7 +321,8 @@ def chain_of_verification_google(
             "contents": [{
                 "parts": [{"text": step2_filled}]
             }],
-            **({"generationConfig": {"temperature": creativity}} if creativity is not None else {})
+            **({"generationConfig": {"temperature": creativity}} if creativity is not None else {}),
+            **({"thinkingConfig": {"thinkingBudget": thinking_budget}} if thinking_budget is not None else {})
         }
         
         result_step2 = make_google_request(url, headers, payload_step2)
@@ -328,7 +344,8 @@ def chain_of_verification_google(
                 "contents": [{
                     "parts": [{"text": step3_filled}]
                 }],
-                **({"generationConfig": {"temperature": creativity}} if creativity is not None else {})
+                **({"generationConfig": {"temperature": creativity}} if creativity is not None else {}),
+                **({"thinkingConfig": {"thinkingBudget": thinking_budget}} if thinking_budget is not None else {})
             }
             
             result_step3 = make_google_request(url, headers, payload_step3)
@@ -347,7 +364,11 @@ def chain_of_verification_google(
             "contents": [{
                 "parts": [{"text": step4_filled}]
             }],
-            **({"generationConfig": {"temperature": creativity}} if creativity is not None else {})
+            "generationConfig": {
+                                "responseMimeType": "application/json",
+                                **({"temperature": creativity} if creativity is not None else {}),
+                                **({"thinkingConfig": {"thinkingBudget": thinking_budget}} if thinking_budget is not None else {})
+            }
         }
         
         result_step4 = make_google_request(url, headers, payload_step4)
@@ -420,6 +441,7 @@ def chain_of_verification_mistral(
         final_response = client.chat.complete(
             model=user_model,
             messages=[{'role': 'user', 'content': step4_filled}],
+            response_format={"type": "json_object"},
             **({"temperature": creativity} if creativity is not None else {})
         )
         

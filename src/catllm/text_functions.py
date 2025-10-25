@@ -354,11 +354,12 @@ def multi_class(
     chain_of_thought = True,
     step_back_prompt = False,
     context_prompt = False,
+    thinking_budget = 0,
     top_n = 12,
     cat_num = 10,
     divisions = 10,
     research_question = None,
-    filename = "categorized_data.csv",
+    filename = None,
     save_directory = None,
     model_source = "auto"
 ):
@@ -366,6 +367,7 @@ def multi_class(
     import json
     import pandas as pd
     import regex
+    import time
     from tqdm import tqdm
 
     #used in chain of verification 
@@ -441,6 +443,16 @@ def multi_class(
     category_dict = {str(i+1): "0" for i in range(cat_num)}
     example_JSON = json.dumps(category_dict, indent=4)
 
+    # for ensuring JSON format for anthropic api
+    properties = {
+            str(i+1): {
+                "type": "string",
+                "description": cat,
+                "enum": ["0", "1"]
+                } 
+            for i, cat in enumerate(categories)
+        }
+    
     print(f"\nThe categories you entered to be coded by {model_source} {user_model}:")
 
     if categories != "auto":
@@ -585,6 +597,9 @@ def multi_class(
             if model_source in ["openai", "perplexity", "huggingface", "xai"]:
                 from openai import OpenAI
                 from openai import OpenAI, BadRequestError, AuthenticationError
+
+                max_retries = 5
+                delay = 2
                 # conditional base_url setting based on model source
                 base_url = (
                     "https://api.perplexity.ai" if model_source == "perplexity" 
@@ -594,60 +609,93 @@ def multi_class(
                 )
     
                 client = OpenAI(api_key=api_key, base_url=base_url)
-                
-                try:
-                    messages = [
-                        *([{'role': 'user', 'content': stepback}] if step_back_prompt and step_back_added else []), # only if step back is enabled and successful
-                        *([{'role': 'assistant', 'content': stepback_insight}] if step_back_added else {}), # include insight if step back succeeded
-                        {'role': 'user', 'content': prompt}
-                    ]
 
-                    response_obj = client.chat.completions.create(
-                    model=user_model,
-                    messages=messages,
-                    **({"temperature": creativity} if creativity is not None else {})
-                    )
+                max_retries = 5
+                delay = 2
+
+                for attempt in range(max_retries):
+                    try:
         
-                    reply = response_obj.choices[0].message.content
-                    
-                    if chain_of_verification:
-                        reply = chain_of_verification_openai(
-                            initial_reply=reply,
-                            step2_prompt=step2_prompt,
-                            step3_prompt=step3_prompt,
-                            step4_prompt=step4_prompt,
-                            client=client,
-                            user_model=user_model,
-                            creativity=creativity,
-                            remove_numbering=remove_numbering
-                        )
+                        messages = [
+                            *([{'role': 'user', 'content': stepback}] if step_back_prompt and step_back_added else []), # only if step back is enabled and successful
+                            *([{'role': 'assistant', 'content': stepback_insight}] if step_back_added else {}), # include insight if step back succeeded
+                            {'role': 'user', 'content': prompt}
+                        ]
 
-                        link1.append(reply)
-                    else:
-                        #if chain of verification is not enabled, just append initial reply
-                        link1.append(reply)
+                        response_obj = client.chat.completions.create(
+                        model=user_model,
+                        messages=messages,
+                        response_format={"type": "json_object"},
+                        **({"temperature": creativity} if creativity is not None else {})
+                        )
+        
+                        reply = response_obj.choices[0].message.content
                     
-                except BadRequestError as e:
-                    # Model doesn't exist - halt immediately
-                    raise ValueError(f"❌ Model '{user_model}' on {model_source} not found. Please check the model name and try again.") from e
-                except Exception as e:
-                    print(f"An error occurred: {e}")
-                    link1.append(f"Error processing input: {e}")
+                        if chain_of_verification:
+                            reply = chain_of_verification_openai(
+                                initial_reply=reply,
+                                step2_prompt=step2_prompt,
+                                step3_prompt=step3_prompt,
+                                step4_prompt=step4_prompt,
+                                client=client,
+                                user_model=user_model,
+                                creativity=creativity,
+                                remove_numbering=remove_numbering
+                            )
+
+                            link1.append(reply)
+                            break
+                        else:
+                            #if chain of verification is not enabled, just append initial reply
+                            link1.append(reply)
+                            break
+                    
+                    except BadRequestError as e:
+                        # Model doesn't exist - halt immediately
+                        raise ValueError(f"❌ Model '{user_model}' on {model_source} not found. Please check the model name and try again.") from e
+                
+                    except Exception as e:
+                        if "500" in str(e) and attempt < max_retries - 1:
+                            wait_time = delay * (2 ** attempt)
+                            print(f"Attempt {attempt + 1} failed with error: {e}")
+                            print(f"Retrying in {wait_time}s...")
+                            time.sleep(wait_time)
+                        else:
+                            print(f"❌ Failed after {max_retries} attempts: {e}")
+                            reply = """{"1":"e"}"""
+                            link1.append(f"Error processing input: {e}")
+                            break  # Exit retry loop after max attempts
+
+                    except Exception as e:
+                        print(f"An error occurred: {e}")
+                        link1.append(f"Error processing input: {e}")
 
             elif model_source == "anthropic":
 
                 import anthropic
                 client = anthropic.Anthropic(api_key=api_key)
+
+                tools = [{
+                    "name": "return_categories",
+                    "description": "Return categorization results as 0 (not present) or 1 (present) for each category",
+                    "input_schema": {
+                        "type": "object",
+                        "properties": properties,
+                        "required": list(properties.keys())
+                    }
+                }]
                 
                 try:
                     response_obj = client.messages.create(
                     model=user_model,
                     max_tokens=4096,
+                    tools=tools,
+                    tool_choice={"type": "tool", "name": "return_categories"},
                     messages=[{'role': 'user', 'content': prompt}],
                     **({"temperature": creativity} if creativity is not None else {})
                     )
-        
-                    reply = response_obj.content[0].text
+                    json_reply = response_obj.content[0].input
+                    reply = json.dumps(json_reply)
                     
                     if chain_of_verification:
                         reply = chain_of_verification_anthropic(
@@ -676,7 +724,7 @@ def multi_class(
             elif model_source == "google":
                 import requests
 
-                def make_google_request(url, headers, payload, max_retries=3):
+                def make_google_request(url, headers, payload, max_retries=5):
                     """Make Google API request with exponential backoff on 429 errors"""
                     for attempt in range(max_retries):
                         try:
@@ -702,8 +750,12 @@ def multi_class(
                         "contents": [{
                             "parts": [{"text": prompt}]
                             }],
-                            **({"generationConfig": {"temperature": creativity}} if creativity is not None else {})
+                            "generationConfig": {
+                                "responseMimeType": "application/json",
+                                **({"temperature": creativity} if creativity is not None else {}),
+                                **({"thinkingConfig": {"thinkingBudget": thinking_budget}} if thinking_budget is not None else {})
                             }
+                    }
                     
                     result = make_google_request(url, headers, payload)
 
@@ -755,6 +807,7 @@ def multi_class(
                     messages=[
                         {'role': 'user', 'content': prompt}
                     ],
+                    response_format={"type": "json_object"},
                     **({"temperature": creativity} if creativity is not None else {})
                 )
                     reply = response.choices[0].message.content
@@ -810,12 +863,9 @@ def multi_class(
 
         # --- Safety Save ---
         if safety:
-            # Save progress so far
-            temp_df = pd.DataFrame({
-                'survey_response': survey_input[:idx+1],
-                'link1': link1,
-                'json': extracted_jsons
-            })
+            if filename == None: # step back requires the survey question to function well
+                raise TypeError("filename is required when using safety. Please provide the filename you want to save to csv.")
+    
             # Normalize processed jsons so far
             normalized_data_list = []
             for json_str in extracted_jsons:
@@ -825,11 +875,21 @@ def multi_class(
                 except json.JSONDecodeError:
                     normalized_data_list.append(pd.DataFrame({"1": ["e"]}))
             normalized_data = pd.concat(normalized_data_list, ignore_index=True)
+    
+            # Save progress so far
+            temp_df = pd.DataFrame({
+                'survey_input': (
+                    survey_input[:idx+1].reset_index(drop=True) 
+                    if isinstance(survey_input, (pd.DataFrame, pd.Series)) 
+                    else pd.Series(survey_input[:idx+1])
+                ),
+                'model_response': pd.Series(link1[:idx+1]).reset_index(drop=True),
+                'json': pd.Series(extracted_jsons[:idx+1]).reset_index(drop=True)
+            })
             temp_df = pd.concat([temp_df, normalized_data], axis=1)
+    
             # save to CSV
-            if save_directory is None:
-                save_directory = os.getcwd()
-            temp_df.to_csv(os.path.join(save_directory, filename), index=False)
+            temp_df.to_csv(filename, index=False)
 
     # --- Final DataFrame ---
     normalized_data_list = []
@@ -872,9 +932,7 @@ def multi_class(
 
     categorized_data['categories_present'] = categorized_data[cat_cols].sum(axis=1)
 
-    if to_csv:
-        if save_directory is None:
-            save_directory = os.getcwd()
-        categorized_data.to_csv(os.path.join(save_directory, filename), index=False)
+    if filename:
+        categorized_data.to_csv(filename, index=False)
     
     return categorized_data

@@ -17,11 +17,12 @@
   - [explore_corpus()](#explore_corpus)
   - [explore_common_categories()](#explore_common_categories)
   - [multi_class()](#multi_class)
-  - [image_score()](#image_score)
+  - [image_score()](#image_score_drawing)
   - [image_features()](#image_features)
   - [build_web_research_dataset()](#build_web_research_dataset)
   - [cerad_drawn_score()](#cerad_drawn_score)
 - [Academic Research](#academic-research)
+- [Contact](#contact)
 - [License](#license)
 
 ## Installation
@@ -30,9 +31,26 @@
 pip install cat-llm
 ```
 
+-----
+
+## ⚠️ Beta Software Notice
+
+**CatLLM is currently in beta.** While I'm actively working to make this tool robust and reliable, you may encounter bugs or unexpected behavior. 
+
+**I need your help!** This project thrives on community feedback. Please contribute by:
+- 🐛 **Reporting bugs** - Found an issue? Let me know!
+- 💡 **Sharing ideas** - Have suggestions for improvements or new features?
+- 🔧 **Contributing code** - Submit pull requests with fixes or enhancements
+
+**Visit our GitHub**: [github.com/chrissoria/cat-llm](https://github.com/chrissoria/cat-llm)
+
+All feedback helps us build better research software for the community.
+
+-----
+
 ## Quick Start
 
-CatLLM helps social scientists and researchers automatically categorize open-ended survey responses, images, and web-scraped data using AI models like GPT-4 and Claude.
+CatLLM helps social scientists and researchers automatically categorize open-ended survey responses, images, and web-scraped data using AI models like GPT-5 and Claude.
 
 Text Analysis: Simply provide your survey responses and category list - the package handles the rest and outputs clean data ready for statistical analysis. It works with single or multiple categories per response and automatically skips missing data to save API costs.
 
@@ -74,6 +92,18 @@ Whether you're working with messy text responses, analyzing visual content, or g
 - **Anthropic**: Claude Sonnet 3.7, Claude Haiku, etc.
 - **Perplexity**: Sonnar Large, Sonnar Small, etc.
 - **Mistral**: Mistral Large, Mistral Small, etc.
+
+**Fully Tested (Beta):**
+- ✅ OpenAI (GPT-4, GPT-4o, GPT-3.5-turbo, etc.)
+- ✅ Anthropic (Claude 3.5 Sonnet, Haiku)
+- ✅ Perplexity (Sonar models)
+
+**Supported but Limited:**
+- ⚠️ Google Gemini - Free tier has severe rate limits (5 RPM). Requires billing account for production use.
+- ⚠️ Huggingface - API routing can be unstable
+
+**Note:** For beta testing, I recommend starting with OpenAI or Anthropic.
+
 
 ## API Reference
 
@@ -421,7 +451,6 @@ diamond_scores = cat.cerad_score(
 )
 ```
 
-
 ## Academic Research
 
 This package implements methodology from research on LLM performance in social science applications, including the UC Berkeley Social Networks Study. The package addresses reproducibility challenges in LLM-assisted research by providing standardized interfaces and consistent output formatting.
@@ -429,6 +458,10 @@ This package implements methodology from research on LLM performance in social s
 If you use this package for research, please cite:
 
 Soria, C. (2025). CatLLM (0.0.8). Zenodo. https://doi.org/10.5281/zenodo.15532317
+
+## Contact
+
+**Interested in research collaboration?** Email: [ChrisSoria@Berkeley.edu](mailto:ChrisSoria@Berkeley.edu)
 
 ## License
 
