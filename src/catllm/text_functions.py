@@ -651,8 +651,14 @@ def multi_class(
                             break
                     
                     except BadRequestError as e:
+                        if "json_validate_failed" in str(e) and attempt < max_retries - 1:
+                            wait_time = delay * (2 ** attempt)
+                            print(f"⚠️ JSON validation failed. Attempt {attempt + 1}/{max_retries}")
+                            print(f"Retrying in {wait_time}s...")
+                            time.sleep(wait_time)
                         # Model doesn't exist - halt immediately
-                        raise ValueError(f"❌ Model '{user_model}' on {model_source} not found. Please check the model name and try again.") from e
+                        else:
+                            raise ValueError(f"❌ Model '{user_model}' on {model_source} not found. Please check the model name and try again.") from e
                 
                     except Exception as e:
                         if "500" in str(e) and attempt < max_retries - 1:
