@@ -610,7 +610,7 @@ def multi_class(
     
                 client = OpenAI(api_key=api_key, base_url=base_url)
 
-                max_retries = 5
+                max_retries = 6
                 delay = 2
 
                 for attempt in range(max_retries):
@@ -917,7 +917,7 @@ def multi_class(
     categorized_data = pd.concat([categorized_data, normalized_data], axis=1)
     categorized_data = categorized_data.rename(columns=lambda x: f'category_{x}' if str(x).isdigit() else x)
 
-    # Converting to numeric
+    # renaming columns for easier readability
     cat_cols = [col for col in categorized_data.columns if col.startswith('category_')]
 
     # Step 1: Identify rows with invalid strings (like "e")
@@ -925,17 +925,24 @@ def multi_class(
         lambda col: pd.to_numeric(col, errors='coerce').isna() & col.notna()
     ).any(axis=1)
 
-    # Step 2: Set processing status BEFORE modifying the data
+    # Step 2: set processing status before modifying the data, if categories extracted then success
     categorized_data['processing_status'] = (~has_invalid_strings).map({True: 'success', False: 'error'})
 
-    # Step 3: Set invalid rows to NA
+    # Step 3: set invalid rows to NA
     categorized_data.loc[has_invalid_strings, cat_cols] = pd.NA
 
-    # Step 4: Fill remaining NaN with 0 (valid but sparse JSONs)
-    categorized_data[cat_cols] = categorized_data[cat_cols].fillna(0)
+    # Step 4: converting to numeric
+    for col in cat_cols:
+        categorized_data[col] = pd.to_numeric(categorized_data[col], errors='coerce')
+    
+    # Step 4.5: Fill NaN with 0 ONLY for valid rows (valid but sparse JSONs)
+    categorized_data.loc[~has_invalid_strings, cat_cols] = (
+        categorized_data.loc[~has_invalid_strings, cat_cols].fillna(0)
+    )
 
     # Step 5: Convert to Int64
     categorized_data[cat_cols] = categorized_data[cat_cols].astype('Int64')
+
 
     # Step 6: Create categories_id
     categorized_data['categories_id'] = categorized_data[cat_cols].apply(
