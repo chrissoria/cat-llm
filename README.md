@@ -2,6 +2,8 @@
 
 # cat-llm
 
+CatLLM: A Reproducible LLM Pipeline for Coding Open-Ended Survey Responses
+
 [![PyPI - Version](https://img.shields.io/pypi/v/cat-llm.svg)](https://pypi.org/project/cat-llm)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/cat-llm.svg)](https://pypi.org/project/cat-llm)
 
@@ -50,7 +52,7 @@ All feedback helps us build better research software for the community.
 
 ## Quick Start
 
-CatLLM helps social scientists and researchers automatically categorize open-ended survey responses, images, and web-scraped data using AI models like GPT-5 and Claude.
+CatLLM helps social scientists and researchers automatically categorize open-ended survey responses, images, and web-scraped data using AI models like GPT-5 and Claude. Not to be confused with CAT-LLM for Chinese article‐style transfer ([Tao et al. 2024](https://arxiv.org/html/2401.05707v1)).
 
 Text Analysis: Simply provide your survey responses and category list - the package handles the rest and outputs clean data ready for statistical analysis. It works with single or multiple categories per response and automatically skips missing data to save API costs.
 
@@ -59,6 +61,8 @@ Image Categorization: Uses the same intelligent categorization method to analyze
 Web Data Collection: Builds comprehensive datasets by scraping web data and using Large Language Models to extract exactly the information you need. The function searches across multiple sources, processes the findings through AI models, and structures everything into clean dataframe format ready for export to CSV.
 
 Whether you're working with messy text responses, analyzing visual content, or gathering information from across the web, CatLLM consistently transforms unstructured data into structured categories and datasets you can actually analyze. All outputs are formatted for immediate statistical analysis and can be exported directly to CSV for further research workflows.
+
+
 
 ## Configuration
 

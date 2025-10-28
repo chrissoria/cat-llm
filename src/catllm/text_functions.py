@@ -126,211 +126,226 @@ def explore_common_categories(
     creativity=None,
     specificity="broad",
     research_question=None,
-    filename=None,
-    model_source="OpenAI"
+    filename=None,          # (kept, unused here)
+    model_source="openai",  # case-insensitive
+    iterations=1,
+    random_state=None
 ):
-    import os
+    import re
     import pandas as pd
-    import random
-    from openai import OpenAI
-    from openai import OpenAI, BadRequestError
+    import numpy as np
     from tqdm import tqdm
 
-    print(f"Exploring class for question: '{survey_question}'.\n          {cat_num * divisions} unique categories to be extracted and {top_n} to be identified as the most common.")
-    print()
+    model_source = (model_source or "openai").lower()
 
-    model_source = model_source.lower() # eliminating case sensitivity 
+    # --- input normalization ---
+    if not isinstance(survey_input, pd.Series):
+        survey_input = pd.Series(survey_input)
+    survey_input = survey_input.dropna().astype("string")
+    n = len(survey_input)
+    if n == 0:
+        raise ValueError("survey_input is empty after dropping NA.")
 
-    chunk_size = round(max(1, len(survey_input) / divisions),0)
-    chunk_size = int(chunk_size)
+    # --- chunk sizing ---
+    chunk_size = int(round(max(1, n / divisions), 0))
+    if chunk_size < (cat_num / 2):
+        raise ValueError(
+            f"Cannot extract {cat_num} categories from chunks of only {chunk_size} responses.\n"
+            f"Solutions:\n"
+            f"  (1) Reduce 'divisions' (currently {divisions}) to make larger chunks, or\n"
+            f"  (2) Reduce 'cat_num' (currently {cat_num})."
+        )
 
-    if chunk_size < (cat_num/2):
-        raise ValueError(f"Cannot extract {cat_num} categories from chunks of only {chunk_size} responses. \n" 
-                    f"Choose one solution: \n"
-                    f"(1) Reduce 'divisions' parameter (currently {divisions}) to create larger chunks, or \n"
-                    f"(2) Reduce 'cat_num' parameter (currently {cat_num}) to extract fewer categories per chunk.")
+    print(
+        f"Exploring class for question: '{survey_question}'.\n"
+        f"          {cat_num * divisions} unique categories to be extracted and {top_n} to be identified as the most common.\n"
+    )
 
-    random_chunks = []
-    for i in range(divisions):
-        chunk = survey_input.sample(n=chunk_size).tolist()
-        random_chunks.append(chunk)
-    
-    responses = []
-    responses_list = []
-    
-    for i in tqdm(range(divisions), desc="Processing chunks"):
-        survey_participant_chunks = '; '.join(random_chunks[i])
-        prompt = f"""Identify {cat_num} {specificity} categories of responses to the question "{survey_question}" in the following list of responses. \
-Responses are each separated by a semicolon. \
-Responses are contained within triple backticks here: ```{survey_participant_chunks}``` \
-Number your categories from 1 through {cat_num} and be concise with the category labels and provide no description of the categories."""
-        
-        if model_source == "openai":
-            try:
-                from openai import OpenAI
+    # --- RNG for reproducible re-sampling across passes ---
+    rng = np.random.default_rng(random_state)
 
-                client = OpenAI(api_key=api_key)
-
-                response_obj = client.chat.completions.create(
-                    model=user_model,
-                    messages=[
-                        {'role': 'system', 'content': f"""You are a helpful assistant that extracts categories from survey responses. \
-                                        The specific task is to identify {specificity} categories of responses to a survey question. \
-                                        The research question is: {research_question}""" if research_question else "You are a helpful assistant."},
-                        {'role': 'user', 'content': prompt}
-                        ],
-                        **({"temperature": creativity} if creativity is not None else {})
-                )
-    
-                reply = response_obj.choices[0].message.content
-
-                responses.append(reply)
-
-            except BadRequestError as e:
-                if "context_length_exceeded" in str(e) or "maximum context length" in str(e):
-                    error_msg = (f"Token limit exceeded for model {user_model}. "
-                        f"Try increasing the 'iterations' parameter to create smaller chunks.")
-                    raise ValueError(error_msg)
-                else:
-                    print(f"OpenAI API error: {e}")
-            except Exception as e:
-                print(f"An error occurred: {e}")
-
-        elif model_source == "anthropic":
-            
-            import anthropic
-            client = anthropic.Anthropic(api_key=api_key)
-
-            # Build system prompt
-            if research_question:
-                system_content = (f"You are a helpful assistant that extracts categories from survey responses. "
-                        f"The specific task is to identify {specificity} categories of responses to a survey question. "
-                        f"The research question is: {research_question}")
-            else:
-                system_content = "You are a helpful assistant."
-    
-            response_obj = client.messages.create(
-                model=user_model,
-                max_tokens=4096,
-                system=system_content,
-                messages=[
-                    {'role': 'user', 'content': prompt}
-                ],
-                **({"temperature": creativity} if creativity is not None else {})
-            )
-
-            reply = response_obj.content[0].text
-    
-            responses.append(reply)
-        else:
-            raise ValueError(f"Unsupported model_source: {model_source}")
-        
-        # Extract just the text as a list
-        items = []
-        for line in responses[i].split('\n'):
-            if '. ' in line:
-                try:
-                    items.append(line.split('. ', 1)[1])
-                except IndexError:
-                    pass
-
-        responses_list.append(items)
-
-    flat_list = [item.lower() for sublist in responses_list for item in sublist]
-
-    #convert flat_list to a df
-    def normalize_category(cat):
-        if pd.isna(cat):
-            return cat
-        terms = sorted([term.strip().lower() for term in str(cat).split('/')])
-        return '/'.join(terms)
-
-    # normalized column
-    df = pd.DataFrame(flat_list, columns=['Category'])
-    df['normalized'] = df['Category'].apply(normalize_category)
-
-    # group by normalized, count, and keep most frequent original
-    result = (df.groupby('normalized')
-            .agg(Category=('Category', lambda x: x.value_counts().index[0]),
-                counts=('Category', 'size'))
-            .sort_values('counts', ascending=False)
-            .reset_index(drop=True))
-
-    df = result
-
-    second_prompt = f"""You are a data analyst reviewing categorized survey data.
-
-    Task: From the provided categories, identify and return the top {top_n} CONCEPTUALLY UNIQUE categories.
-
-    Critical Instructions:
-    1. The categories have already been deduplicated for exact string matches
-    2. However, some categories may still be SEMANTICALLY DUPLICATES (same concept, different wording):
-        - "closer to work" and "commute/proximity to work" mean the same thing
-        - "breakup/household conflict" and "relationship problems" mean the same thing
-    3. When you identify semantic duplicates:
-        - Combine their frequencies mentally
-        - Keep the version that appears most frequently OR is most clearly worded
-        - Each concept should appear ONLY ONCE in your final list
-    4. Keep category names {specificity}
-    5. Return ONLY a numbered list of {top_n} conceptually unique categories
-    6. No additional text, explanations, or commentary
-
-    Pre-processed Categories (sorted by frequency):
-    {df['Category'].head(top_n * 3).tolist()}
-
-    Note: More categories than needed are provided so you can identify and merge semantic duplicates.
-
-    Output Format:
-    1. category name
-    2. category name
-    3. category name
-
-    Top {top_n} Conceptually Unique Categories:"""
-
-        
+    # main calls
     if model_source == "openai":
-    
-        base_url = (
-        "https://api.perplexity.ai" if model_source == "perplexity" 
-        else "https://router.huggingface.co/v1" if model_source == "huggingface"
-        else None
-        )
-
-        client = OpenAI(api_key=api_key, base_url=base_url)
-        
-        response_obj = client.chat.completions.create(
-            model=user_model,
-            messages=[{'role': 'user', 'content': second_prompt}],
-            **({"temperature": creativity} if creativity is not None else {})
-        )
-
-        top_categories = response_obj.choices[0].message.content
-
+        from openai import OpenAI
+        client = OpenAI(api_key=api_key)
     elif model_source == "anthropic":
         import anthropic
-
         client = anthropic.Anthropic(api_key=api_key)
+    else:
+        raise ValueError(f"Unsupported model_source: {model_source}")
 
-        response_obj = client.messages.create(
-            model=user_model,
-            max_tokens=4096,
-            messages=[{'role': 'user', 'content': second_prompt}],
-            **({"temperature": creativity} if creativity is not None else {})
+    def make_prompt(responses_blob: str) -> str:
+        return (
+            f'Identify {cat_num} {specificity} categories of responses to the question "{survey_question}" '
+            f"in the following list of responses. Responses are separated by semicolons. "
+            f"Responses are within triple backticks: ```{responses_blob}``` "
+            f"Number your categories from 1 through {cat_num} and provide concise labels only (no descriptions)."
         )
 
-        top_categories = response_obj.content[0].text
+    def call_model(prompt: str) -> str:
+        if model_source == "openai":
+            messages = [
+                {
+                    "role": "system",
+                    "content": (
+                        f"You are a helpful assistant that extracts categories from survey responses. "
+                        f"The specific task is to identify {specificity} categories of responses to a survey question. "
+                        f"The research question is: {research_question}"
+                        if research_question else
+                        "You are a helpful assistant."
+                    )
+                },
+                {"role": "user", "content": prompt},
+            ]
+            resp = client.chat.completions.create(
+                model=user_model,
+                messages=messages,
+                **({"temperature": creativity} if creativity is not None else {})
+            )
+            return resp.choices[0].message.content
 
-    print(top_categories)
+        # anthropic
+        sys_text = (
+            f"You are a helpful assistant that extracts categories from survey responses. "
+            f"The specific task is to identify {specificity} categories of responses to a survey question. "
+            f"The research question is: {research_question}"
+            if research_question else
+            "You are a helpful assistant."
+        )
+        resp = client.messages.create(
+            model=user_model,
+            max_tokens=4096,
+            system=sys_text,
+            messages=[{"role": "user", "content": prompt}],
+            **({"temperature": creativity} if creativity is not None else {})
+        )
+        return resp.content[0].text
 
-    top_categories_final = []
-    for line in top_categories.split('\n'):
-        if '. ' in line:
+    # --- parse numbered list like "1. Foo" / "1) Foo" / "1 - Foo" ---
+    line_pat = re.compile(r"^\s*\d+\s*[\.\)\-]\s*(.+)$")
+
+    all_items = []
+
+    for pass_idx in range(iterations):
+        # fresh chunks each pass, with reproducible per-chunk seeds
+        random_chunks = []
+        for _ in range(divisions):
+            seed = int(rng.integers(0, 2**32 - 1))
+            # pandas sample with random_state for reproducibility
+            chunk = survey_input.sample(n=chunk_size, random_state=seed).tolist()
+            random_chunks.append(chunk)
+
+        for i in tqdm(range(divisions), desc=f"Processing chunks (pass {pass_idx+1}/{iterations})"):
+            survey_participant_chunks = "; ".join(random_chunks[i])
+            prompt = make_prompt(survey_participant_chunks)
             try:
-                top_categories_final.append(line.split('. ', 1)[1])
-            except IndexError:
-                pass
+                reply = call_model(prompt)
+            except Exception as e:
+                # common failure mode is context/token limit
+                raise RuntimeError(
+                    f"Model call failed on pass {pass_idx+1}, chunk {i+1}: {e}"
+                ) from e
 
-    return top_categories_final
+            # extract numbered items
+            items = []
+            for raw_line in (reply or "").splitlines():
+                m = line_pat.match(raw_line.strip())
+                if m:
+                    items.append(m.group(1).strip())
+            # fallback: if model returned bare lines without numbers
+            if not items:
+                for raw_line in (reply or "").splitlines():
+                    s = raw_line.strip()
+                    if s:
+                        items.append(s)
+
+            all_items.extend(items)
+
+    # --- normalize and count ---
+    def normalize_category(cat):
+        # normalize case + slash-delimited variants (e.g., "friends/family" == "family / friends")
+        terms = sorted([t.strip().lower() for t in str(cat).split("/")])
+        return "/".join(terms)
+
+    flat_list = [str(x).strip() for x in all_items if str(x).strip()]
+    if not flat_list:
+        raise ValueError("No categories were extracted from the model responses.")
+
+    df = pd.DataFrame(flat_list, columns=["Category"])
+    df["normalized"] = df["Category"].map(normalize_category)
+
+    result = (
+        df.groupby("normalized")
+          .agg(Category=("Category", lambda x: x.value_counts().index[0]),
+               counts=("Category", "size"))
+          .sort_values("counts", ascending=False)
+          .reset_index(drop=True)
+    )
+
+    # --- second-pass semantic merge prompt (top_n selection) ---
+    seed_list = result["Category"].head(top_n * 3).tolist()
+
+    second_prompt = f"""
+You are a data analyst reviewing categorized survey data.
+
+Task: From the provided categories, identify and return the top {top_n} CONCEPTUALLY UNIQUE categories.
+
+Critical Instructions:
+1) Exact duplicates are already removed.
+2) Merge SEMANTIC duplicates (same concept, different wording). Examples:
+   - "closer to work" ≈ "commute/proximity to work"
+   - "breakup/household conflict" ≈ "relationship problems"
+3) When merging:
+   - Combine frequencies mentally
+   - Keep the most frequent OR clearest label
+   - Each concept appears ONLY ONCE
+4) Keep category names {specificity}.
+5) Return ONLY a numbered list of {top_n} categories. No extra text.
+
+Pre-processed Categories (sorted by frequency, top sample):
+{seed_list}
+
+Output:
+1. category
+2. category
+...
+{top_n}. category
+""".strip()
+
+    if model_source == "openai":
+        resp2 = client.chat.completions.create(
+            model=user_model,
+            messages=[{"role": "user", "content": second_prompt}],
+            **({"temperature": creativity} if creativity is not None else {})
+        )
+        top_categories_text = resp2.choices[0].message.content
+    else:
+        resp2 = client.messages.create(
+            model=user_model,
+            max_tokens=2048,
+            messages=[{"role": "user", "content": second_prompt}],
+            **({"temperature": creativity} if creativity is not None else {})
+        )
+        top_categories_text = resp2.content[0].text
+
+    # parse the final numbered list
+    final = []
+    for line in top_categories_text.splitlines():
+        m = line_pat.match(line.strip())
+        if m:
+            final.append(m.group(1).strip())
+    if not final:
+        # permissive fallback if the model returns plain bullets
+        final = [l.strip("-*• ").strip() for l in top_categories_text.splitlines() if l.strip()]
+
+    print("\nTop categories:\n" + "\n".join(f"{i+1}. {c}" for i, c in enumerate(final[:top_n])))
+
+    return {
+        "counts_df": result,            # normalized frequency table
+        "top_categories": final[:top_n],
+        "raw_top_text": top_categories_text
+    }
+
 
 #multi-class text classification
 # GOAL: enable self-consistency
