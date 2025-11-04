@@ -116,19 +116,19 @@ Number your categories from 1 through {cat_num} and be concise with the category
 
 #extract top categories from corpus
 def explore_common_categories(
-    survey_question, 
+    survey_question, #make optional later
     survey_input,
     api_key,
-    top_n=12,
-    cat_num=10,
-    divisions=10,
+    top_n=12, #change paaram name to num_top_categories
+    cat_num=10, #need to make more clear what this is
+    divisions=5,
     user_model="gpt-5",
     creativity=None,
     specificity="broad",
     research_question=None,
-    filename=None,          # (kept, unused here)
-    model_source="openai",  # case-insensitive
-    iterations=1,
+    filename=None,          # need to implement
+    model_source="openai",  # add in automatic detection later
+    iterations=5,
     random_state=None
 ):
     import re
@@ -555,7 +555,7 @@ def multi_class(
 
                 {examples_text}
 
-                Provide your reasoning for each category, then provide your final answer in JSON format where the number belonging to each category is the key and a 1 if the category is present and a 0 if it is not present as key values."""
+                Provide your work in JSON format where the number belonging to each category is the key and a 1 if the category is present and a 0 if it is not present as key values."""
             else:
 
                 prompt = f"""{survey_question_context} \
@@ -613,8 +613,6 @@ def multi_class(
                 from openai import OpenAI
                 from openai import OpenAI, BadRequestError, AuthenticationError
 
-                max_retries = 5
-                delay = 2
                 # conditional base_url setting based on model source
                 base_url = (
                     "https://api.perplexity.ai" if model_source == "perplexity" 
@@ -625,7 +623,7 @@ def multi_class(
     
                 client = OpenAI(api_key=api_key, base_url=base_url)
 
-                max_retries = 6
+                max_retries = 8
                 delay = 2
 
                 for attempt in range(max_retries):
@@ -676,7 +674,7 @@ def multi_class(
                             raise ValueError(f"❌ Model '{user_model}' on {model_source} not found. Please check the model name and try again.") from e
                 
                     except Exception as e:
-                        if "500" in str(e) and attempt < max_retries - 1:
+                        if ("500" in str(e) or "504" in str(e)) and attempt < max_retries - 1:
                             wait_time = delay * (2 ** attempt)
                             print(f"Attempt {attempt + 1} failed with error: {e}")
                             print(f"Retrying in {wait_time}s...")
@@ -745,20 +743,27 @@ def multi_class(
             elif model_source == "google":
                 import requests
 
-                def make_google_request(url, headers, payload, max_retries=5):
-                    """Make Google API request with exponential backoff on 429 errors"""
+                def make_google_request(url, headers, payload, max_retries=8):
+                    """Make Google API request with exponential backoff on server errors"""
                     for attempt in range(max_retries):
                         try:
                             response = requests.post(url, headers=headers, json=payload)
                             response.raise_for_status()
                             return response.json()
                         except requests.exceptions.HTTPError as e:
-                            if e.response.status_code == 429 and attempt < max_retries - 1:
-                                wait_time = 10 * (2 ** attempt)
-                                print(f"⚠️ Rate limited. Waiting {wait_time}s...")
-                                time.sleep(wait_time)
-                            else:
-                                raise
+                            status_code = e.response.status_code
+                            retryable_errors = [429, 500, 502, 503, 504]
+            
+                    if status_code in retryable_errors and attempt < max_retries - 1:
+                        # Use longer wait time for rate limits (429)
+                        wait_time = 10 * (2 ** attempt) if status_code == 429 else 2 * (2 ** attempt)
+                        error_type = "Rate limited" if status_code == 429 else f"Server error {status_code}"
+                        print(f"⚠️ {error_type}. Attempt {attempt + 1}/{max_retries}")
+                        print(f"Retrying in {wait_time}s...")
+                        time.sleep(wait_time)
+                    else:
+                        raise
+
 
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
                 try:
@@ -821,48 +826,79 @@ def multi_class(
                 from mistralai import Mistral
                 from mistralai.models import SDKError
 
+                max_retries = 8
+                delay = 2
+
                 client = Mistral(api_key=api_key)
-                try:
-                    response = client.chat.complete(
-                    model=user_model,
-                    messages=[
+
+                for attempt in range(max_retries):
+                    try:
+                        messages = [
+                        *([{'role': 'user', 'content': stepback}] if step_back_prompt and step_back_added else []),
+                        *([{'role': 'assistant', 'content': stepback_insight}] if step_back_added else []),
                         {'role': 'user', 'content': prompt}
-                    ],
-                    response_format={"type": "json_object"},
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                    reply = response.choices[0].message.content
-                    
-                    if chain_of_verification:
-                        reply = chain_of_verification_mistral(
-                            initial_reply=reply,
-                            step2_prompt=step2_prompt,
-                            step3_prompt=step3_prompt,
-                            step4_prompt=step4_prompt,
-                            client=client,
-                            user_model=user_model,
-                            creativity=creativity,
-                            remove_numbering=remove_numbering
+                        ]
+            
+                        response = client.chat.complete(
+                            model=user_model,
+                            messages=messages,
+                            response_format={"type": "json_object"},
+                            **({"temperature": creativity} if creativity is not None else {})
                         )
-
+                        reply = response.choices[0].message.content
+            
+                        if chain_of_verification:
+                            reply = chain_of_verification_mistral(
+                                initial_reply=reply,
+                                step2_prompt=step2_prompt,
+                                step3_prompt=step3_prompt,
+                                step4_prompt=step4_prompt,
+                                client=client,
+                                user_model=user_model,
+                                creativity=creativity,
+                                remove_numbering=remove_numbering
+                            )
+            
                         link1.append(reply)
-
-                    else:
-                        #if chain of verification is not enabled, just append initial reply
-                        link1.append(reply)
-
-                except SDKError as e:
-                    error_str = str(e).lower()
-                    if "invalid_model" in error_str or "invalid model" in error_str:
-                        raise ValueError(f"❌ Model '{user_model}' not found.") from e
-                    elif "401" in str(e) or "unauthorized" in str(e).lower():
-                        raise ValueError(f"❌ Authentication failed. Please check your Mistral API key.") from e
-                    else:
-                        print(f"An error occurred: {e}")
+                        break  # Success - exit retry loop
+            
+                    except SDKError as e:
+                        error_str = str(e).lower()
+            
+                        # Non-retryable errors - exit immediately
+                        if "invalid_model" in error_str or "invalid model" in error_str:
+                            raise ValueError(f"❌ Model '{user_model}' not found.") from e
+                        elif "401" in str(e) or "unauthorized" in error_str:
+                            raise ValueError(f"❌ Authentication failed. Please check your Mistral API key.") from e
+            
+                        # Retryable server errors (500, 502, 503, 504)
+                        retryable_errors = ["500", "502", "503", "504"]
+                        if any(code in str(e) for code in retryable_errors) and attempt < max_retries - 1:
+                            wait_time = delay * (2 ** attempt)
+                            print(f"⚠️ Server error detected. Attempt {attempt + 1}/{max_retries}")
+                            print(f"Retrying in {wait_time}s...")
+                            time.sleep(wait_time)
+                        else:
+                            print(f"❌ Failed after {max_retries} attempts: {e}")
+                            link1.append(f"Error processing input: {e}")
+                            break
+                
+                    except MistralError as e:
+                        # Handle HTTP errors with status codes
+                        if hasattr(e, 'status_code') and e.status_code in [500, 502, 503, 504] and attempt < max_retries - 1:
+                            wait_time = delay * (2 ** attempt)
+                            print(f"⚠️ Server error {e.status_code}. Attempt {attempt + 1}/{max_retries}")
+                            print(f"Retrying in {wait_time}s...")
+                            time.sleep(wait_time)
+                        else:
+                            print(f"❌ Failed after {max_retries} attempts: {e}")
+                            link1.append(f"Error processing input: {e}")
+                            break
+                
+                    except Exception as e:
+                        print(f"❌ Unexpected error: {e}")
                         link1.append(f"Error processing input: {e}")
-                except Exception as e:
-                    print(f"An unexpected error occurred: {e}")
-                    link1.append(f"Error processing input: {e}")
+                        break
 
             else:
                 raise ValueError("Unknown source! Choose from OpenAI, Anthropic, Perplexity, Google, xAI, Huggingface, or Mistral")
