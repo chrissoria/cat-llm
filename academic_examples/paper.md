@@ -39,9 +39,15 @@ data sources into traditional statistical analysis pipelines
 modular framework with specialized functions that not only ensure
 consistent data structures across text and image analysis workflows, but
 also facilitate the automated retrieval of structured data from the web.
-This integration allows researchers to seamlessly combine large model
-outputs with real-world datasets, maintaining compatibility with
-standard statistical analysis tools.
+The package handles different prompting strategies reactively through
+configurable parameters that allow users to switch between techniques
+such as Chain-of-Thought (CoT) [@wei_chain_thought_2023],
+Chain-of-Verification (CoVe) [@dhuliawala_chain_verification_2023], and
+step-back prompting [@zheng_take_2024], enabling researchers to optimize
+model reasoning based on task complexity without requiring expertise in
+prompt engineering. This integration allows researchers to seamlessly
+combine large model outputs with real-world datasets, maintaining
+compatibility with standard statistical analysis tools.
 
 # Statement of need
 

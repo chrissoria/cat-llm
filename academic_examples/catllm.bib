@@ -50,7 +50,7 @@
 	month = jun,
 	year = {2024},
 	note = {arXiv:2309.02726 [cs]},
-	keywords = {Computer Science - Artificial Intelligence, Computer Science - Computation and Language},
+	keywords = {Computer Science - Computation and Language, Computer Science - Artificial Intelligence},
 	annote = {Comment: Accepted by ACL 2024 (findings)},
 	file = {Preprint PDF:/Users/chrissoria/Zotero/storage/N6AR8YTY/Yang et al. - 2024 - Large Language Models for Automated Open-domain Sc.pdf:application/pdf;Snapshot:/Users/chrissoria/Zotero/storage/ANMAFX7I/2309.html:text/html},
 }
@@ -104,7 +104,7 @@ The findings imply that social science researchers who want to use LLMs should d
 	author = {Soria, Chris},
 	month = jun,
 	year = {2025},
-	keywords = {AI, Automated Coding, Coding, Large Language Models, Open Ended Survey Data},
+	keywords = {Large Language Models, AI, Automated Coding, Coding, Open Ended Survey Data},
 	file = {OSF Preprint:/Users/chrissoria/Zotero/storage/B8WQNS5U/Soria - 2025 - An Empirical Investigation into the Utility of Lar.pdf:application/pdf},
 }
 
@@ -119,7 +119,7 @@ The findings imply that social science researchers who want to use LLMs should d
 	month = nov,
 	year = {2024},
 	note = {arXiv:2406.00515 [cs]},
-	keywords = {Computer Science - Artificial Intelligence, Computer Science - Computation and Language, Computer Science - Software Engineering},
+	keywords = {Computer Science - Computation and Language, Computer Science - Artificial Intelligence, Computer Science - Software Engineering},
 	file = {Preprint PDF:/Users/chrissoria/Zotero/storage/7QTN7H6U/Jiang et al. - 2024 - A Survey on Large Language Models for Code Generat.pdf:application/pdf;Snapshot:/Users/chrissoria/Zotero/storage/4YWQBZFT/2406.html:text/html},
 }
 
@@ -162,4 +162,51 @@ The findings imply that social science researchers who want to use LLMs should d
 	keywords = {Human behaviour, Information theory and computation},
 	pages = {11477},
 	file = {Full Text PDF:/Users/chrissoria/Zotero/storage/YKX29DXN/Bojić et al. - 2025 - Comparing large Language models and human annotato.pdf:application/pdf},
+}
+
+@misc{wei_chain_thought_2023,
+	title = {Chain-of-{Thought} {Prompting} {Elicits} {Reasoning} in {Large} {Language} {Models}},
+	url = {http://arxiv.org/abs/2201.11903},
+	doi = {10.48550/arXiv.2201.11903},
+	abstract = {We explore how generating a chain of thought -- a series of intermediate reasoning steps -- significantly improves the ability of large language models to perform complex reasoning. In particular, we show how such reasoning abilities emerge naturally in sufficiently large language models via a simple method called chain of thought prompting, where a few chain of thought demonstrations are provided as exemplars in prompting. Experiments on three large language models show that chain of thought prompting improves performance on a range of arithmetic, commonsense, and symbolic reasoning tasks. The empirical gains can be striking. For instance, prompting a 540B-parameter language model with just eight chain of thought exemplars achieves state of the art accuracy on the GSM8K benchmark of math word problems, surpassing even finetuned GPT-3 with a verifier.},
+	urldate = {2025-11-04},
+	publisher = {arXiv},
+	author = {Wei, Jason and Wang, Xuezhi and Schuurmans, Dale and Bosma, Maarten and Ichter, Brian and Xia, Fei and Chi, Ed and Le, Quoc and Zhou, Denny},
+	month = jan,
+	year = {2023},
+	note = {arXiv:2201.11903 [cs]},
+	keywords = {Computer Science - Artificial Intelligence, Computer Science - Computation and Language},
+	file = {Preprint PDF:/Users/chrissoria/Zotero/storage/6ZHF4ACT/Wei et al. - 2023 - Chain-of-Thought Prompting Elicits Reasoning in Large Language Models.pdf:application/pdf;Snapshot:/Users/chrissoria/Zotero/storage/4HIKYNPM/2201.html:text/html},
+}
+
+@misc{dhuliawala_chain_verification_2023,
+	title = {Chain-of-{Verification} {Reduces} {Hallucination} in {Large} {Language} {Models}},
+	url = {http://arxiv.org/abs/2309.11495},
+	doi = {10.48550/arXiv.2309.11495},
+	abstract = {Generation of plausible yet incorrect factual information, termed hallucination, is an unsolved issue in large language models. We study the ability of language models to deliberate on the responses they give in order to correct their mistakes. We develop the Chain-of-Verification (CoVe) method whereby the model first (i) drafts an initial response; then (ii) plans verification questions to fact-check its draft; (iii) answers those questions independently so the answers are not biased by other responses; and (iv) generates its final verified response. In experiments, we show CoVe decreases hallucinations across a variety of tasks, from list-based questions from Wikidata, closed book MultiSpanQA and longform text generation.},
+	urldate = {2025-11-04},
+	publisher = {arXiv},
+	author = {Dhuliawala, Shehzaad and Komeili, Mojtaba and Xu, Jing and Raileanu, Roberta and Li, Xian and Celikyilmaz, Asli and Weston, Jason},
+	month = sep,
+	year = {2023},
+	note = {arXiv:2309.11495 [cs]},
+	keywords = {Computer Science - Artificial Intelligence, Computer Science - Computation and Language},
+	file = {Preprint PDF:/Users/chrissoria/Zotero/storage/M9VE3XFQ/Dhuliawala et al. - 2023 - Chain-of-Verification Reduces Hallucination in Large Language Models.pdf:application/pdf;Snapshot:/Users/chrissoria/Zotero/storage/74Q94ZD9/2309.html:text/html},
+}
+
+@misc{zheng_take_2024,
+	title = {Take a {Step} {Back}: {Evoking} {Reasoning} via {Abstraction} in {Large} {Language} {Models}},
+	shorttitle = {Take a {Step} {Back}},
+	url = {http://arxiv.org/abs/2310.06117},
+	doi = {10.48550/arXiv.2310.06117},
+	abstract = {We present Step-Back Prompting, a simple prompting technique that enables LLMs to do abstractions to derive high-level concepts and first principles from instances containing specific details. Using the concepts and principles to guide reasoning, LLMs significantly improve their abilities in following a correct reasoning path towards the solution. We conduct experiments of Step-Back Prompting with PaLM-2L, GPT-4 and Llama2-70B models, and observe substantial performance gains on various challenging reasoning-intensive tasks including STEM, Knowledge QA, and Multi-Hop Reasoning. For instance, Step-Back Prompting improves PaLM-2L performance on MMLU (Physics and Chemistry) by 7\% and 11\% respectively, TimeQA by 27\%, and MuSiQue by 7\%.},
+	urldate = {2025-11-04},
+	publisher = {arXiv},
+	author = {Zheng, Huaixiu Steven and Mishra, Swaroop and Chen, Xinyun and Cheng, Heng-Tze and Chi, Ed H. and Le, Quoc V. and Zhou, Denny},
+	month = mar,
+	year = {2024},
+	note = {arXiv:2310.06117 [cs]},
+	keywords = {Computer Science - Artificial Intelligence, Computer Science - Computation and Language, Computer Science - Machine Learning},
+	annote = {Comment: ICLR 2024},
+	file = {Preprint PDF:/Users/chrissoria/Zotero/storage/TVLEVBHV/Zheng et al. - 2024 - Take a Step Back Evoking Reasoning via Abstraction in Large Language Models.pdf:application/pdf;Snapshot:/Users/chrissoria/Zotero/storage/EBTVHR9R/2310.html:text/html},
 }
