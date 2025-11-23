@@ -1,14 +1,20 @@
-from .calls.all_calls import (
+from .calls.stepback import (
     get_stepback_insight_openai,
     get_stepback_insight_anthropic,
     get_stepback_insight_google,
-    get_stepback_insight_mistral,
+    get_stepback_insight_mistral
+)
+from .calls.CoVe import (
     chain_of_verification_openai,
     chain_of_verification_google,
     chain_of_verification_anthropic,
-    chain_of_verification_mistral,
+    chain_of_verification_mistral
+)
+from .calls.top_n import (
     get_openai_top_n,
-    get_anthropic_top_n
+    get_anthropic_top_n,
+    get_google_top_n,
+    get_mistral_top_n
 )
 
 
@@ -19,7 +25,7 @@ def explore_corpus(
     api_key,
     research_question=None,
     specificity="broad",
-    cat_num=10,
+    categories_per_chunk=10,
     divisions=5,
     user_model="gpt-5",
     creativity=None,
@@ -33,7 +39,7 @@ def explore_corpus(
     from openai import OpenAI, BadRequestError
     from tqdm import tqdm
 
-    print(f"Exploring class for question: '{survey_question}'.\n          {cat_num * divisions} unique categories to be extracted.")
+    print(f"Exploring class for question: '{survey_question}'.\n          {categories_per_chunk * divisions} unique categories to be extracted.")
     print()
 
     model_source = model_source.lower() # eliminating case sensitivity 
@@ -41,11 +47,11 @@ def explore_corpus(
     chunk_size = round(max(1, len(survey_input) / divisions),0)
     chunk_size = int(chunk_size)
 
-    if chunk_size < (cat_num/2):
-        raise ValueError(f"Cannot extract {cat_num} {specificity} categories from chunks of only {chunk_size} responses. \n" 
+    if chunk_size < (categories_per_chunk/2):
+        raise ValueError(f"Cannot extract {categories_per_chunk} {specificity} categories from chunks of only {chunk_size} responses. \n" 
                     f"Choose one solution: \n"
                     f"(1) Reduce 'divisions' parameter (currently {divisions}) to create larger chunks, or \n"
-                    f"(2) Reduce 'cat_num' parameter (currently {cat_num}) to extract fewer categories per chunk.")
+                    f"(2) Reduce 'categories_per_chunk' parameter (currently {categories_per_chunk}) to extract fewer categories per chunk.")
 
     random_chunks = []
     for i in range(divisions):
@@ -57,10 +63,10 @@ def explore_corpus(
     
     for i in tqdm(range(divisions), desc="Processing chunks"):
         survey_participant_chunks = '; '.join(random_chunks[i])
-        prompt = f"""Identify {cat_num} {specificity} categories of responses to the question "{survey_question}" in the following list of responses. \
+        prompt = f"""Identify {categories_per_chunk} {specificity} categories of responses to the question "{survey_question}" in the following list of responses. \
 Responses are each separated by a semicolon. \
 Responses are contained within triple backticks here: ```{survey_participant_chunks}``` \
-Number your categories from 1 through {cat_num} and be concise with the category labels and provide no description of the categories."""
+Number your categories from 1 through {categories_per_chunk} and be concise with the category labels and provide no description of the categories."""
         
         if model_source == "openai":
             client = OpenAI(api_key=api_key)
@@ -116,18 +122,18 @@ Number your categories from 1 through {cat_num} and be concise with the category
 
 #extract top categories from corpus
 def explore_common_categories(
-    survey_question, #make optional later
     survey_input,
     api_key,
-    top_n=12, #change paaram name to num_top_categories
-    cat_num=10, #need to make more clear what this is
+    survey_question="",
+    max_categories=12,
+    categories_per_chunk=10,
     divisions=5,
     user_model="gpt-5",
     creativity=None,
     specificity="broad",
     research_question=None,
     filename=None,          # need to implement
-    model_source="openai",  # add in automatic detection later
+    model_source="auto",
     iterations=5,
     random_state=None
 ):
@@ -136,7 +142,32 @@ def explore_common_categories(
     import numpy as np
     from tqdm import tqdm
 
-    model_source = (model_source or "openai").lower()
+    model_source = model_source.lower() # eliminating case sensitivity 
+
+    # auto-detect model source if not provided
+    if model_source is None or model_source == "auto":
+        user_model_lower = user_model.lower()
+    
+        if "gpt" in user_model_lower:
+            model_source = "openai"
+        elif "claude" in user_model_lower:
+            model_source = "anthropic"
+        elif "gemini" in user_model_lower or "gemma" in user_model_lower:
+            model_source = "google"
+        elif "llama" in user_model_lower or "meta" in user_model_lower:
+            model_source = "huggingface"
+        elif "mistral" in user_model_lower or "mixtral" in user_model_lower:
+            model_source = "mistral"
+        elif "sonar" in user_model_lower or "pplx" in user_model_lower:
+            model_source = "perplexity"
+        elif "deepseek"  in user_model_lower or "qwen" in user_model_lower:
+            model_source = "huggingface"
+        elif "grok" in user_model_lower:
+            model_source = "xai"
+        else:
+            raise ValueError(f"❌ Could not auto-detect model source from '{user_model}'. Please specify model_source explicitly: OpenAI, Anthropic, Perplexity, Google, xAI, Huggingface, or Mistral")
+    else:
+        model_source = model_source.lower()
 
     # --- input normalization ---
     if not isinstance(survey_input, pd.Series):
@@ -148,42 +179,56 @@ def explore_common_categories(
 
     # --- chunk sizing ---
     chunk_size = int(round(max(1, n / divisions), 0))
-    if chunk_size < (cat_num / 2):
+    if chunk_size < (categories_per_chunk / 2):
         raise ValueError(
-            f"Cannot extract {cat_num} categories from chunks of only {chunk_size} responses.\n"
+            f"Cannot extract {categories_per_chunk} categories from chunks of only {chunk_size} responses.\n"
             f"Solutions:\n"
             f"  (1) Reduce 'divisions' (currently {divisions}) to make larger chunks, or\n"
-            f"  (2) Reduce 'cat_num' (currently {cat_num})."
+            f"  (2) Reduce 'categories_per_chunk' (currently {categories_per_chunk})."
         )
 
     print(
         f"Exploring class for question: '{survey_question}'.\n"
-        f"          {cat_num * divisions} unique categories to be extracted and {top_n} to be identified as the most common.\n"
+        f"          {categories_per_chunk * divisions} unique categories to be extracted and {max_categories} to be identified as the most common.\n"
     )
 
     # --- RNG for reproducible re-sampling across passes ---
     rng = np.random.default_rng(random_state)
 
-    # main calls
-    if model_source == "openai":
+    # main calls - initialize clients based on model source
+    if model_source in ["openai", "perplexity", "huggingface", "xai"]:
         from openai import OpenAI
-        client = OpenAI(api_key=api_key)
+        # conditional base_url setting based on model source
+        base_url = (
+            "https://api.perplexity.ai" if model_source == "perplexity" 
+            else "https://router.huggingface.co/v1" if model_source == "huggingface"
+            else "https://api.x.ai/v1" if model_source == "xai"
+            else None  # default for OpenAI
+        )
+        client = OpenAI(api_key=api_key, base_url=base_url)
     elif model_source == "anthropic":
         import anthropic
         client = anthropic.Anthropic(api_key=api_key)
+    elif model_source == "google":
+        import requests
+        # Google uses REST API, no client initialization needed
+        client = None
+    elif model_source == "mistral":
+        from mistralai import Mistral
+        client = Mistral(api_key=api_key)
     else:
         raise ValueError(f"Unsupported model_source: {model_source}")
 
     def make_prompt(responses_blob: str) -> str:
         return (
-            f'Identify {cat_num} {specificity} categories of responses to the question "{survey_question}" '
+            f'Identify {categories_per_chunk} {specificity} categories of responses to the question \"{survey_question}\" '
             f"in the following list of responses. Responses are separated by semicolons. "
             f"Responses are within triple backticks: ```{responses_blob}``` "
-            f"Number your categories from 1 through {cat_num} and provide concise labels only (no descriptions)."
+            f"Number your categories from 1 through {categories_per_chunk} and provide concise labels only (no descriptions)."
         )
 
     def call_model(prompt: str) -> str:
-        if model_source == "openai":
+        if model_source in ["openai", "perplexity", "huggingface", "xai"]:
             messages = [
                 {
                     "role": "system",
@@ -204,22 +249,76 @@ def explore_common_categories(
             )
             return resp.choices[0].message.content
 
-        # anthropic
-        sys_text = (
-            f"You are a helpful assistant that extracts categories from survey responses. "
-            f"The specific task is to identify {specificity} categories of responses to a survey question. "
-            f"The research question is: {research_question}"
-            if research_question else
-            "You are a helpful assistant."
-        )
-        resp = client.messages.create(
-            model=user_model,
-            max_tokens=4096,
-            system=sys_text,
-            messages=[{"role": "user", "content": prompt}],
-            **({"temperature": creativity} if creativity is not None else {})
-        )
-        return resp.content[0].text
+        elif model_source == "anthropic":
+            sys_text = (
+                f"You are a helpful assistant that extracts categories from survey responses. "
+                f"The specific task is to identify {specificity} categories of responses to a survey question. "
+                f"The research question is: {research_question}"
+                if research_question else
+                "You are a helpful assistant."
+            )
+            resp = client.messages.create(
+                model=user_model,
+                max_tokens=4096,
+                system=sys_text,
+                messages=[{"role": "user", "content": prompt}],
+                **({"temperature": creativity} if creativity is not None else {})
+            )
+            return resp.content[0].text
+        
+        elif model_source == "google":
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
+            headers = {
+                "x-goog-api-key": api_key,
+                "Content-Type": "application/json"
+            }
+            
+            # Build system-like content in the prompt
+            if research_question:
+                system_context = (f"You are a helpful assistant that extracts categories from survey responses. "
+                                f"The specific task is to identify {specificity} categories of responses to a survey question. "
+                                f"The research question is: {research_question}\n\n")
+            else:
+                system_context = "You are a helpful assistant.\n\n"
+            
+            full_prompt = system_context + prompt
+            
+            payload = {
+                "contents": [{
+                    "parts": [{"text": full_prompt}]
+                }],
+                "generationConfig": {
+                    **({"temperature": creativity} if creativity is not None else {})
+                }
+            }
+            
+            response = requests.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+            result = response.json()
+            
+            if "candidates" in result and result["candidates"]:
+                return result["candidates"][0]["content"]["parts"][0]["text"]
+            else:
+                return "No response generated"
+        
+        elif model_source == "mistral":
+            # Build system prompt
+            if research_question:
+                system_content = (f"You are a helpful assistant that extracts categories from survey responses. "
+                                f"The specific task is to identify {specificity} categories of responses to a survey question. "
+                                f"The research question is: {research_question}")
+            else:
+                system_content = "You are a helpful assistant."
+            
+            resp = client.chat.complete(
+                model=user_model,
+                messages=[
+                    {"role": "system", "content": system_content},
+                    {"role": "user", "content": prompt}
+                ],
+                **({"temperature": creativity} if creativity is not None else {})
+            )
+            return resp.choices[0].message.content
 
     # --- parse numbered list like "1. Foo" / "1) Foo" / "1 - Foo" ---
     line_pat = re.compile(r"^\s*\d+\s*[\.\)\-]\s*(.+)$")
@@ -282,13 +381,13 @@ def explore_common_categories(
           .reset_index(drop=True)
     )
 
-    # --- second-pass semantic merge prompt (top_n selection) ---
-    seed_list = result["Category"].head(top_n * 3).tolist()
+    # --- second-pass semantic merge prompt (max_categories selection) ---
+    seed_list = result["Category"].head(max_categories * 3).tolist()
 
     second_prompt = f"""
 You are a data analyst reviewing categorized survey data.
 
-Task: From the provided categories, identify and return the top {top_n} CONCEPTUALLY UNIQUE categories.
+Task: From the provided categories, identify and return the top {max_categories} CONCEPTUALLY UNIQUE categories.
 
 Critical Instructions:
 1) Exact duplicates are already removed.
@@ -300,7 +399,7 @@ Critical Instructions:
    - Keep the most frequent OR clearest label
    - Each concept appears ONLY ONCE
 4) Keep category names {specificity}.
-5) Return ONLY a numbered list of {top_n} categories. No extra text.
+5) Return ONLY a numbered list of {max_categories} categories. No extra text.
 
 Pre-processed Categories (sorted by frequency, top sample):
 {seed_list}
@@ -309,7 +408,7 @@ Output:
 1. category
 2. category
 ...
-{top_n}. category
+{max_categories}. category
 """.strip()
 
     if model_source == "openai":
@@ -338,11 +437,11 @@ Output:
         # permissive fallback if the model returns plain bullets
         final = [l.strip("-*• ").strip() for l in top_categories_text.splitlines() if l.strip()]
 
-    print("\nTop categories:\n" + "\n".join(f"{i+1}. {c}" for i, c in enumerate(final[:top_n])))
+    print("\nTop categories:\n" + "\n".join(f"{i+1}. {c}" for i, c in enumerate(final[:max_categories])))
 
     return {
         "counts_df": result,            # normalized frequency table
-        "top_categories": final[:top_n],
+        "top_categories": final[:max_categories],
         "raw_top_text": top_categories_text
     }
 
@@ -370,8 +469,8 @@ def multi_class(
     step_back_prompt = False,
     context_prompt = False,
     thinking_budget = 0,
-    top_n = 12,
-    cat_num = 10,
+    max_categories = 12,
+    categories_per_chunk = 10,
     divisions = 10,
     research_question = None,
     filename = None,
@@ -448,14 +547,14 @@ def multi_class(
             api_key=api_key,
             model_source=model_source,
             user_model=user_model,
-            top_n=top_n,
-            cat_num=cat_num,
+            max_categories=max_categories,
+            categories_per_chunk=categories_per_chunk,
             divisions=divisions
         )
         
     categories_str = "\n".join(f"{i + 1}. {cat}" for i, cat in enumerate(categories))
-    cat_num = len(categories)
-    category_dict = {str(i+1): "0" for i in range(cat_num)}
+    categories_per_chunk = len(categories)
+    category_dict = {str(i+1): "0" for i in range(categories_per_chunk)}
     example_JSON = json.dumps(category_dict, indent=4)
 
     # for ensuring JSON format for anthropic api
@@ -825,6 +924,7 @@ def multi_class(
             elif model_source == "mistral":
                 from mistralai import Mistral
                 from mistralai.models import SDKError
+                from mistralai.models import MistralError
 
                 max_retries = 8
                 delay = 2
