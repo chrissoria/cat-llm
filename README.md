@@ -203,7 +203,7 @@ Processes each text response individually, assigning one or more categories from
 - `example1` through `example6` (str, optional): Few-shot learning examples for guiding categorization
 - `creativity` (float, optional): Temperature/randomness setting (0.0-1.0, varies by model)
 - `safety` (bool, default=False): Enable safety checks on responses and saves to CSV at each API call step
-- `chain_of_verification` (bool, default=False): Enable Chain-of-Verification prompting technique for improved accuracy
+- `chain_of_verification` (bool, default=False): Enable Chain-of-Verification prompting technique for improved accuracy. **⚠️ Warning: CoVe consumes significantly more tokens (3-5x) as it makes multiple API calls per response. Use only if you have a sufficient budget and are willing to pay for marginal improvements in classification accuracy.**
 - `chain_of_thought` (bool, default=True): Enable Chain-of-Thought prompting technique for step-by-step reasoning
 - `step_back_prompt` (bool, default=False): Enable step-back prompting to analyze higher-level context before classification
 - `context_prompt` (bool, default=False): Add expert role and behavioral guidelines to the prompt
@@ -258,7 +258,7 @@ Processes each image individually, assigning one or more categories from the pro
 - `user_model` (str, default="gpt-4o"): Specific model to use
 - `creativity` (float, optional): Temperature/randomness setting (0.0-1.0)
 - `safety` (bool, default=False): Enable safety checks on responses and saves to CSV at each API call step
-- `chain_of_verification` (bool, default=False): Enable Chain-of-Verification prompting - re-examines the image to verify categorization accuracy
+- `chain_of_verification` (bool, default=False): Enable Chain-of-Verification prompting - re-examines the image to verify categorization accuracy. **⚠️ Warning: CoVe consumes significantly more tokens (3-5x) as it makes multiple API calls per response. Use only if you have a sufficient budget and are willing to pay for marginal improvements in classification accuracy.**
 - `chain_of_thought` (bool, default=True): Enable Chain-of-Thought prompting for step-by-step visual analysis
 - `step_back_prompt` (bool, default=False): Enable step-back prompting to analyze key visual features before classification
 - `context_prompt` (bool, default=False): Add expert visual analyst role and behavioral guidelines to the prompt
