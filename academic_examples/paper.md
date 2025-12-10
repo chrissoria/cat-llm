@@ -5,8 +5,8 @@ tags:
 - Python
 - social science
 - demography
-- dementia
 - content coding
+- image classification
 date: "29 May 2025"
 output: pdf_document
 authors:
@@ -89,9 +89,13 @@ OpenAI and Anthropic, particularly GPT-4, can effectively replicate
 human analysis performance in content analysis tasks, with some studies
 showing LLMs achieving higher inter-rater reliability than human
 annotators in sentiment analysis and political leaning assessments
-[@bojic_comparing_2025]. Unlike existing tools, CatLLM provides
-reproducible, structured outputs while supporting multiple AI providers
-and maintaining cost efficiency through built-in optimization features.
+[@bojic_comparing_2025]. However, LLM outputs can be inconsistent across
+calls, posing challenges for reproducible qualitative analysis—CatLLM
+addresses this through frequency-based theme extraction that aggregates
+results across multiple independent calls rather than relying on single
+responses. Unlike existing tools, CatLLM provides reproducible,
+structured outputs while supporting multiple AI providers and
+maintaining cost efficiency through built-in optimization features.
 
 ![Example of CatLLM Assigning Categories to Move Reason Survey
 Responses](move_reasons.png)
@@ -107,21 +111,6 @@ the Caribbean-American Dementia and Aging Study
 [@llibre-guerra_caribbean-american_2021]. These applications demonstrate
 the package's versatility in addressing real-world research challenges
 that require systematic analysis of unstructured data at scale.
-
-## Performance and Reliability
-
-To evaluate CatLLM's reliability across different language model providers, we processed 3,208 open-ended survey responses from the UC Berkeley Social Networks Study using eight models. Table 1 reports success rates, processing times, and costs for each model.
-
-| Metric | GPT-5 | Claude Sonnet 4.5 | Gemini 2.5 Flash | Grok-4 Fast | Mistral Medium | Llama 4 | DeepSeek v3.1 | Qwen 3 |
-|--------|-------|-------------------|------------------|-------------|----------------|---------|---------------|--------|
-| Success Rate (%) | 100 | 99.97 | 99.44 | 100 | 99.94 | 100 | 99.91 | 99.84 |
-| Failure Count | 0 | 1 | 18 | 0 | 2 | 0 | 3 | 5 |
-| Cost ($) | 27.85 | 19.31 | 0.94 | 0.46 | 0.38 | 2.54 | 2.54 | 2.54 |
-| Processing Time (H:MM) | 7:27 | 2:55 | 1:00 | 0:49 | 1:23 | 0:23 | 2:23 | 2:45 |
-
-Table: Model performance metrics for processing 3,208 survey responses. Success rate indicates percentage of responses successfully categorized. Costs reflect API pricing at time of testing. {#tbl-performance}
-
-All models achieved success rates above 99%, with failures primarily attributable to transient server errors rather than JSON processing issues. The results demonstrate substantial cost variation across providers: closed-source models like GPT-5 offer high reliability but at premium pricing ($27.85), while open-weights alternatives like Mistral Medium and the Groq-hosted models provide comparable success rates at a fraction of the cost ($0.38–$2.54). Processing times ranged from 23 minutes (Llama 4) to over 7 hours (GPT-5), reflecting differences in API rate limits and model inference speeds.
 
 The package can be easily installed and implemented:
 
@@ -166,27 +155,36 @@ The package extends this framework through specialized capabilities:
     similarity metrics for objective evaluation of visual reproduction
     tasks.
 
--   **Standardized Cognitive Assessment Scoring**: Implements
-    established CERAD protocols [@fillenbaum_cerad_2008] for scoring
-    geometric shape drawings, calculating standardized scores based on
-    the presence of required visual elements for neuropsychological
-    evaluation.
-
--   **Corpus-Level Theme Discovery**: Identifies and ranks themes across
-    large text collections by systematically analyzing random corpus
-    segments, extracting recurring topics, and prioritizing themes based
-    on their frequency and consistency across different sections.
+-   **Corpus-Level Theme Discovery**: Improves reproducibility in
+    qualitative theme identification by making multiple independent
+    calls across random corpus segments, then using a secondary model to
+    standardize and consolidate the outputs. This frequency-based
+    extraction method reduces the probabilistic variability inherent in
+    single LLM calls—rather than relying on one potentially inconsistent
+    response, the function surfaces only categories that recur across
+    many independent iterations, producing a reliable, ranked list of
+    themes most representative of the data.
 
 This modular approach provides researchers with consistent data
 structures across text, image, and web data analysis workflows while
-maintaining compatibility with standard statistical analysis tools.
+maintaining compatibility with standard statistical analysis tools. In
+reliability testing across eight high-end language models processing
+3,208 survey responses, the package produced valid structured output for
+100% of successful API calls—the small number of failures (0–18 per
+model) were exclusively due to transient server errors rather than JSON
+parsing issues. Costs ranged from \$0.38 (Mistral Medium) to \$27.85
+(GPT-5), with processing times from 23 minutes to over 7 hours depending
+on provider rate limits. Further research is needed to evaluate
+performance with smaller, less capable models.
 
-![CatLLM Function Diagram](web_retrieval_flowchart.png)
+The `image_multi_class` function has been applied to implement CERAD
+protocols [@fillenbaum_cerad_2008] for scoring geometric shape drawings
+in the Caribbean-American Dementia and Aging Study
+[@llibre-guerra_caribbean-american_2021], demonstrating how
+general-purpose image classification can be adapted to specialized
+research domains.
 
 ![CatLLM Classification Process Flow](catllm_flowchart_three_nodes.png)
-
-![Scoring Drawings of Cubes According to CERAD Rules Using
-CatLLM](CERAD_diagram.png)
 
 # Acknowledgements
 

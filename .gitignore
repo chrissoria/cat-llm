@@ -6,4 +6,5 @@
 # Test files
 examples/test_multi_class_local.ipynb
 examples/test_multi_class_local.py
+examples/test_web_research_local.ipynb
 examples/test_output/
