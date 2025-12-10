@@ -38,7 +38,6 @@ def get_image_stepback_insight_openai(
         return stepback_insight, True
 
     except Exception as e:
-        print(f"An error occurred during image step-back prompting: {e}")
         return None, False
 
 
@@ -68,7 +67,6 @@ def get_image_stepback_insight_anthropic(
         return stepback_insight, True
 
     except Exception as e:
-        print(f"An error occurred during image step-back prompting: {e}")
         return None, False
 
 
@@ -108,7 +106,6 @@ def get_image_stepback_insight_google(
         return stepback_insight, True
 
     except Exception as e:
-        print(f"An error occurred during image step-back prompting: {e}")
         return None, False
 
 
@@ -137,7 +134,6 @@ def get_image_stepback_insight_mistral(
         return stepback_insight, True
 
     except Exception as e:
-        print(f"An error occurred during image step-back prompting: {e}")
         return None, False
 
 

@@ -80,13 +80,10 @@ def image_chain_of_verification_openai(
         )
 
         verified_reply = final_response.choices[0].message.content
-        print("Image chain of verification completed. Final response generated.\n")
 
         return verified_reply
 
     except Exception as e:
-        print(f"ERROR in Image Chain of Verification: {str(e)}")
-        print("Falling back to initial response.\n")
         return initial_reply
 
 
@@ -170,13 +167,10 @@ def image_chain_of_verification_anthropic(
         )
 
         verified_reply = final_response.content[0].text
-        print("Image chain of verification completed. Final response generated.\n")
 
         return verified_reply
 
     except Exception as e:
-        print(f"ERROR in Image Chain of Verification: {str(e)}")
-        print("Falling back to initial response.\n")
         return initial_reply
 
 
@@ -281,12 +275,9 @@ def image_chain_of_verification_google(
         result_step4 = make_google_request(url, headers, payload_step4)
         verified_reply = result_step4["candidates"][0]["content"]["parts"][0]["text"]
 
-        print("Image chain of verification completed. Final response generated.\n")
         return verified_reply
 
     except Exception as e:
-        print(f"ERROR in Image Chain of Verification: {str(e)}")
-        print("Falling back to initial response.\n")
         return initial_reply
 
 
@@ -368,11 +359,8 @@ def image_chain_of_verification_mistral(
         )
 
         verified_reply = final_response.choices[0].message.content
-        print("Image chain of verification completed. Final response generated.\n")
 
         return verified_reply
 
     except Exception as e:
-        print(f"ERROR in Image Chain of Verification: {str(e)}")
-        print("Falling back to initial response.\n")
         return initial_reply
