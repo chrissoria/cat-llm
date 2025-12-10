@@ -8,17 +8,11 @@ tags:
 - content coding
 - image classification
 date: "29 May 2025"
-output: pdf_document
 authors:
 - name: Chris Soria
   orcid: "0009-0007-3558-5896"
-  equal-contrib: true
   affiliation: 1
 bibliography: catllm.bib
-link-citations: true
-editor_options:
-  markdown:
-    wrap: 72
 affiliations:
 - name: University of California, Berkeley, United States
   index: 1
@@ -114,7 +108,7 @@ that require systematic analysis of unstructured data at scale.
 
 The package can be easily installed and implemented:
 
-```         
+```python
 pip install cat-llm
 
 import catllm as cat
