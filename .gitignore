@@ -2,3 +2,8 @@
 .Rhistory
 .RData
 .Ruserdata
+
+# Test files
+examples/test_multi_class_local.ipynb
+examples/test_multi_class_local.py
+examples/test_output/

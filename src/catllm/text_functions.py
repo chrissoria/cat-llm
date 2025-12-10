@@ -18,6 +18,62 @@ from .calls.top_n import (
 )
 
 
+def _detect_model_source(user_model, model_source):
+    """Auto-detect model source from model name if not explicitly provided."""
+    model_source = model_source.lower()
+
+    if model_source is None or model_source == "auto":
+        user_model_lower = user_model.lower()
+
+        if "gpt" in user_model_lower:
+            return "openai"
+        elif "claude" in user_model_lower:
+            return "anthropic"
+        elif "gemini" in user_model_lower or "gemma" in user_model_lower:
+            return "google"
+        elif "llama" in user_model_lower or "meta" in user_model_lower:
+            return "huggingface"
+        elif "mistral" in user_model_lower or "mixtral" in user_model_lower:
+            return "mistral"
+        elif "sonar" in user_model_lower or "pplx" in user_model_lower:
+            return "perplexity"
+        elif "deepseek" in user_model_lower or "qwen" in user_model_lower:
+            return "huggingface"
+        elif "grok" in user_model_lower:
+            return "xai"
+        else:
+            raise ValueError(
+                f"Could not auto-detect model source from '{user_model}'. "
+                "Please specify model_source explicitly: OpenAI, Anthropic, Perplexity, Google, xAI, Huggingface, or Mistral"
+            )
+    return model_source
+
+
+def _get_stepback_insight(model_source, stepback, api_key, user_model, creativity):
+    """Get step-back insight using the appropriate provider."""
+    stepback_functions = {
+        "openai": get_stepback_insight_openai,
+        "perplexity": get_stepback_insight_openai,
+        "huggingface": get_stepback_insight_openai,
+        "xai": get_stepback_insight_openai,
+        "anthropic": get_stepback_insight_anthropic,
+        "google": get_stepback_insight_google,
+        "mistral": get_stepback_insight_mistral,
+    }
+
+    func = stepback_functions.get(model_source)
+    if func is None:
+        return None, False
+
+    return func(
+        stepback=stepback,
+        api_key=api_key,
+        user_model=user_model,
+        model_source=model_source,
+        creativity=creativity
+    )
+
+
 #extract categories from corpus
 def explore_corpus(
     survey_question, 
@@ -142,32 +198,7 @@ def explore_common_categories(
     import numpy as np
     from tqdm import tqdm
 
-    model_source = model_source.lower() # eliminating case sensitivity 
-
-    # auto-detect model source if not provided
-    if model_source is None or model_source == "auto":
-        user_model_lower = user_model.lower()
-    
-        if "gpt" in user_model_lower:
-            model_source = "openai"
-        elif "claude" in user_model_lower:
-            model_source = "anthropic"
-        elif "gemini" in user_model_lower or "gemma" in user_model_lower:
-            model_source = "google"
-        elif "llama" in user_model_lower or "meta" in user_model_lower:
-            model_source = "huggingface"
-        elif "mistral" in user_model_lower or "mixtral" in user_model_lower:
-            model_source = "mistral"
-        elif "sonar" in user_model_lower or "pplx" in user_model_lower:
-            model_source = "perplexity"
-        elif "deepseek"  in user_model_lower or "qwen" in user_model_lower:
-            model_source = "huggingface"
-        elif "grok" in user_model_lower:
-            model_source = "xai"
-        else:
-            raise ValueError(f"❌ Could not auto-detect model source from '{user_model}'. Please specify model_source explicitly: OpenAI, Anthropic, Perplexity, Google, xAI, Huggingface, or Mistral")
-    else:
-        model_source = model_source.lower()
+    model_source = _detect_model_source(user_model, model_source)
 
     # --- input normalization ---
     if not isinstance(survey_input, pd.Series):
@@ -453,7 +484,6 @@ def multi_class(
     categories,
     api_key,
     user_model="gpt-5",
-    user_prompt = None,
     survey_question = "",
     example1 = None,
     example2 = None,
@@ -463,7 +493,6 @@ def multi_class(
     example6 = None,
     creativity = None,
     safety = False,
-    to_csv = False,
     chain_of_verification = False,
     chain_of_thought = True,
     step_back_prompt = False,
@@ -509,32 +538,7 @@ def multi_class(
     
         return line
 
-    model_source = model_source.lower() # eliminating case sensitivity 
-
-    # auto-detect model source if not provided
-    if model_source is None or model_source == "auto":
-        user_model_lower = user_model.lower()
-    
-        if "gpt" in user_model_lower:
-            model_source = "openai"
-        elif "claude" in user_model_lower:
-            model_source = "anthropic"
-        elif "gemini" in user_model_lower or "gemma" in user_model_lower:
-            model_source = "google"
-        elif "llama" in user_model_lower or "meta" in user_model_lower:
-            model_source = "huggingface"
-        elif "mistral" in user_model_lower or "mixtral" in user_model_lower:
-            model_source = "mistral"
-        elif "sonar" in user_model_lower or "pplx" in user_model_lower:
-            model_source = "perplexity"
-        elif "deepseek"  in user_model_lower or "qwen" in user_model_lower:
-            model_source = "huggingface"
-        elif "grok" in user_model_lower:
-            model_source = "xai"
-        else:
-            raise ValueError(f"❌ Could not auto-detect model source from '{user_model}'. Please specify model_source explicitly: OpenAI, Anthropic, Perplexity, Google, xAI, Huggingface, or Mistral")
-    else:
-        model_source = model_source.lower()
+    model_source = _detect_model_source(user_model, model_source)
 
     if categories == "auto":
         if survey_question == "": # step back requires the survey question to function well
@@ -589,272 +593,218 @@ def multi_class(
     else:
         survey_question_context = ""
 
-    # step back insight initializationif step_back_prompt:
+    # step back insight initialization
     if step_back_prompt:
-        if survey_question == "": # step back requires the survey question to function well
+        if survey_question == "":
             raise TypeError("survey_question is required when using step_back_prompt. Please provide the survey question you are analyzing.")
-                
-        stepback = f"""What are the underlying factors or dimensions that explain how people typically answer "{survey_question}"?"""
 
-        if model_source in ["openai", "perplexity", "huggingface", "xai"]:
-            stepback_insight, step_back_added = get_stepback_insight_openai(
-                stepback=stepback,
-                api_key=api_key,
-                user_model=user_model,
-                model_source=model_source,
-                creativity=creativity
-            )
-        elif model_source == "anthropic":
-            stepback_insight, step_back_added = get_stepback_insight_anthropic(
-                stepback=stepback,
-                api_key=api_key,
-                user_model=user_model,
-                model_source=model_source,
-                creativity=creativity
-            )
-        elif model_source == "google":
-            stepback_insight, step_back_added = get_stepback_insight_google(
-                stepback=stepback,
-                api_key=api_key,
-                user_model=user_model,
-                model_source=model_source,
-                creativity=creativity
-            )
-        elif model_source == "mistral":
-            stepback_insight, step_back_added = get_stepback_insight_mistral(
-                stepback=stepback,
-                api_key=api_key,
-                user_model=user_model,
-                model_source=model_source,
-                creativity=creativity
-            )
+        stepback = f"""What are the underlying factors or dimensions that explain how people typically answer "{survey_question}"?"""
+        stepback_insight, step_back_added = _get_stepback_insight(
+            model_source, stepback, api_key, user_model, creativity
+        )
     else:
         stepback_insight = None
         step_back_added = False
 
-    for idx, response in enumerate(tqdm(survey_input, desc="Categorizing responses")):
-        reply = None  
+    def _build_prompt(response_text):
+        """Build the classification prompt for a single response."""
+        if chain_of_thought:
+            prompt = f"""{survey_question_context}
 
-        if pd.isna(response): 
-            link1.append("Skipped NaN input")
-            default_json = example_JSON 
-            extracted_jsons.append(default_json)
-            #print(f"Skipped NaN input.")
+            Categorize this survey response "{response_text}" into the following categories that apply:
+            {categories_str}
+
+            Let's think step by step:
+            1. First, identify the main themes mentioned in the response
+            2. Then, match each theme to the relevant categories
+            3. Finally, assign 1 to matching categories and 0 to non-matching categories
+
+            {examples_text}
+
+            Provide your work in JSON format where the number belonging to each category is the key and a 1 if the category is present and a 0 if it is not present as key values."""
         else:
-            if chain_of_thought:
-                prompt = f"""{survey_question_context}
+            prompt = f"""{survey_question_context} \
+            Categorize this survey response "{response_text}" into the following categories that apply: \
+            {categories_str}
+            {examples_text}
+            Provide your work in JSON format where the number belonging to each category is the key and a 1 if the category is present and a 0 if it is not present as key values."""
 
-                Categorize this survey response "{response}" into the following categories that apply: 
-                {categories_str}
+        if context_prompt:
+            context = """You are an expert researcher in survey data categorization.
+            Apply multi-label classification and base decisions on explicit and implicit meanings.
+            When uncertain, prioritize precision over recall."""
+            prompt = context + prompt
 
-                Let's think step by step:
-                1. First, identify the main themes mentioned in the response
-                2. Then, match each theme to the relevant categories
-                3. Finally, assign 1 to matching categories and 0 to non-matching categories
+        return prompt
 
-                {examples_text}
+    def _build_cove_prompts(prompt, response_text):
+        """Build chain of verification prompts."""
+        step2_prompt = f"""You provided this initial categorization:
+        <<INITIAL_REPLY>>
 
-                Provide your work in JSON format where the number belonging to each category is the key and a 1 if the category is present and a 0 if it is not present as key values."""
-            else:
+        Original task: {prompt}
 
-                prompt = f"""{survey_question_context} \
-                Categorize this survey response "{response}" into the following categories that apply: \
-                {categories_str}
-                {examples_text}
-                Provide your work in JSON format where the number belonging to each category is the key and a 1 if the category is present and a 0 if it is not present as key values."""
+        Generate a focused list of 3-5 verification questions to fact-check your categorization. Each question should:
+        - Be concise and specific (one sentence)
+        - Address a distinct aspect of the categorization
+        - Be answerable independently
 
-            if context_prompt:
-                context = """You are an expert researcher in survey data categorization. 
-                Apply multi-label classification and base decisions on explicit and implicit meanings. 
-                When uncertain, prioritize precision over recall."""
+        Focus on verifying:
+        - Whether each category assignment is accurate
+        - Whether the categories match the criteria in the original task
+        - Whether there are any logical inconsistencies
 
-                prompt = context + prompt
+        Provide only the verification questions as a numbered list."""
+
+        step3_prompt = f"""Answer the following verification question based on the survey response provided.
+
+        Survey response: {response_text}
+
+        Verification question: <<QUESTION>>
+
+        Provide a brief, direct answer (1-2 sentences maximum).
+
+        Answer:"""
+
+        step4_prompt = f"""Original task: {prompt}
+        Initial categorization:
+        <<INITIAL_REPLY>>
+        Verification questions and answers:
+        <<VERIFICATION_QA>>
+        If no categories are present, assign "0" to all categories.
+        Provide the final corrected categorization in the same JSON format:"""
+
+        return step2_prompt, step3_prompt, step4_prompt
+
+    def _call_openai_compatible(prompt, step2_prompt, step3_prompt, step4_prompt):
+        """Handle OpenAI-compatible API calls (OpenAI, Perplexity, HuggingFace, xAI)."""
+        from openai import OpenAI, BadRequestError
+
+        base_url = (
+            "https://api.perplexity.ai" if model_source == "perplexity"
+            else "https://router.huggingface.co/v1" if model_source == "huggingface"
+            else "https://api.x.ai/v1" if model_source == "xai"
+            else None
+        )
+        client = OpenAI(api_key=api_key, base_url=base_url)
+
+        max_retries = 8
+        delay = 2
+
+        for attempt in range(max_retries):
+            try:
+                messages = [
+                    *([{'role': 'user', 'content': stepback}] if step_back_prompt and step_back_added else []),
+                    *([{'role': 'assistant', 'content': stepback_insight}] if step_back_added else []),
+                    {'role': 'user', 'content': prompt}
+                ]
+
+                response_obj = client.chat.completions.create(
+                    model=user_model,
+                    messages=messages,
+                    response_format={"type": "json_object"},
+                    **({"temperature": creativity} if creativity is not None else {})
+                )
+
+                reply = response_obj.choices[0].message.content
+
+                if chain_of_verification:
+                    reply = chain_of_verification_openai(
+                        initial_reply=reply,
+                        step2_prompt=step2_prompt,
+                        step3_prompt=step3_prompt,
+                        step4_prompt=step4_prompt,
+                        client=client,
+                        user_model=user_model,
+                        creativity=creativity,
+                        remove_numbering=remove_numbering
+                    )
+
+                return reply, None
+
+            except BadRequestError as e:
+                if "json_validate_failed" in str(e) and attempt < max_retries - 1:
+                    wait_time = delay * (2 ** attempt)
+                    print(f"⚠️ JSON validation failed. Attempt {attempt + 1}/{max_retries}")
+                    print(f"Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    raise ValueError(f"❌ Model '{user_model}' on {model_source} not found. Please check the model name and try again.") from e
+
+            except Exception as e:
+                if ("500" in str(e) or "504" in str(e)) and attempt < max_retries - 1:
+                    wait_time = delay * (2 ** attempt)
+                    print(f"Attempt {attempt + 1} failed with error: {e}")
+                    print(f"Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    print(f"❌ Failed after {max_retries} attempts: {e}")
+                    return """{"1":"e"}""", f"Error processing input: {e}"
+
+        return """{"1":"e"}""", "Max retries exceeded"
+
+    def _call_anthropic(prompt, step2_prompt, step3_prompt, step4_prompt):
+        """Handle Anthropic API calls."""
+        import anthropic
+        client = anthropic.Anthropic(api_key=api_key)
+
+        tools = [{
+            "name": "return_categories",
+            "description": "Return categorization results as 0 (not present) or 1 (present) for each category",
+            "input_schema": {
+                "type": "object",
+                "properties": properties,
+                "required": list(properties.keys())
+            }
+        }]
+
+        try:
+            response_obj = client.messages.create(
+                model=user_model,
+                max_tokens=4096,
+                tools=tools,
+                tool_choice={"type": "tool", "name": "return_categories"},
+                messages=[{'role': 'user', 'content': prompt}],
+                **({"temperature": creativity} if creativity is not None else {})
+            )
+            json_reply = response_obj.content[0].input
+            reply = json.dumps(json_reply)
 
             if chain_of_verification:
-                step2_prompt = f"""You provided this initial categorization:
-                <<INITIAL_REPLY>>
-                
-                Original task: {prompt}
-                
-                Generate a focused list of 3-5 verification questions to fact-check your categorization. Each question should:
-                - Be concise and specific (one sentence)
-                - Address a distinct aspect of the categorization
-                - Be answerable independently
-
-                Focus on verifying:
-                - Whether each category assignment is accurate
-                - Whether the categories match the criteria in the original task
-                - Whether there are any logical inconsistencies
-
-                Provide only the verification questions as a numbered list."""
-
-                step3_prompt = f"""Answer the following verification question based on the survey response provided.
-
-                Survey response: {response}
-
-                Verification question: <<QUESTION>>
-
-                Provide a brief, direct answer (1-2 sentences maximum).
-
-                Answer:"""
-
-
-                step4_prompt = f"""Original task: {prompt}
-                Initial categorization:
-                <<INITIAL_REPLY>>
-                Verification questions and answers:
-                <<VERIFICATION_QA>>
-                If no categories are present, assign "0" to all categories.
-                Provide the final corrected categorization in the same JSON format:"""
-
-            # Main model interaction
-            if model_source in ["openai", "perplexity", "huggingface", "xai"]:
-                from openai import OpenAI
-                from openai import OpenAI, BadRequestError, AuthenticationError
-
-                # conditional base_url setting based on model source
-                base_url = (
-                    "https://api.perplexity.ai" if model_source == "perplexity" 
-                    else "https://router.huggingface.co/v1" if model_source == "huggingface"
-                    else "https://api.x.ai/v1" if model_source == "xai"
-                    else None  # default
+                reply = chain_of_verification_anthropic(
+                    initial_reply=reply,
+                    step2_prompt=step2_prompt,
+                    step3_prompt=step3_prompt,
+                    step4_prompt=step4_prompt,
+                    client=client,
+                    user_model=user_model,
+                    creativity=creativity,
+                    remove_numbering=remove_numbering
                 )
-    
-                client = OpenAI(api_key=api_key, base_url=base_url)
 
-                max_retries = 8
-                delay = 2
+            return reply, None
 
-                for attempt in range(max_retries):
-                    try:
-        
-                        messages = [
-                            *([{'role': 'user', 'content': stepback}] if step_back_prompt and step_back_added else []), # only if step back is enabled and successful
-                            *([{'role': 'assistant', 'content': stepback_insight}] if step_back_added else {}), # include insight if step back succeeded
-                            {'role': 'user', 'content': prompt}
-                        ]
+        except anthropic.NotFoundError as e:
+            raise ValueError(f"❌ Model '{user_model}' on {model_source} not found. Please check the model name and try again.") from e
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            return """{"1":"e"}""", f"Error processing input: {e}"
 
-                        response_obj = client.chat.completions.create(
-                        model=user_model,
-                        messages=messages,
-                        response_format={"type": "json_object"},
-                        **({"temperature": creativity} if creativity is not None else {})
-                        )
-        
-                        reply = response_obj.choices[0].message.content
-                    
-                        if chain_of_verification:
-                            reply = chain_of_verification_openai(
-                                initial_reply=reply,
-                                step2_prompt=step2_prompt,
-                                step3_prompt=step3_prompt,
-                                step4_prompt=step4_prompt,
-                                client=client,
-                                user_model=user_model,
-                                creativity=creativity,
-                                remove_numbering=remove_numbering
-                            )
+    def _call_google(prompt, step2_prompt, step3_prompt, step4_prompt):
+        """Handle Google API calls."""
+        import requests
 
-                            link1.append(reply)
-                            break
-                        else:
-                            #if chain of verification is not enabled, just append initial reply
-                            link1.append(reply)
-                            break
-                    
-                    except BadRequestError as e:
-                        if "json_validate_failed" in str(e) and attempt < max_retries - 1:
-                            wait_time = delay * (2 ** attempt)
-                            print(f"⚠️ JSON validation failed. Attempt {attempt + 1}/{max_retries}")
-                            print(f"Retrying in {wait_time}s...")
-                            time.sleep(wait_time)
-                        # Model doesn't exist - halt immediately
-                        else:
-                            raise ValueError(f"❌ Model '{user_model}' on {model_source} not found. Please check the model name and try again.") from e
-                
-                    except Exception as e:
-                        if ("500" in str(e) or "504" in str(e)) and attempt < max_retries - 1:
-                            wait_time = delay * (2 ** attempt)
-                            print(f"Attempt {attempt + 1} failed with error: {e}")
-                            print(f"Retrying in {wait_time}s...")
-                            time.sleep(wait_time)
-                        else:
-                            print(f"❌ Failed after {max_retries} attempts: {e}")
-                            reply = """{"1":"e"}"""
-                            link1.append(f"Error processing input: {e}")
-                            break  # Exit retry loop after max attempts
-
-                    except Exception as e:
-                        print(f"An error occurred: {e}")
-                        link1.append(f"Error processing input: {e}")
-
-            elif model_source == "anthropic":
-
-                import anthropic
-                client = anthropic.Anthropic(api_key=api_key)
-
-                tools = [{
-                    "name": "return_categories",
-                    "description": "Return categorization results as 0 (not present) or 1 (present) for each category",
-                    "input_schema": {
-                        "type": "object",
-                        "properties": properties,
-                        "required": list(properties.keys())
-                    }
-                }]
-                
+        def make_google_request(url, headers, payload, max_retries=8):
+            for attempt in range(max_retries):
                 try:
-                    response_obj = client.messages.create(
-                    model=user_model,
-                    max_tokens=4096,
-                    tools=tools,
-                    tool_choice={"type": "tool", "name": "return_categories"},
-                    messages=[{'role': 'user', 'content': prompt}],
-                    **({"temperature": creativity} if creativity is not None else {})
-                    )
-                    json_reply = response_obj.content[0].input
-                    reply = json.dumps(json_reply)
-                    
-                    if chain_of_verification:
-                        reply = chain_of_verification_anthropic(
-                            initial_reply=reply,
-                            step2_prompt=step2_prompt,
-                            step3_prompt=step3_prompt,
-                            step4_prompt=step4_prompt,
-                            client=client,
-                            user_model=user_model,
-                            creativity=creativity,
-                            remove_numbering=remove_numbering
-                        )
+                    response = requests.post(url, headers=headers, json=payload)
+                    response.raise_for_status()
+                    return response.json()
+                except requests.exceptions.HTTPError as e:
+                    status_code = e.response.status_code
+                    retryable_errors = [429, 500, 502, 503, 504]
 
-                        link1.append(reply)
-                    else:
-                        #if chain of verification is not enabled, just append initial reply
-                        link1.append(reply)
-                    
-                except anthropic.NotFoundError as e:
-                    # Model doesn't exist - halt immediately
-                    raise ValueError(f"❌ Model '{user_model}' on {model_source} not found. Please check the model name and try again.") from e
-                except Exception as e:
-                    print(f"An error occurred: {e}")
-                    link1.append(f"Error processing input: {e}")
-                    
-            elif model_source == "google":
-                import requests
-
-                def make_google_request(url, headers, payload, max_retries=8):
-                    """Make Google API request with exponential backoff on server errors"""
-                    for attempt in range(max_retries):
-                        try:
-                            response = requests.post(url, headers=headers, json=payload)
-                            response.raise_for_status()
-                            return response.json()
-                        except requests.exceptions.HTTPError as e:
-                            status_code = e.response.status_code
-                            retryable_errors = [429, 500, 502, 503, 504]
-            
                     if status_code in retryable_errors and attempt < max_retries - 1:
-                        # Use longer wait time for rate limits (429)
                         wait_time = 10 * (2 ** attempt) if status_code == 429 else 2 * (2 ** attempt)
                         error_type = "Rate limited" if status_code == 429 else f"Server error {status_code}"
                         print(f"⚠️ {error_type}. Attempt {attempt + 1}/{max_retries}")
@@ -863,160 +813,176 @@ def multi_class(
                     else:
                         raise
 
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
+        headers = {
+            "x-goog-api-key": api_key,
+            "Content-Type": "application/json"
+        }
+        payload = {
+            "contents": [{"parts": [{"text": prompt}]}],
+            "generationConfig": {
+                "responseMimeType": "application/json",
+                **({"temperature": creativity} if creativity is not None else {}),
+                **({"thinkingConfig": {"thinkingBudget": thinking_budget}} if thinking_budget is not None else {})
+            }
+        }
 
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
-                try:
-                    headers = {
-                        "x-goog-api-key": api_key,
-                        "Content-Type": "application/json"
-                        }
-                    
-                    payload = {
-                        "contents": [{
-                            "parts": [{"text": prompt}]
-                            }],
-                            "generationConfig": {
-                                "responseMimeType": "application/json",
-                                **({"temperature": creativity} if creativity is not None else {}),
-                                **({"thinkingConfig": {"thinkingBudget": thinking_budget}} if thinking_budget is not None else {})
-                            }
-                    }
-                    
-                    result = make_google_request(url, headers, payload)
+        try:
+            result = make_google_request(url, headers, payload)
 
-                    if "candidates" in result and result["candidates"]:
-                        reply = result["candidates"][0]["content"]["parts"][0]["text"]
-                    else:
-                        reply = "No response generated"
-
-                    if chain_of_verification:
-                        reply = chain_of_verification_google(
-                            initial_reply=reply,
-                            prompt=prompt,
-                            step2_prompt=step2_prompt,
-                            step3_prompt=step3_prompt,
-                            step4_prompt=step4_prompt,
-                            url=url,
-                            headers=headers,
-                            creativity=creativity,
-                            remove_numbering=remove_numbering,
-                            make_google_request=make_google_request
-                        )
-
-                        link1.append(reply)
-        
-                    else:
-                        # if chain of verification is not enabled, just append initial reply
-                        link1.append(reply)
-                
-                except requests.exceptions.HTTPError as e:
-                    if e.response.status_code == 404:
-                        raise ValueError(f"❌ Model '{user_model}' not found. Please check the model name and try again.") from e
-                    elif e.response.status_code == 401 or e.response.status_code == 403:
-                        raise ValueError(f"❌ Authentication failed. Please check your Google API key.") from e
-                    else:
-                        print(f"HTTP error occurred: {e}")
-                        link1.append(f"Error processing input: {e}")
-                except Exception as e:
-                    print(f"An error occurred: {e}")
-                    link1.append(f"Error processing input: {e}")
-
-            elif model_source == "mistral":
-                from mistralai import Mistral
-                from mistralai.models import SDKError
-                from mistralai.models import MistralError
-
-                max_retries = 8
-                delay = 2
-
-                client = Mistral(api_key=api_key)
-
-                for attempt in range(max_retries):
-                    try:
-                        messages = [
-                        *([{'role': 'user', 'content': stepback}] if step_back_prompt and step_back_added else []),
-                        *([{'role': 'assistant', 'content': stepback_insight}] if step_back_added else []),
-                        {'role': 'user', 'content': prompt}
-                        ]
-            
-                        response = client.chat.complete(
-                            model=user_model,
-                            messages=messages,
-                            response_format={"type": "json_object"},
-                            **({"temperature": creativity} if creativity is not None else {})
-                        )
-                        reply = response.choices[0].message.content
-            
-                        if chain_of_verification:
-                            reply = chain_of_verification_mistral(
-                                initial_reply=reply,
-                                step2_prompt=step2_prompt,
-                                step3_prompt=step3_prompt,
-                                step4_prompt=step4_prompt,
-                                client=client,
-                                user_model=user_model,
-                                creativity=creativity,
-                                remove_numbering=remove_numbering
-                            )
-            
-                        link1.append(reply)
-                        break  # Success - exit retry loop
-            
-                    except SDKError as e:
-                        error_str = str(e).lower()
-            
-                        # Non-retryable errors - exit immediately
-                        if "invalid_model" in error_str or "invalid model" in error_str:
-                            raise ValueError(f"❌ Model '{user_model}' not found.") from e
-                        elif "401" in str(e) or "unauthorized" in error_str:
-                            raise ValueError(f"❌ Authentication failed. Please check your Mistral API key.") from e
-            
-                        # Retryable server errors (500, 502, 503, 504)
-                        retryable_errors = ["500", "502", "503", "504"]
-                        if any(code in str(e) for code in retryable_errors) and attempt < max_retries - 1:
-                            wait_time = delay * (2 ** attempt)
-                            print(f"⚠️ Server error detected. Attempt {attempt + 1}/{max_retries}")
-                            print(f"Retrying in {wait_time}s...")
-                            time.sleep(wait_time)
-                        else:
-                            print(f"❌ Failed after {max_retries} attempts: {e}")
-                            link1.append(f"Error processing input: {e}")
-                            break
-                
-                    except MistralError as e:
-                        # Handle HTTP errors with status codes
-                        if hasattr(e, 'status_code') and e.status_code in [500, 502, 503, 504] and attempt < max_retries - 1:
-                            wait_time = delay * (2 ** attempt)
-                            print(f"⚠️ Server error {e.status_code}. Attempt {attempt + 1}/{max_retries}")
-                            print(f"Retrying in {wait_time}s...")
-                            time.sleep(wait_time)
-                        else:
-                            print(f"❌ Failed after {max_retries} attempts: {e}")
-                            link1.append(f"Error processing input: {e}")
-                            break
-                
-                    except Exception as e:
-                        print(f"❌ Unexpected error: {e}")
-                        link1.append(f"Error processing input: {e}")
-                        break
-
+            if "candidates" in result and result["candidates"]:
+                reply = result["candidates"][0]["content"]["parts"][0]["text"]
             else:
-                raise ValueError("Unknown source! Choose from OpenAI, Anthropic, Perplexity, Google, xAI, Huggingface, or Mistral")
-            # in situation that no JSON is found
-            if reply is not None:
-                extracted_json = regex.findall(r'\{(?:[^{}]|(?R))*\}', reply, regex.DOTALL)
-                if extracted_json:
-                    cleaned_json = extracted_json[0].replace('[', '').replace(']', '').replace('\n', '').replace(" ", '').replace("  ", '')
-                    extracted_jsons.append(cleaned_json)
-                    #print(cleaned_json)
+                reply = "No response generated"
+
+            if chain_of_verification:
+                reply = chain_of_verification_google(
+                    initial_reply=reply,
+                    prompt=prompt,
+                    step2_prompt=step2_prompt,
+                    step3_prompt=step3_prompt,
+                    step4_prompt=step4_prompt,
+                    url=url,
+                    headers=headers,
+                    creativity=creativity,
+                    remove_numbering=remove_numbering,
+                    make_google_request=make_google_request
+                )
+
+            return reply, None
+
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 404:
+                raise ValueError(f"❌ Model '{user_model}' not found. Please check the model name and try again.") from e
+            elif e.response.status_code in [401, 403]:
+                raise ValueError(f"❌ Authentication failed. Please check your Google API key.") from e
+            else:
+                print(f"HTTP error occurred: {e}")
+                return """{"1":"e"}""", f"Error processing input: {e}"
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            return """{"1":"e"}""", f"Error processing input: {e}"
+
+    def _call_mistral(prompt, step2_prompt, step3_prompt, step4_prompt):
+        """Handle Mistral API calls."""
+        from mistralai import Mistral
+        from mistralai.models import SDKError, MistralError
+
+        client = Mistral(api_key=api_key)
+        max_retries = 8
+        delay = 2
+
+        for attempt in range(max_retries):
+            try:
+                messages = [
+                    *([{'role': 'user', 'content': stepback}] if step_back_prompt and step_back_added else []),
+                    *([{'role': 'assistant', 'content': stepback_insight}] if step_back_added else []),
+                    {'role': 'user', 'content': prompt}
+                ]
+
+                response = client.chat.complete(
+                    model=user_model,
+                    messages=messages,
+                    response_format={"type": "json_object"},
+                    **({"temperature": creativity} if creativity is not None else {})
+                )
+                reply = response.choices[0].message.content
+
+                if chain_of_verification:
+                    reply = chain_of_verification_mistral(
+                        initial_reply=reply,
+                        step2_prompt=step2_prompt,
+                        step3_prompt=step3_prompt,
+                        step4_prompt=step4_prompt,
+                        client=client,
+                        user_model=user_model,
+                        creativity=creativity,
+                        remove_numbering=remove_numbering
+                    )
+
+                return reply, None
+
+            except SDKError as e:
+                error_str = str(e).lower()
+
+                if "invalid_model" in error_str or "invalid model" in error_str:
+                    raise ValueError(f"❌ Model '{user_model}' not found.") from e
+                elif "401" in str(e) or "unauthorized" in error_str:
+                    raise ValueError(f"❌ Authentication failed. Please check your Mistral API key.") from e
+
+                retryable_errors = ["500", "502", "503", "504"]
+                if any(code in str(e) for code in retryable_errors) and attempt < max_retries - 1:
+                    wait_time = delay * (2 ** attempt)
+                    print(f"⚠️ Server error detected. Attempt {attempt + 1}/{max_retries}")
+                    print(f"Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
                 else:
-                    error_message = """{"1":"e"}"""
-                    extracted_jsons.append(error_message)
-                    print(error_message)
-            else:
-                error_message = """{"1":"e"}"""
-                extracted_jsons.append(error_message)
-                #print(error_message)
+                    print(f"❌ Failed after {max_retries} attempts: {e}")
+                    return """{"1":"e"}""", f"Error processing input: {e}"
+
+            except MistralError as e:
+                if hasattr(e, 'status_code') and e.status_code in [500, 502, 503, 504] and attempt < max_retries - 1:
+                    wait_time = delay * (2 ** attempt)
+                    print(f"⚠️ Server error {e.status_code}. Attempt {attempt + 1}/{max_retries}")
+                    print(f"Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    print(f"❌ Failed after {max_retries} attempts: {e}")
+                    return """{"1":"e"}""", f"Error processing input: {e}"
+
+            except Exception as e:
+                print(f"❌ Unexpected error: {e}")
+                return """{"1":"e"}""", f"Error processing input: {e}"
+
+        return """{"1":"e"}""", "Max retries exceeded"
+
+    def _process_single_response(response_text):
+        """Process a single survey response and return (reply, error_msg)."""
+        prompt = _build_prompt(response_text)
+
+        if chain_of_verification:
+            step2_prompt, step3_prompt, step4_prompt = _build_cove_prompts(prompt, response_text)
+        else:
+            step2_prompt = step3_prompt = step4_prompt = None
+
+        if model_source in ["openai", "perplexity", "huggingface", "xai"]:
+            return _call_openai_compatible(prompt, step2_prompt, step3_prompt, step4_prompt)
+        elif model_source == "anthropic":
+            return _call_anthropic(prompt, step2_prompt, step3_prompt, step4_prompt)
+        elif model_source == "google":
+            return _call_google(prompt, step2_prompt, step3_prompt, step4_prompt)
+        elif model_source == "mistral":
+            return _call_mistral(prompt, step2_prompt, step3_prompt, step4_prompt)
+        else:
+            raise ValueError("Unknown source! Choose from OpenAI, Anthropic, Perplexity, Google, xAI, Huggingface, or Mistral")
+
+    def _extract_json(reply):
+        """Extract JSON from model reply."""
+        if reply is None:
+            return """{"1":"e"}"""
+
+        extracted_json = regex.findall(r'\{(?:[^{}]|(?R))*\}', reply, regex.DOTALL)
+        if extracted_json:
+            return extracted_json[0].replace('[', '').replace(']', '').replace('\n', '').replace(" ", '').replace("  ", '')
+        else:
+            print("""{"1":"e"}""")
+            return """{"1":"e"}"""
+
+    # Main processing loop
+    for idx, response in enumerate(tqdm(survey_input, desc="Categorizing responses")):
+        if pd.isna(response):
+            link1.append("Skipped NaN input")
+            extracted_jsons.append(example_JSON)
+            continue
+
+        reply, error_msg = _process_single_response(response)
+
+        if error_msg:
+            link1.append(error_msg)
+        else:
+            link1.append(reply)
+
+        extracted_jsons.append(_extract_json(reply))
 
         # --- Safety Save ---
         if safety:

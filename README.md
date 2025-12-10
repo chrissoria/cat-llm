@@ -196,22 +196,25 @@ Processes each text response individually, assigning one or more categories from
 
 **Parameters:**
 - `survey_input` (list): List of text responses to classify
-- `categories` (list): List of predefined categories for classification
+- `categories` (list or "auto"): List of predefined categories for classification, or "auto" to automatically extract categories
 - `api_key` (str): API key for the LLM service
 - `user_model` (str, default="gpt-5"): Specific model to use
-- `user_prompt` (str, optional): Custom prompt template to override default prompting
 - `survey_question` (str, default=""): The survey question being analyzed
-- `example1` through `example6` (dict, optional): Few-shot learning examples (format: {"response": "...", "categories": [...]})
+- `example1` through `example6` (str, optional): Few-shot learning examples for guiding categorization
 - `creativity` (float, optional): Temperature/randomness setting (0.0-1.0, varies by model)
 - `safety` (bool, default=False): Enable safety checks on responses and saves to CSV at each API call step
-- `to_csv` (bool, default=False): Whether to save results to CSV
 - `chain_of_verification` (bool, default=False): Enable Chain-of-Verification prompting technique for improved accuracy
-- `chain_of_thought` (bool, default=False): Enable Chain-of-Thought prompting technique for improved accuracy
+- `chain_of_thought` (bool, default=True): Enable Chain-of-Thought prompting technique for step-by-step reasoning
 - `step_back_prompt` (bool, default=False): Enable step-back prompting to analyze higher-level context before classification
 - `context_prompt` (bool, default=False): Add expert role and behavioral guidelines to the prompt
-- `filename` (str, default="categorized_data.csv"): Filename for CSV output
+- `thinking_budget` (int, default=0): Thinking budget for Google models with extended reasoning capabilities
+- `max_categories` (int, default=12): Maximum categories when using "auto" mode
+- `categories_per_chunk` (int, default=10): Categories per chunk when using "auto" mode
+- `divisions` (int, default=10): Number of divisions when using "auto" mode
+- `research_question` (str, optional): Research question to guide auto-categorization
+- `filename` (str, optional): Filename for CSV output (triggers save when provided)
 - `save_directory` (str, optional): Directory path to save the CSV file
-- `model_source` (str, default="auto"): Model provider ("auto", "OpenAI", "Anthropic", "Google", "Mistral", "Perplexity", "Huggingface")
+- `model_source` (str, default="auto"): Model provider ("auto", "OpenAI", "Anthropic", "Google", "Mistral", "Perplexity", "Huggingface", "xAI")
 
 **Returns:**
 - `pandas.DataFrame`: DataFrame with classification results, columns formatted as specified
@@ -245,7 +248,7 @@ move_reasons = cat.multi_class(
 Performs multi-label image classification into user-defined categories, returning structured results with optional CSV export.
 
 **Methodology:**
-Processes each image individually, assigning one or more categories from the provided list. Supports flexible output formatting and optional saving of results to CSV for easy integration with data analysis workflows.
+Processes each image individually, assigning one or more categories from the provided list. Supports flexible output formatting and optional saving of results to CSV for easy integration with data analysis workflows. Includes advanced prompting techniques for improved accuracy.
 
 **Parameters:**
 - `image_description` (str): A description of what the model should expect to see
@@ -253,11 +256,17 @@ Processes each image individually, assigning one or more categories from the pro
 - `categories` (list): List of predefined categories for classification
 - `api_key` (str): API key for the LLM service
 - `user_model` (str, default="gpt-4o"): Specific model to use
-- `creativity` (float, default=0): Temperature/randomness setting (0.0-1.0)
+- `creativity` (float, optional): Temperature/randomness setting (0.0-1.0)
 - `safety` (bool, default=False): Enable safety checks on responses and saves to CSV at each API call step
-- `filename` (str, default="categorized_data.csv"): Filename for CSV output
+- `chain_of_verification` (bool, default=False): Enable Chain-of-Verification prompting - re-examines the image to verify categorization accuracy
+- `chain_of_thought` (bool, default=True): Enable Chain-of-Thought prompting for step-by-step visual analysis
+- `step_back_prompt` (bool, default=False): Enable step-back prompting to analyze key visual features before classification
+- `context_prompt` (bool, default=False): Add expert visual analyst role and behavioral guidelines to the prompt
+- `thinking_budget` (int, default=0): Thinking budget for Google models with extended reasoning capabilities
+- `example1` through `example6` (str, optional): Few-shot learning examples for guiding image categorization
+- `filename` (str, optional): Filename for CSV output (triggers save when provided)
 - `save_directory` (str, optional): Directory path to save the CSV file
-- `model_source` (str, default="OpenAI"): Model provider ("OpenAI", "Anthropic", "Perplexity", "Mistral")
+- `model_source` (str, default="auto"): Model provider ("auto", "OpenAI", "Anthropic", "Google", "Mistral", "Perplexity", "Huggingface", "xAI")
 
 **Returns:**
 - `pandas.DataFrame`: DataFrame with classification results, columns formatted as specified
@@ -271,15 +280,16 @@ user_categories = ["has a cat somewhere in it",
                    "looks cartoonish",
                    "Adrian Brody is in it"]
 
-description = "Should be an image of a child's drawing"                   
+description = "Should be an image of a child's drawing"
 
 image_categories = cat.image_multi_class(
-    image_description=description, 
-    image_input= ['desktop/image1.jpg','desktop/image2.jpg', desktop/image3.jpg'], 
+    image_description=description,
+    image_input=['desktop/image1.jpg','desktop/image2.jpg', 'desktop/image3.jpg'],
     user_model="gpt-4o",
     creativity=0,
     categories=user_categories,
-    safety =TRUE,
+    chain_of_thought=True,
+    safety=True,
     api_key="OPENAI_API_KEY")
 ```
 

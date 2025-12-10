@@ -32,7 +32,7 @@ def get_openai_top_n(
              The research question is: {research_question}""" if research_question else "You are a helpful assistant."},
             {'role': 'user', 'content': prompt}
         ],
-        **({\"temperature\": creativity} if creativity is not None else {})
+        **({"temperature": creativity} if creativity is not None else {})
     )
     
     return response_obj.choices[0].message.content
@@ -68,7 +68,7 @@ def get_anthropic_top_n(
         messages=[
             {'role': 'user', 'content': prompt}
         ],
-        **({\"temperature\": creativity} if creativity is not None else {})
+        **({"temperature": creativity} if creativity is not None else {})
     )
     
     return response_obj.content[0].text
@@ -110,7 +110,7 @@ def get_google_top_n(
             "parts": [{"text": full_prompt}]
         }],
         "generationConfig": {
-            **({\"temperature\": creativity} if creativity is not None else {})
+            **({"temperature": creativity} if creativity is not None else {})
         }
     }
     
@@ -155,7 +155,7 @@ def get_mistral_top_n(
             {'role': 'system', 'content': system_content},
             {'role': 'user', 'content': prompt}
         ],
-        **({\"temperature\": creativity} if creativity is not None else {})
+        **({"temperature": creativity} if creativity is not None else {})
     )
     
     return response_obj.choices[0].message.content

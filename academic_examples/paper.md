@@ -108,6 +108,21 @@ the Caribbean-American Dementia and Aging Study
 the package's versatility in addressing real-world research challenges
 that require systematic analysis of unstructured data at scale.
 
+## Performance and Reliability
+
+To evaluate CatLLM's reliability across different language model providers, we processed 3,208 open-ended survey responses from the UC Berkeley Social Networks Study using eight models. Table 1 reports success rates, processing times, and costs for each model.
+
+| Metric | GPT-5 | Claude Sonnet 4.5 | Gemini 2.5 Flash | Grok-4 Fast | Mistral Medium | Llama 4 | DeepSeek v3.1 | Qwen 3 |
+|--------|-------|-------------------|------------------|-------------|----------------|---------|---------------|--------|
+| Success Rate (%) | 100 | 99.97 | 99.44 | 100 | 99.94 | 100 | 99.91 | 99.84 |
+| Failure Count | 0 | 1 | 18 | 0 | 2 | 0 | 3 | 5 |
+| Cost ($) | 27.85 | 19.31 | 0.94 | 0.46 | 0.38 | 2.54 | 2.54 | 2.54 |
+| Processing Time (H:MM) | 7:27 | 2:55 | 1:00 | 0:49 | 1:23 | 0:23 | 2:23 | 2:45 |
+
+Table: Model performance metrics for processing 3,208 survey responses. Success rate indicates percentage of responses successfully categorized. Costs reflect API pricing at time of testing. {#tbl-performance}
+
+All models achieved success rates above 99%, with failures primarily attributable to transient server errors rather than JSON processing issues. The results demonstrate substantial cost variation across providers: closed-source models like GPT-5 offer high reliability but at premium pricing ($27.85), while open-weights alternatives like Mistral Medium and the Groq-hosted models provide comparable success rates at a fraction of the cost ($0.38–$2.54). Processing times ranged from 23 minutes (Llama 4) to over 7 hours (GPT-5), reflecting differences in API rate limits and model inference speeds.
+
 The package can be easily installed and implemented:
 
 ```         
@@ -167,6 +182,8 @@ structures across text, image, and web data analysis workflows while
 maintaining compatibility with standard statistical analysis tools.
 
 ![CatLLM Function Diagram](web_retrieval_flowchart.png)
+
+![CatLLM Classification Process Flow](catllm_flowchart_three_nodes.png)
 
 ![Scoring Drawings of Cubes According to CERAD Rules Using
 CatLLM](CERAD_diagram.png)
