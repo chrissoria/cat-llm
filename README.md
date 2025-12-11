@@ -21,8 +21,8 @@ CatLLM: A Reproducible LLM Pipeline for Coding Open-Ended Survey Responses
   - [multi_class()](#multi_class)
   - [image_score()](#image_score_drawing)
   - [image_features()](#image_features)
-  - [build_web_research_dataset()](#build_web_research_dataset)
   - [cerad_drawn_score()](#cerad_drawn_score)
+- [Related Projects](#related-projects)
 - [Academic Research](#academic-research)
 - [Contact](#contact)
 - [License](#license)
@@ -35,32 +35,15 @@ pip install cat-llm
 
 -----
 
-## ⚠️ Beta Software Notice
-
-**CatLLM is currently in beta.** While I'm actively working to make this tool robust and reliable, you may encounter bugs or unexpected behavior. 
-
-**I need your help!** This project thrives on community feedback. Please contribute by:
-- 🐛 **Reporting bugs** - Found an issue? Let me know!
-- 💡 **Sharing ideas** - Have suggestions for improvements or new features?
-- 🔧 **Contributing code** - Submit pull requests with fixes or enhancements
-
-**Visit our GitHub**: [github.com/chrissoria/cat-llm](https://github.com/chrissoria/cat-llm)
-
-All feedback helps us build better research software for the community.
-
------
-
 ## Quick Start
 
-CatLLM helps social scientists and researchers automatically categorize open-ended survey responses, images, and web-scraped data using AI models like GPT-5 and Claude. Not to be confused with CAT-LLM for Chinese article‐style transfer ([Tao et al. 2024](https://arxiv.org/html/2401.05707v1)).
+CatLLM helps social scientists and researchers automatically categorize open-ended survey responses and images using AI models like GPT-5 and Claude. Not to be confused with CAT-LLM for Chinese article‐style transfer ([Tao et al. 2024](https://arxiv.org/html/2401.05707v1)).
 
-Text Analysis: Simply provide your survey responses and category list - the package handles the rest and outputs clean data ready for statistical analysis. It works with single or multiple categories per response and automatically skips missing data to save API costs.
+**Text Analysis:** Simply provide your survey responses and category list - the package handles the rest and outputs clean data ready for statistical analysis. It works with single or multiple categories per response and automatically skips missing data to save API costs.
 
-Image Categorization: Uses the same intelligent categorization method to analyze images, extracting specific features, counting objects, identifying colors, or determining the presence of elements based on your research questions.
+**Image Categorization:** Uses the same intelligent categorization method to analyze images, extracting specific features, counting objects, identifying colors, or determining the presence of elements based on your research questions.
 
-Web Data Collection: Builds comprehensive datasets by scraping web data and using Large Language Models to extract exactly the information you need. The function searches across multiple sources, processes the findings through AI models, and structures everything into clean dataframe format ready for export to CSV.
-
-Whether you're working with messy text responses, analyzing visual content, or gathering information from across the web, CatLLM consistently transforms unstructured data into structured categories and datasets you can actually analyze. All outputs are formatted for immediate statistical analysis and can be exported directly to CSV for further research workflows.
+Whether you're working with messy text responses or analyzing visual content, CatLLM consistently transforms unstructured data into structured categories you can actually analyze. All outputs are formatted for immediate statistical analysis and can be exported directly to CSV for further research workflows.
 
 
 
@@ -376,60 +359,6 @@ image_scores = cat.image_features(
     api_key="OPENAI_API_KEY")
 ```
 
-### `build_web_research_dataset()`
-
-Conducts automated web research on specified topics and compiles the findings into a structured dataset, extracting answers and source URLs for comprehensive research workflows. 
-
-NOTE: This function currently only works with Anthropic models and requires an Anthropic API key. It is strongly recommended to increase your API rate limits before using this function to avoid interruptions during web research tasks.
-
-SECOND NOTE: This function works best if you are specific with your search question. For example, instead of search_question="Hottest temperature in 2024?" you should use "Hottest temperature in 2024 from extremeweatherwatch.com?" or "Hottest temperature in 2024 from weatherundeground.com?". Another example is use "Where these UC Berkeley professors got their PhD according to Linkedin?" instead of "Where they got their PhD according to Linkedin?" to avoid matching people with the same name. 
-
-THIRD NOTE: This function works by scraping data from the web. Be aware that not all websites allow webscraping from Anthropic and therefore the function won't be able to retrieve information from these sites.
-
-**Methodology:**
-Performs systematic web searches using the specified search questions and processes the results through Anthropic's language models to extract relevant information. The function handles multiple search queries sequentially, applying time delays between requests to respect rate limits. Results are categorized according to user-defined criteria and can be exported to CSV format for further analysis and research documentation.
-
-**Rate Limits:**
-Before using this function, review and increase your Anthropic API rate limits at: https://console.anthropic.com/settings/limits. For general information about API rate limits, consult the Anthropic documentation at: https://docs.anthropic.com/claude/reference/rate-limits
-
-**Parameters:**
-- `search_question` (str): Primary research question or topic to guide the search strategy
-- `search_input` (list): List of specific search queries or questions to investigate
-- `features_to_extract` (list): List of specific features to extract (e.g., ["number of people", "primary color", "contains text"])
-- `api_key` (str): API key for the LLM service
-- `answer_format`: (str, default="concise"): Response detail level ("concise", "detailed", "comprehensive")
-- `additional_instructions` (str, default="claude-3-7-sonnet-20250219"): Specific Anthropic model to use for processing results
-- `user_model` (str, default="gpt-4o"): Specific vision model to use
-- `creativity` (float, default=0): Temperature/randomness setting (0.0-1.0)
-- `safety` (bool, default=False): Enable safety checks and save results at each API call step
-- `filename` (str, default="categorized_data.csv"): Filename for CSV output
-- `save_directory` (str, optional): Directory path to save the CSV file
-- `model_source` (str, default="OpenAI"): Model provider ("OpenAI", "Anthropic", "Perplexity", "Mistral")
-- `time_delay` (int, default=15): Delay in seconds between search requests to manage API rate limits
-
-**Returns:**
-- `pandas.DataFrame`: DataFrame with image paths and extracted feature values for each specified attribute[1][4]
-
-**Example:**
-
-```
-import catllm as cat          
-
-research_data = cat.build_web_research_dataset(
-    search_question="What are the latest developments in renewable energy technology?",
-    search_input=["solar panel efficiency 2025", "wind turbine innovations", "battery storage breakthroughs"],
-    api_key="ANTHROPIC_API_KEY",
-    answer_format="detailed",
-    additional_instructions="Focus on recent technological advances and commercial applications",
-    categories=['Answer', 'URL', 'Date', 'Key_Technology'],
-    model_source="Anthropic",
-    user_model="claude-3-7-sonnet-20250219",
-    creativity=0.1,
-    safety=True,
-    time_delay=3
-)
-```
-
 ### `cerad_drawn_score()`
 
 Automatically scores drawings of circles, diamonds, overlapping rectangles, and cubes according to the official Consortium to Establish a Registry for Alzheimer's Disease (CERAD) scoring system, returning structured results with optional CSV export. Works even with images that contain other drawings or writing.
@@ -466,13 +395,21 @@ diamond_scores = cat.cerad_score(
 )
 ```
 
+## Related Projects
+
+**Looking for web research capabilities?** Check out [llm-web-research](https://github.com/chrissoria/llm-web-research) - a precision-focused LLM-powered web research tool that uses a novel Funnel of Verification (FoVe) methodology to reduce false positives. It's designed for use cases where accuracy matters more than completeness.
+
+```bash
+pip install llm-web-research
+```
+
 ## Academic Research
 
 This package implements methodology from research on LLM performance in social science applications, including the UC Berkeley Social Networks Study. The package addresses reproducibility challenges in LLM-assisted research by providing standardized interfaces and consistent output formatting.
 
 If you use this package for research, please cite:
 
-Soria, C. (2025). CatLLM (0.0.8). Zenodo. https://doi.org/10.5281/zenodo.15532317
+Soria, C. (2025). CatLLM (0.1.0). Zenodo. https://doi.org/10.5281/zenodo.15532317
 
 ## Contact
 

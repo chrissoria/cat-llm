@@ -3,6 +3,9 @@
 .RData
 .Ruserdata
 
+# Environment variables (secrets)
+.env
+
 # Test files
 examples/test_multi_class_local.ipynb
 examples/test_multi_class_local.py

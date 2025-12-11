@@ -12,6 +12,5 @@ from .__about__ import (
 )
 
 from .text_functions import *
-from .CERAD_functions import * 
-from .image_functions import * 
-from .build_web_research import * 
+from .CERAD_functions import *
+from .image_functions import *

@@ -51,7 +51,7 @@ The `CatLLM` package processes diverse data sources—including user-provided te
 
 The package extends this framework through specialized capabilities:
 
--   **Web Data Collection**: Retrieves and structures unstructured content from web sources, transforming raw online data into standardized datasets suitable for analysis alongside survey and qualitative data.
+-   **Web Data Collection**: Available as part of the CatLLM ecosystem through the companion package `llm-web-research` (`pip install llm-web-research`). This package retrieves and structures unstructured content from web sources, transforming raw online data into standardized datasets suitable for analysis alongside survey and qualitative data. Unlike traditional web scraping approaches, `llm-web-research` prioritizes precision over quantity, using a multi-step verification pipeline to reduce false positives and flag ambiguous queries rather than returning potentially incorrect answers.
 
 -   **Binary Image Classification**: Applies classification frameworks to vision models, determining the presence or absence of specific categories within images for systematic visual content analysis.
 
