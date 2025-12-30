@@ -134,6 +134,29 @@ def _encode_bytes_to_base64(data_bytes):
     return base64.b64encode(data_bytes).decode("utf-8")
 
 
+def _extract_page_text(pdf_path, page_index):
+    """
+    Extract text content from a single PDF page.
+    Used for text-based processing mode.
+    """
+    import fitz  # PyMuPDF
+
+    try:
+        doc = fitz.open(pdf_path)
+        page = doc[page_index]
+        text = page.get_text("text")
+        doc.close()
+
+        if not text.strip():
+            return None, False, "Page contains no extractable text"
+
+        return text.strip(), True, None
+
+    except Exception as e:
+        print(f"Error extracting text from page {page_index} of {pdf_path}: {e}")
+        return None, False, str(e)
+
+
 # PDF multi-class (binary) function
 def pdf_multi_class(
     pdf_description,
@@ -141,6 +164,7 @@ def pdf_multi_class(
     categories,
     api_key,
     user_model="gpt-4o",
+    mode="image",
     creativity=None,
     safety=False,
     chain_of_verification=False,
@@ -170,6 +194,11 @@ def pdf_multi_class(
         categories (list): List of category names for classification.
         api_key (str): API key for the model provider.
         user_model (str): Model name to use. Default "gpt-4o".
+        mode (str): How to process PDF pages. Options:
+            - "image": Render pages as images (best for visual elements like charts/tables)
+            - "text": Extract text only (best for text-heavy documents, faster/cheaper)
+            - "both": Send both text and image (most comprehensive but slower/costlier)
+            Default is "image".
         creativity (float): Temperature setting. None uses model default.
         safety (bool): If True, saves progress after each page.
         chain_of_verification (bool): Enable Chain of Verification for accuracy.
@@ -193,11 +222,21 @@ def pdf_multi_class(
 
     Example:
         >>> import catllm as cat
+        >>> # Image mode (default) - good for documents with charts/tables
         >>> results = cat.pdf_multi_class(
         ...     pdf_description="financial reports",
         ...     pdf_input="/path/to/pdfs/",
         ...     categories=["has_chart", "has_table", "is_summary"],
-        ...     api_key="your-api-key"
+        ...     api_key="your-api-key",
+        ...     mode="image"
+        ... )
+        >>> # Text mode - good for text-heavy documents, faster and cheaper
+        >>> results = cat.pdf_multi_class(
+        ...     pdf_description="research papers",
+        ...     pdf_input="/path/to/pdfs/",
+        ...     categories=["discusses_methodology", "has_results"],
+        ...     api_key="your-api-key",
+        ...     mode="text"
         ... )
     """
     import os
@@ -210,11 +249,17 @@ def pdf_multi_class(
     if save_directory is not None and not os.path.isdir(save_directory):
         raise FileNotFoundError(f"Directory {save_directory} doesn't exist")
 
+    # Validate mode parameter
+    mode = mode.lower()
+    if mode not in {"image", "text", "both"}:
+        raise ValueError(f"mode must be 'image', 'text', or 'both', got: {mode}")
+
     model_source = _detect_model_source(user_model, model_source)
 
-    # Providers with native PDF support
+    # Providers with native PDF support (only used in image/both modes)
     native_pdf_providers = {"anthropic", "google"}
-    needs_image_conversion = model_source not in native_pdf_providers
+
+    print(f"Processing mode: {mode}")
 
     # Load PDF files
     pdf_files = _load_pdf_files(pdf_input)
@@ -281,12 +326,20 @@ Provide a brief analysis of what content cues to look for when categorizing such
     link1 = []
     extracted_jsons = []
 
-    def _build_base_prompt_text():
-        """Build the base text portion of the prompt."""
+    def _build_base_prompt_text(page_text=None):
+        """Build the base text portion of the prompt based on mode."""
+        # Determine instruction based on mode
+        if mode == "text":
+            examine_instruction = "Examine the following text extracted from a PDF page"
+        elif mode == "both":
+            examine_instruction = "Examine the attached PDF page image AND the extracted text below"
+        else:  # image mode
+            examine_instruction = "Examine the attached PDF page"
+
         if chain_of_thought:
             base_text = (
                 f"You are a document-tagging assistant.\n"
-                f"Task ► Examine the attached PDF page and decide, **for each category below**, "
+                f"Task ► {examine_instruction} and decide, **for each category below**, "
                 f"whether it is PRESENT (1) or NOT PRESENT (0).\n\n"
                 f"Document page is expected to contain: {pdf_description}\n\n"
                 f"Categories:\n{categories_str}\n\n"
@@ -304,7 +357,7 @@ Provide a brief analysis of what content cues to look for when categorizing such
         else:
             base_text = (
                 f"You are a document-tagging assistant.\n"
-                f"Task ► Examine the attached PDF page and decide, **for each category below**, "
+                f"Task ► {examine_instruction} and decide, **for each category below**, "
                 f"whether it is PRESENT (1) or NOT PRESENT (0).\n\n"
                 f"Document page is expected to contain: {pdf_description}\n\n"
                 f"Categories:\n{categories_str}\n\n"
@@ -315,6 +368,10 @@ Provide a brief analysis of what content cues to look for when categorizing such
                 f"Example (three categories):\n"
                 f"{example_JSON}"
             )
+
+        # Add extracted text for text and both modes
+        if page_text and mode in ("text", "both"):
+            base_text += f"\n\n--- EXTRACTED TEXT FROM PAGE ---\n{page_text}\n--- END OF EXTRACTED TEXT ---"
 
         if context_prompt:
             context = (
@@ -667,16 +724,247 @@ Provide the final categorization in the same JSON format:"""
 
         return """{"1":"e"}""", "Max retries exceeded"
 
+    def _build_prompt_text_only(base_text):
+        """Build text-only prompt for providers (no image attachment)."""
+        return [{"type": "text", "text": base_text}]
+
+    def _call_openai_text_only(prompt_text, step2_prompt, step3_prompt, step4_prompt):
+        """Handle OpenAI-compatible API calls with text-only prompt."""
+        from openai import OpenAI, BadRequestError
+
+        base_url = (
+            "https://api.perplexity.ai" if model_source == "perplexity"
+            else "https://router.huggingface.co/v1" if model_source == "huggingface"
+            else "https://api.x.ai/v1" if model_source == "xai"
+            else None
+        )
+        client = OpenAI(api_key=api_key, base_url=base_url)
+
+        max_retries = 8
+        delay = 2
+
+        for attempt in range(max_retries):
+            try:
+                messages = []
+                if step_back_prompt and step_back_added:
+                    messages.append({'role': 'user', 'content': stepback})
+                    messages.append({'role': 'assistant', 'content': stepback_insight})
+                messages.append({'role': 'user', 'content': prompt_text})
+
+                response_obj = client.chat.completions.create(
+                    model=user_model,
+                    messages=messages,
+                    **({"temperature": creativity} if creativity is not None else {})
+                )
+                reply = response_obj.choices[0].message.content
+                return reply, None
+
+            except BadRequestError as e:
+                if "json_validate_failed" in str(e) and attempt < max_retries - 1:
+                    wait_time = delay * (2 ** attempt)
+                    print(f"⚠️ JSON validation failed. Attempt {attempt + 1}/{max_retries}")
+                    print(f"Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    raise ValueError(f"❌ Model '{user_model}' on {model_source} not found.") from e
+
+            except Exception as e:
+                if ("500" in str(e) or "504" in str(e)) and attempt < max_retries - 1:
+                    wait_time = delay * (2 ** attempt)
+                    print(f"Attempt {attempt + 1} failed with error: {e}")
+                    print(f"Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    print(f"❌ Failed after {max_retries} attempts: {e}")
+                    return """{"1":"e"}""", f"Error processing input: {e}"
+
+        return """{"1":"e"}""", "Max retries exceeded"
+
+    def _call_anthropic_text_only(prompt_text, step2_prompt, step3_prompt, step4_prompt):
+        """Handle Anthropic API calls with text-only prompt."""
+        import anthropic
+        client = anthropic.Anthropic(api_key=api_key)
+
+        try:
+            messages = []
+            if step_back_prompt and step_back_added:
+                messages.append({'role': 'user', 'content': stepback})
+                messages.append({'role': 'assistant', 'content': stepback_insight})
+            messages.append({'role': 'user', 'content': prompt_text})
+
+            response_obj = client.messages.create(
+                model=user_model,
+                max_tokens=1024,
+                messages=messages,
+                **({"temperature": creativity} if creativity is not None else {})
+            )
+            reply = response_obj.content[0].text
+            return reply, None
+
+        except anthropic.NotFoundError as e:
+            raise ValueError(f"❌ Model '{user_model}' on {model_source} not found.") from e
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            return """{"1":"e"}""", f"Error processing input: {e}"
+
+    def _call_google_text_only(prompt_text, step2_prompt, step3_prompt, step4_prompt):
+        """Handle Google API calls with text-only prompt."""
+        import requests
+
+        def make_google_request(url, headers, payload, max_retries=8):
+            for attempt in range(max_retries):
+                try:
+                    response = requests.post(url, headers=headers, json=payload)
+                    response.raise_for_status()
+                    return response.json()
+                except requests.exceptions.HTTPError as e:
+                    status_code = e.response.status_code
+                    retryable_errors = [429, 500, 502, 503, 504]
+
+                    if status_code in retryable_errors and attempt < max_retries - 1:
+                        wait_time = 10 * (2 ** attempt) if status_code == 429 else 2 * (2 ** attempt)
+                        error_type = "Rate limited" if status_code == 429 else f"Server error {status_code}"
+                        print(f"⚠️ {error_type}. Attempt {attempt + 1}/{max_retries}")
+                        print(f"Retrying in {wait_time}s...")
+                        time.sleep(wait_time)
+                    else:
+                        raise
+
+        url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
+        headers = {
+            "x-goog-api-key": api_key,
+            "Content-Type": "application/json"
+        }
+
+        parts = []
+        if step_back_prompt and step_back_added:
+            parts.append({"text": f"Context from step-back analysis:\n{stepback_insight}\n\n"})
+        parts.append({"text": prompt_text})
+
+        payload = {
+            "contents": [{"parts": parts}],
+            "generationConfig": {
+                "responseMimeType": "application/json",
+                **({"temperature": creativity} if creativity is not None else {}),
+                **({"thinkingConfig": {"thinkingBudget": thinking_budget}} if thinking_budget else {})
+            }
+        }
+
+        try:
+            result = make_google_request(url, headers, payload)
+
+            if "candidates" in result and result["candidates"]:
+                reply = result["candidates"][0]["content"]["parts"][0]["text"]
+            else:
+                return "No response generated", None
+
+            return reply, None
+
+        except requests.exceptions.HTTPError as e:
+            if e.response.status_code == 404:
+                raise ValueError(f"❌ Model '{user_model}' not found.") from e
+            elif e.response.status_code in [401, 403]:
+                raise ValueError(f"❌ Authentication failed.") from e
+            else:
+                print(f"HTTP error occurred: {e}")
+                return """{"1":"e"}""", f"Error processing input: {e}"
+        except Exception as e:
+            print(f"An error occurred: {e}")
+            return """{"1":"e"}""", f"Error processing input: {e}"
+
+    def _call_mistral_text_only(prompt_text, step2_prompt, step3_prompt, step4_prompt):
+        """Handle Mistral API calls with text-only prompt."""
+        from mistralai import Mistral
+        from mistralai.models import SDKError, MistralError
+
+        client = Mistral(api_key=api_key)
+        max_retries = 8
+        delay = 2
+
+        for attempt in range(max_retries):
+            try:
+                messages = []
+                if step_back_prompt and step_back_added:
+                    messages.append({'role': 'user', 'content': stepback})
+                    messages.append({'role': 'assistant', 'content': stepback_insight})
+                messages.append({'role': 'user', 'content': prompt_text})
+
+                response = client.chat.complete(
+                    model=user_model,
+                    messages=messages,
+                    **({"temperature": creativity} if creativity is not None else {})
+                )
+                reply = response.choices[0].message.content
+                return reply, None
+
+            except SDKError as e:
+                error_str = str(e).lower()
+
+                if "invalid_model" in error_str or "invalid model" in error_str:
+                    raise ValueError(f"❌ Model '{user_model}' not found.") from e
+                elif "401" in str(e) or "unauthorized" in error_str:
+                    raise ValueError(f"❌ Authentication failed.") from e
+
+                retryable_errors = ["500", "502", "503", "504"]
+                if any(code in str(e) for code in retryable_errors) and attempt < max_retries - 1:
+                    wait_time = delay * (2 ** attempt)
+                    print(f"⚠️ Server error detected. Attempt {attempt + 1}/{max_retries}")
+                    print(f"Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    print(f"❌ Failed after {max_retries} attempts: {e}")
+                    return """{"1":"e"}""", f"Error processing input: {e}"
+
+            except MistralError as e:
+                if hasattr(e, 'status_code') and e.status_code in [500, 502, 503, 504] and attempt < max_retries - 1:
+                    wait_time = delay * (2 ** attempt)
+                    print(f"⚠️ Server error {e.status_code}. Attempt {attempt + 1}/{max_retries}")
+                    print(f"Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    print(f"❌ Failed after {max_retries} attempts: {e}")
+                    return """{"1":"e"}""", f"Error processing input: {e}"
+
+            except Exception as e:
+                print(f"❌ Unexpected error: {e}")
+                return """{"1":"e"}""", f"Error processing input: {e}"
+
+        return """{"1":"e"}""", "Max retries exceeded"
+
     def _process_single_page(pdf_path, page_index, page_label):
         """Process a single PDF page and return (reply, error_msg)."""
 
-        base_prompt_text = _build_base_prompt_text()
+        # Extract text if needed for text or both modes
+        page_text = None
+        if mode in ("text", "both"):
+            page_text, text_valid, text_error = _extract_page_text(pdf_path, page_index)
+            if mode == "text" and not text_valid:
+                # Text mode requires text - fail if extraction failed
+                return None, f"Failed to extract text: {text_error}"
+            # For "both" mode, we continue even if text extraction fails
+
+        # Build prompt with text if available
+        base_prompt_text = _build_base_prompt_text(page_text)
 
         if chain_of_verification:
             step2_prompt, step3_prompt, step4_prompt = _build_cove_prompts(base_prompt_text)
         else:
             step2_prompt = step3_prompt = step4_prompt = None
 
+        # TEXT-ONLY MODE: No image/PDF attachment needed
+        if mode == "text":
+            if model_source == "anthropic":
+                return _call_anthropic_text_only(base_prompt_text, step2_prompt, step3_prompt, step4_prompt)
+            elif model_source == "google":
+                return _call_google_text_only(base_prompt_text, step2_prompt, step3_prompt, step4_prompt)
+            elif model_source in ["openai", "perplexity", "huggingface", "xai"]:
+                return _call_openai_text_only(base_prompt_text, step2_prompt, step3_prompt, step4_prompt)
+            elif model_source == "mistral":
+                return _call_mistral_text_only(base_prompt_text, step2_prompt, step3_prompt, step4_prompt)
+            else:
+                raise ValueError(f"Unknown source! Choose from OpenAI, Anthropic, Perplexity, Google, xAI, Huggingface, or Mistral")
+
+        # IMAGE or BOTH MODE: Include image/PDF attachment
         # Handle providers with native PDF support
         if model_source == "anthropic":
             pdf_bytes, is_valid = _extract_page_as_pdf_bytes(pdf_path, page_index)

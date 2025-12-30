@@ -19,6 +19,8 @@ CatLLM: A Reproducible LLM Pipeline for Coding Open-Ended Survey Responses
   - [explore_corpus()](#explore_corpus)
   - [explore_common_categories()](#explore_common_categories)
   - [multi_class()](#multi_class)
+  - [image_multi_class()](#image_multi_class)
+  - [pdf_multi_class()](#pdf_multi_class)
   - [image_score()](#image_score_drawing)
   - [image_features()](#image_features)
   - [cerad_drawn_score()](#cerad_drawn_score)
@@ -82,17 +84,16 @@ Whether you're working with messy text responses or analyzing visual content, Ca
 - **Perplexity**: Sonnar Large, Sonnar Small, etc.
 - **Mistral**: Mistral Large, Mistral Small, etc.
 
-**Fully Tested (Beta):**
-- ✅ OpenAI (GPT-4, GPT-4o, GPT-3.5-turbo, etc.)
-- ✅ Anthropic (Claude 3.5 Sonnet, Haiku)
+**Fully Tested:**
+- ✅ OpenAI (GPT-4, GPT-4o, GPT-5, etc.)
+- ✅ Anthropic (Claude Sonnet 4, Claude 3.5 Sonnet, Haiku)
 - ✅ Perplexity (Sonar models)
 - ✅ Google Gemini - Free tier has severe rate limits (5 RPM). Requires Google AI Studio billing account for large-scale use.
+- ✅ Huggingface - Access to Qwen, Llama 4, DeepSeek, and thousands of user-trained models for specific tasks. API routing can occasionally be unstable.
+- ✅ xAI (Grok models)
+- ✅ Mistral (Mistral Large, Pixtral, etc.)
 
-**Supported but Limited:**
-- 
-- ⚠️ Huggingface - API routing can be unstable
-
-**Note:** For beta testing, I recommend starting with OpenAI or Anthropic.
+**Note:** For best results, I recommend starting with OpenAI or Anthropic.
 
 
 ## API Reference
@@ -276,6 +277,96 @@ image_categories = cat.image_multi_class(
     chain_of_thought=True,
     safety=True,
     api_key="OPENAI_API_KEY")
+```
+
+### `pdf_multi_class()`
+
+Performs multi-label classification of PDF pages into user-defined categories, returning structured results with optional CSV export. Each page of each PDF is processed separately.
+
+**Installation:**
+```console
+pip install cat-llm[pdf]
+```
+Requires PyMuPDF for PDF processing.
+
+**Methodology:**
+Processes each PDF page individually, assigning one or more categories from the provided list. Pages are labeled as `{filename}_p{page_number}` (e.g., "report_p1", "report_p2"). Supports three processing modes for different document types and includes advanced prompting techniques for improved accuracy.
+
+**Parameters:**
+- `pdf_description` (str): A description of what the PDF documents contain
+- `pdf_input` (str or list): Directory path containing PDFs, or list of PDF file paths
+- `categories` (list): List of predefined categories for classification
+- `api_key` (str): API key for the LLM service
+- `user_model` (str, default="gpt-4o"): Specific model to use
+- `mode` (str, default="image"): How to process PDF pages:
+  - `"image"`: Render pages as images (best for visual elements like charts/tables)
+  - `"text"`: Extract text only (faster/cheaper for text-heavy documents)
+  - `"both"`: Send both image and extracted text (most comprehensive)
+- `creativity` (float, optional): Temperature/randomness setting (0.0-1.0)
+- `safety` (bool, default=False): Enable safety checks and save results at each API call step
+- `chain_of_verification` (bool, default=False): Enable Chain-of-Verification prompting - re-examines pages to verify categorization accuracy. **⚠️ Warning: CoVe consumes significantly more tokens (3-5x).**
+- `chain_of_thought` (bool, default=True): Enable Chain-of-Thought prompting for step-by-step analysis
+- `step_back_prompt` (bool, default=False): Enable step-back prompting to analyze key content patterns before classification
+- `context_prompt` (bool, default=False): Add expert document analyst role and behavioral guidelines to the prompt
+- `thinking_budget` (int, default=0): Thinking budget for Google models with extended reasoning capabilities
+- `example1` through `example6` (str, optional): Few-shot learning examples for guiding categorization
+- `filename` (str, optional): Filename for CSV output (triggers save when provided)
+- `save_directory` (str, optional): Directory path to save the CSV file
+- `model_source` (str, default="auto"): Model provider ("auto", "OpenAI", "Anthropic", "Google", "Mistral", "Perplexity", "Huggingface", "xAI")
+
+**Native PDF Support:**
+- ✅ Anthropic and Google: Send PDFs directly without conversion
+- 🖼️ Other providers: Automatically convert PDF pages to images
+
+**Returns:**
+- `pandas.DataFrame`: DataFrame with classification results including:
+  - `pdf_input`: Page label (e.g., "report_p1")
+  - `model_response`: Raw model response
+  - `category_1`, `category_2`, ...: Binary category assignments (1 = present, 0 = absent)
+  - `processing_status`: "success" or "error"
+
+**Example:**
+
+```python
+import catllm as cat
+
+# Image mode (default) - best for documents with charts, tables, figures
+page_categories = cat.pdf_multi_class(
+    pdf_description="Financial quarterly reports",
+    pdf_input="/path/to/reports/",  # or list of PDF paths
+    categories=[
+        "Contains a financial table",
+        "Contains a chart or graph",
+        "Is a summary or executive page",
+        "Contains footnotes or disclaimers"
+    ],
+    user_model="gpt-4o",
+    mode="image",
+    creativity=0,
+    chain_of_thought=True,
+    safety=True,
+    filename="report_analysis.csv",
+    api_key="OPENAI_API_KEY"
+)
+
+# Text mode - faster/cheaper for text-heavy documents
+text_categories = cat.pdf_multi_class(
+    pdf_description="Research paper pages",
+    pdf_input=["paper1.pdf", "paper2.pdf"],
+    categories=["Discusses methodology", "Contains results"],
+    mode="text",
+    api_key="OPENAI_API_KEY"
+)
+
+# Both mode - most comprehensive analysis
+comprehensive = cat.pdf_multi_class(
+    pdf_description="Mixed content documents",
+    pdf_input="/path/to/docs/",
+    categories=["Has data visualization", "Contains key findings"],
+    mode="both",
+    api_key="ANTHROPIC_API_KEY",
+    user_model="claude-sonnet-4-20250514"
+)
 ```
 
 ### `image_score_drawing()`
