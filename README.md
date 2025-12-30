@@ -21,7 +21,7 @@ CatLLM: A Reproducible LLM Pipeline for Coding Open-Ended Survey Responses
   - [multi_class()](#multi_class)
   - [image_multi_class()](#image_multi_class)
   - [pdf_multi_class()](#pdf_multi_class)
-  - [image_score()](#image_score_drawing)
+  - [image_score_drawing()](#image_score_drawing)
   - [image_features()](#image_features)
   - [cerad_drawn_score()](#cerad_drawn_score)
 - [Related Projects](#related-projects)
@@ -79,10 +79,13 @@ Whether you're working with messy text responses or analyzing visual content, Ca
 
 ## Supported Models
 
-- **OpenAI**: GPT-4o, GPT-4, GPT-3.5-turbo, etc.
-- **Anthropic**: Claude Sonnet 3.7, Claude Haiku, etc.
-- **Perplexity**: Sonnar Large, Sonnar Small, etc.
-- **Mistral**: Mistral Large, Mistral Small, etc.
+- **OpenAI**: GPT-4o, GPT-4, GPT-5, etc.
+- **Anthropic**: Claude Sonnet 4, Claude 3.5 Sonnet, Claude Haiku, etc.
+- **Google**: Gemini 2.5 Flash, Gemini 2.5 Pro, etc.
+- **Huggingface**: Qwen, Llama 4, DeepSeek, and thousands of community models
+- **xAI**: Grok models
+- **Mistral**: Mistral Large, Pixtral, etc.
+- **Perplexity**: Sonar Large, Sonar Small, etc.
 
 **Fully Tested:**
 - ✅ OpenAI (GPT-4, GPT-4o, GPT-5, etc.)
@@ -299,9 +302,9 @@ Processes each PDF page individually, assigning one or more categories from the 
 - `api_key` (str): API key for the LLM service
 - `user_model` (str, default="gpt-4o"): Specific model to use
 - `mode` (str, default="image"): How to process PDF pages:
-  - `"image"`: Render pages as images (best for visual elements like charts/tables)
-  - `"text"`: Extract text only (faster/cheaper for text-heavy documents)
-  - `"both"`: Send both image and extracted text (most comprehensive)
+  - `"image"`: Render pages as images. Best for documents with visual elements (charts, tables, figures, layouts). Uses more tokens but captures visual structure.
+  - `"text"`: Extract text only. Faster and cheaper for text-heavy documents like research papers or reports. Won't detect visual elements but processes text more accurately.
+  - `"both"`: Send both image and extracted text. Most comprehensive analysis but slowest and most expensive. Use when documents have both important visual elements and dense text.
 - `creativity` (float, optional): Temperature/randomness setting (0.0-1.0)
 - `safety` (bool, default=False): Enable safety checks and save results at each API call step
 - `chain_of_verification` (bool, default=False): Enable Chain-of-Verification prompting - re-examines pages to verify categorization accuracy. **⚠️ Warning: CoVe consumes significantly more tokens (3-5x).**
