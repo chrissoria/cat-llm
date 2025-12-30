@@ -33,6 +33,9 @@ dependencies = [
   "perplexityai"
 ]
 
+[project.optional-dependencies]
+pdf = ["PyMuPDF>=1.23.0"]
+
 [project.urls]
 Documentation = "https://github.com/chrissoria/cat-llm#readme"
 Issues = "https://github.com/chrissoria/cat-llm/issues"

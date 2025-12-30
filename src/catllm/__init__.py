@@ -14,3 +14,4 @@ from .__about__ import (
 from .text_functions import *
 from .CERAD_functions import *
 from .image_functions import *
+from .pdf_functions import *
