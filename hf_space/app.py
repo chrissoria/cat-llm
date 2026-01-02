@@ -55,6 +55,15 @@ def get_model_source(model):
     return "huggingface"
 
 
+def toggle_input_type(input_type):
+    """Show/hide input groups based on selected type."""
+    return (
+        gr.update(visible=(input_type == "Spreadsheet")),  # spreadsheet_group
+        gr.update(visible=(input_type == "Image")),        # image_group
+        gr.update(visible=(input_type == "Spreadsheet")),  # column_row (for spreadsheet)
+    )
+
+
 def load_columns(file):
     if file is None:
         return gr.update(choices=[], value=None), "Please upload a file first"
@@ -76,6 +85,7 @@ def load_columns(file):
 
 
 def classify_data(input_type, spreadsheet_file, spreadsheet_column,
+                  image_files_input, image_desc,
                   cat1, cat2, cat3, cat4, cat5, cat6, cat7, cat8, cat9, cat10,
                   model, model_source_input, api_key_input):
     """Main classification function."""
@@ -153,6 +163,34 @@ def classify_data(input_type, spreadsheet_file, spreadsheet_column,
 
             return result, download_path, f"**Success!** Classified {len(input_data)} items"
 
+        elif input_type == "Image":
+            if not image_files_input:
+                return None, None, "**Error:** Please upload at least one image"
+            if not image_desc:
+                return None, None, "**Error:** Please provide an image description"
+
+            # Get file paths from uploaded files
+            image_paths = []
+            for f in image_files_input:
+                file_path = f if isinstance(f, str) else f.name
+                image_paths.append(file_path)
+
+            result = catllm.image_multi_class(
+                image_description=image_desc,
+                image_input=image_paths,
+                categories=categories,
+                api_key=actual_api_key,
+                user_model=actual_model,
+                model_source=model_source
+            )
+
+            # Save for download
+            with tempfile.NamedTemporaryFile(mode='w', suffix='_classified.csv', delete=False) as f:
+                result.to_csv(f.name, index=False)
+                download_path = f.name
+
+            return result, download_path, f"**Success!** Classified {len(image_paths)} images"
+
         else:
             return None, None, f"**Error:** {input_type} not yet supported in this version"
 
@@ -184,12 +222,27 @@ with gr.Blocks(title="catllm Classifier") as demo:
                 label="Input Type"
             )
 
-            spreadsheet_file = gr.File(
-                label="Upload CSV or Excel File",
-                file_types=[".csv", ".xlsx", ".xls"]
-            )
+            # Spreadsheet inputs
+            with gr.Group() as spreadsheet_group:
+                spreadsheet_file = gr.File(
+                    label="Upload CSV or Excel File",
+                    file_types=[".csv", ".xlsx", ".xls"]
+                )
 
-            with gr.Row():
+            # Image inputs
+            with gr.Group(visible=False) as image_group:
+                image_files = gr.File(
+                    label="Upload Images",
+                    file_types=["image"],
+                    file_count="multiple"
+                )
+                image_description = gr.Textbox(
+                    label="Image Description",
+                    placeholder="e.g., 'Photos of products' or 'Medical X-ray images'",
+                    info="Describe what the images show to help the model understand context"
+                )
+
+            with gr.Row(visible=True) as column_row:
                 spreadsheet_column = gr.Dropdown(
                     label="Column to Classify",
                     choices=[],
@@ -260,6 +313,12 @@ with gr.Blocks(title="catllm Classifier") as demo:
         outputs=[api_key_status]
     )
 
+    input_type.change(
+        fn=toggle_input_type,
+        inputs=[input_type],
+        outputs=[spreadsheet_group, image_group, column_row]
+    )
+
     load_cols_btn.click(
         fn=load_columns,
         inputs=[spreadsheet_file],
@@ -274,7 +333,7 @@ with gr.Blocks(title="catllm Classifier") as demo:
 
     classify_btn.click(
         fn=classify_data,
-        inputs=[input_type, spreadsheet_file, spreadsheet_column] + category_inputs + [model, model_source, api_key],
+        inputs=[input_type, spreadsheet_file, spreadsheet_column, image_files, image_description] + category_inputs + [model, model_source, api_key],
         outputs=[results, download_file, status]
     )
 
