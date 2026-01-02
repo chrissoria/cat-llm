@@ -14,4 +14,5 @@ examples/test_cerad_local.ipynb
 examples/test_image_multi_class_local.ipynb
 examples/test_pdf_multi_class_local.ipynb
 examples/test_pdf_multi_class_local.py
+examples/test_classify_local.py
 examples/test_output/

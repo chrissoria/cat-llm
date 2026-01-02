@@ -16,6 +16,7 @@ CatLLM: A Reproducible LLM Pipeline for Coding Open-Ended Survey Responses
 - [Configuration](#configuration)
 - [Supported Models](#supported-models)
 - [API Reference](#api-reference)
+  - [classify()](#classify) - Unified function for text, image, and PDF
   - [explore_corpus()](#explore_corpus)
   - [explore_common_categories()](#explore_common_categories)
   - [multi_class()](#multi_class)
@@ -53,29 +54,19 @@ Whether you're working with messy text responses or analyzing visual content, Ca
 
 ## Configuration
 
-### Get Your OpenAI API Key
+### Get Your API Key
 
-1. **Create an OpenAI Developer Account**:
-   - Go to [platform.openai.com](https://platform.openai.com) (separate from regular ChatGPT)
-   - Sign up with email, Google, Microsoft, or Apple
+Get an API key from your preferred provider:
 
-2. **Generate an API Key**:
-   - Log into your account and click your name in the top right corner
-   - Click "View API keys" or navigate to the "API keys" section
-   - Click "Create new secret key"
-   - Give your key a descriptive name
-   - Set permissions (choose "All" for full access)
+- **OpenAI**: [platform.openai.com](https://platform.openai.com)
+- **Anthropic**: [console.anthropic.com](https://console.anthropic.com)
+- **Google**: [aistudio.google.com](https://aistudio.google.com)
+- **Huggingface**: [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens)
+- **xAI**: [console.x.ai](https://console.x.ai)
+- **Mistral**: [console.mistral.ai](https://console.mistral.ai)
+- **Perplexity**: [perplexity.ai/settings/api](https://www.perplexity.ai/settings/api)
 
-3. **Add Payment Details**:
-   - Add a payment method to your OpenAI account
-   - Purchase credits (start with $5 - it lasts a long time for most research use)
-   - **Important**: Your API key won't work without credits
-
-4. **Save Your Key Securely**:
-   - Copy the key immediately (you won't be able to see it again)
-   - Store it safely and never share it publicly
-
-5. Copy and paste your key into catllm in the api_key parameter
+Most providers require adding a payment method and purchasing credits. Store your key securely and never share it publicly.
 
 ## Supported Models
 
@@ -100,6 +91,63 @@ Whether you're working with messy text responses or analyzing visual content, Ca
 
 
 ## API Reference
+
+### `classify()`
+
+Unified classification function for text, image, and PDF inputs. This is the recommended entry point for most users—it dispatches to the appropriate specialized function based on the `input_type` parameter.
+
+**Parameters:**
+- `input_data`: The data to classify (text list, image paths, or PDF paths)
+- `categories` (list): List of category names for classification
+- `api_key` (str): API key for the LLM service
+- `input_type` (str, default="text"): Type of input - "text", "image", or "pdf"
+- `description` (str): Description of the input data
+- `user_model` (str, default="gpt-4o"): Model to use
+- `mode` (str, default="image"): PDF processing mode - "image", "text", or "both" (only used when input_type="pdf")
+- `creativity` (float, optional): Temperature setting (0.0-1.0)
+- `safety` (bool, default=False): Save progress after each item
+- `chain_of_thought` (bool, default=True): Enable step-by-step reasoning
+- `filename` (str, optional): Output filename for CSV
+- `save_directory` (str, optional): Directory to save results
+- `model_source` (str, default="auto"): Provider - "auto", "openai", "anthropic", "google", "mistral", "perplexity", "huggingface", "xai"
+
+**Note:** For PDF classification, each page is processed separately and labeled as `{filename}_p{page_number}` (e.g., "report_p1", "report_p2").
+
+**Returns:**
+- `pandas.DataFrame`: Classification results with category columns
+
+**Examples:**
+
+```python
+import catllm as cat
+
+# Text classification (default)
+results = cat.classify(
+    input_data=df['responses'],
+    categories=["Positive feedback", "Negative feedback", "Neutral"],
+    description="Customer satisfaction survey",
+    api_key=api_key
+)
+
+# Image classification
+results = cat.classify(
+    input_data="/path/to/images/",
+    categories=["Contains person", "Outdoor scene", "Has text"],
+    description="Product photos",
+    input_type="image",
+    api_key=api_key
+)
+
+# PDF classification (processes each page separately)
+results = cat.classify(
+    input_data="/path/to/reports/",
+    categories=["Contains table", "Has chart", "Is summary page"],
+    description="Financial reports",
+    input_type="pdf",
+    mode="both",  # Use both image and extracted text
+    api_key=api_key
+)
+```
 
 ### `explore_corpus()`
 

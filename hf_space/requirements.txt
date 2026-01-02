@@ -1,0 +1,8 @@
+cat-llm[pdf]>=0.1.01
+gradio==5.6.0
+pydantic==2.10.6
+huggingface_hub<0.27.0
+pandas
+openpyxl
+requests
+regex
