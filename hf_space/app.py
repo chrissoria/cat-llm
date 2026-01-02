@@ -55,15 +55,6 @@ def get_model_source(model):
     return "huggingface"
 
 
-def toggle_input_type(input_type):
-    """Show/hide input groups based on selected type."""
-    return (
-        gr.update(visible=(input_type == "Spreadsheet")),  # spreadsheet_group
-        gr.update(visible=(input_type == "Image")),        # image_group
-        gr.update(visible=(input_type == "Spreadsheet")),  # column_row (for spreadsheet)
-    )
-
-
 def load_columns(file):
     if file is None:
         return gr.update(choices=[], value=None), "Please upload a file first"
@@ -84,8 +75,7 @@ def load_columns(file):
         return gr.update(choices=[], value=None), f"**Error:** {str(e)}"
 
 
-def classify_data(input_type, spreadsheet_file, spreadsheet_column,
-                  image_files_input, image_desc,
+def classify_data(spreadsheet_file, spreadsheet_column,
                   cat1, cat2, cat3, cat4, cat5, cat6, cat7, cat8, cat9, cat10,
                   model, model_source_input, api_key_input):
     """Main classification function."""
@@ -130,69 +120,36 @@ def classify_data(input_type, spreadsheet_file, spreadsheet_column,
         model_source = model_source_input
 
     try:
-        if input_type == "Spreadsheet":
-            if not spreadsheet_file:
-                return None, None, "**Error:** Please upload a spreadsheet"
-            if not spreadsheet_column:
-                return None, None, "**Error:** Please select a column to classify"
+        if not spreadsheet_file:
+            return None, None, "**Error:** Please upload a file"
+        if not spreadsheet_column:
+            return None, None, "**Error:** Please select a column to classify"
 
-            file_path = spreadsheet_file if isinstance(spreadsheet_file, str) else spreadsheet_file.name
-            if file_path.endswith('.csv'):
-                df = pd.read_csv(file_path)
-            else:
-                df = pd.read_excel(file_path)
-
-            if spreadsheet_column not in df.columns:
-                return None, None, f"**Error:** Column '{spreadsheet_column}' not found"
-
-            input_data = df[spreadsheet_column].tolist()
-
-            result = catllm.multi_class(
-                survey_input=input_data,
-                categories=categories,
-                api_key=actual_api_key,
-                user_model=actual_model,
-                model_source=model_source
-            )
-
-            # Return the result directly from catllm (already properly formatted)
-            # Save for download
-            with tempfile.NamedTemporaryFile(mode='w', suffix='_classified.csv', delete=False) as f:
-                result.to_csv(f.name, index=False)
-                download_path = f.name
-
-            return result, download_path, f"**Success!** Classified {len(input_data)} items"
-
-        elif input_type == "Image":
-            if not image_files_input:
-                return None, None, "**Error:** Please upload at least one image"
-            if not image_desc:
-                return None, None, "**Error:** Please provide an image description"
-
-            # Get file paths from uploaded files
-            image_paths = []
-            for f in image_files_input:
-                file_path = f if isinstance(f, str) else f.name
-                image_paths.append(file_path)
-
-            result = catllm.image_multi_class(
-                image_description=image_desc,
-                image_input=image_paths,
-                categories=categories,
-                api_key=actual_api_key,
-                user_model=actual_model,
-                model_source=model_source
-            )
-
-            # Save for download
-            with tempfile.NamedTemporaryFile(mode='w', suffix='_classified.csv', delete=False) as f:
-                result.to_csv(f.name, index=False)
-                download_path = f.name
-
-            return result, download_path, f"**Success!** Classified {len(image_paths)} images"
-
+        file_path = spreadsheet_file if isinstance(spreadsheet_file, str) else spreadsheet_file.name
+        if file_path.endswith('.csv'):
+            df = pd.read_csv(file_path)
         else:
-            return None, None, f"**Error:** {input_type} not yet supported in this version"
+            df = pd.read_excel(file_path)
+
+        if spreadsheet_column not in df.columns:
+            return None, None, f"**Error:** Column '{spreadsheet_column}' not found"
+
+        input_data = df[spreadsheet_column].tolist()
+
+        result = catllm.multi_class(
+            survey_input=input_data,
+            categories=categories,
+            api_key=actual_api_key,
+            user_model=actual_model,
+            model_source=model_source
+        )
+
+        # Save for download
+        with tempfile.NamedTemporaryFile(mode='w', suffix='_classified.csv', delete=False) as f:
+            result.to_csv(f.name, index=False)
+            download_path = f.name
+
+        return result, download_path, f"**Success!** Classified {len(input_data)} responses"
 
     except Exception as e:
         return None, None, f"**Error:** {str(e)}"
@@ -208,41 +165,20 @@ def add_category_field(current_count):
     return updates
 
 
-with gr.Blocks(title="catllm Classifier") as demo:
-    gr.Markdown("# catllm Classifier")
-    gr.Markdown("Classify spreadsheets into custom categories using LLMs.")
+with gr.Blocks(title="catllm - Survey Response Classifier") as demo:
+    gr.Markdown("# catllm - Survey Response Classifier")
+    gr.Markdown("Classify survey responses into custom categories using LLMs.")
 
     category_count = gr.State(value=INITIAL_CATEGORIES)
 
     with gr.Row():
         with gr.Column():
-            input_type = gr.Radio(
-                choices=["Spreadsheet", "Image", "PDF"],
-                value="Spreadsheet",
-                label="Input Type"
+            spreadsheet_file = gr.File(
+                label="Upload Survey Data (CSV or Excel)",
+                file_types=[".csv", ".xlsx", ".xls"]
             )
 
-            # Spreadsheet inputs
-            with gr.Group() as spreadsheet_group:
-                spreadsheet_file = gr.File(
-                    label="Upload CSV or Excel File",
-                    file_types=[".csv", ".xlsx", ".xls"]
-                )
-
-            # Image inputs
-            with gr.Group(visible=False) as image_group:
-                image_files = gr.File(
-                    label="Upload Images",
-                    file_types=["image"],
-                    file_count="multiple"
-                )
-                image_description = gr.Textbox(
-                    label="Image Description",
-                    placeholder="e.g., 'Photos of products' or 'Medical X-ray images'",
-                    info="Describe what the images show to help the model understand context"
-                )
-
-            with gr.Row(visible=True) as column_row:
+            with gr.Row():
                 spreadsheet_column = gr.Dropdown(
                     label="Column to Classify",
                     choices=[],
@@ -313,12 +249,6 @@ with gr.Blocks(title="catllm Classifier") as demo:
         outputs=[api_key_status]
     )
 
-    input_type.change(
-        fn=toggle_input_type,
-        inputs=[input_type],
-        outputs=[spreadsheet_group, image_group, column_row]
-    )
-
     load_cols_btn.click(
         fn=load_columns,
         inputs=[spreadsheet_file],
@@ -333,7 +263,7 @@ with gr.Blocks(title="catllm Classifier") as demo:
 
     classify_btn.click(
         fn=classify_data,
-        inputs=[input_type, spreadsheet_file, spreadsheet_column, image_files, image_description] + category_inputs + [model, model_source, api_key],
+        inputs=[spreadsheet_file, spreadsheet_column] + category_inputs + [model, model_source, api_key],
         outputs=[results, download_file, status]
     )
 

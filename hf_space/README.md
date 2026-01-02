@@ -1,5 +1,5 @@
 ---
-title: catllm Classifier
+title: catllm - Survey Response Classifier
 emoji: 🏷️
 colorFrom: blue
 colorTo: purple
@@ -8,22 +8,20 @@ sdk_version: "5.6.0"
 app_file: app.py
 pinned: false
 license: mit
-short_description: Classify text, images, and PDFs using LLMs
+short_description: Classify survey responses using LLMs
 ---
 
-# catllm Classifier
+# catllm - Survey Response Classifier
 
-A web interface for the [catllm](https://github.com/chrissoria/cat-llm) Python package. Classify text, images, and PDF documents into custom categories using various LLM providers.
+A web interface for the [catllm](https://github.com/chrissoria/cat-llm) Python package. Classify survey responses into custom categories using various LLM providers.
 
 ## How to Use
 
-1. **Select Input Type**: Choose between Text, Image, or PDF
-2. **Provide Your Data**: Enter text directly, or upload an image/PDF file
-3. **Define Categories**: Enter comma-separated categories (e.g., "Positive, Negative, Neutral")
-4. **Add Context** (optional): Describe what you're classifying to help the model
-5. **Choose a Model**: Select your preferred LLM
-6. **Enter API Key**: Provide your API key for the selected model's provider
-7. **Click Classify**: View results showing which categories apply
+1. **Upload Your Data**: Upload a CSV or Excel file containing survey responses
+2. **Select Column**: Choose the column containing the text responses to classify
+3. **Define Categories**: Enter your classification categories (e.g., "Positive", "Negative", "Neutral")
+4. **Choose a Model**: Select your preferred LLM (free models available!)
+5. **Click Classify**: View and download results with category assignments
 
 ## Supported Models
 
