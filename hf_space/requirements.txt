@@ -6,3 +6,4 @@ pandas
 openpyxl
 requests
 regex
+reportlab
