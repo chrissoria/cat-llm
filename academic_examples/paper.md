@@ -45,6 +45,8 @@ import catllm as cat
 
 For comprehensive documentation and detailed installation instructions, see <https://github.com/chrissoria/cat-llm>.
 
+A no-code web interface is also available at <https://huggingface.co/spaces/CatLLM/survey-classifier>.
+
 # Features
 
 The `CatLLM` package processes diverse data sources—including user-provided text (open-ended survey responses), image data, and unstructured content retrieved from the web—and returns structured data objects. The package enables users to customize function behavior by incorporating their specific research questions and background theoretical frameworks, allowing the language models to generate more contextually relevant and theoretically grounded outputs tailored to their analytical objectives.
