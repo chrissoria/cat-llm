@@ -443,7 +443,8 @@ def load_columns(file):
         return gr.update(choices=[], value=None), f"**Error:** {str(e)}"
 
 
-def classify_data(spreadsheet_file, spreadsheet_column,
+def classify_data(input_type, spreadsheet_file, spreadsheet_column,
+                  pdf_file, pdf_description, pdf_mode,
                   cat1, cat2, cat3, cat4, cat5, cat6, cat7, cat8, cat9, cat10,
                   model_tier, model, model_source_input, api_key_input):
     """Main classification function with progress updates. Yields status updates then final results."""
@@ -515,53 +516,132 @@ def classify_data(spreadsheet_file, spreadsheet_column,
         model_source = model_source_input
 
     try:
-        if not spreadsheet_file:
-            yield None, None, None, None, "**Error:** Please upload a file"
-            return
-        if not spreadsheet_column:
-            yield None, None, None, None, "**Error:** Please select a column to classify"
-            return
+        # Determine if we're processing text or PDF
+        is_pdf_mode = input_type == "PDF Documents"
 
-        file_path = spreadsheet_file if isinstance(spreadsheet_file, str) else spreadsheet_file.name
-        if file_path.endswith('.csv'):
-            df = pd.read_csv(file_path)
+        if is_pdf_mode:
+            # PDF validation
+            if not pdf_file:
+                yield None, None, None, None, "**Error:** Please upload a PDF file"
+                return
+
+            pdf_path = pdf_file if isinstance(pdf_file, str) else pdf_file.name
+
+            # Map UI mode to function parameter
+            mode_mapping = {
+                "Image (visual documents)": "image",
+                "Text (text-heavy)": "text",
+                "Both (comprehensive)": "both"
+            }
+            actual_pdf_mode = mode_mapping.get(pdf_mode, "image")
+
+            # Progress update
+            yield None, None, None, None, f"⏳ **Loading PDF...** Processing document."
+
+            # Data quality placeholder for PDFs
+            data_quality = {
+                'null_count': 0,
+                'avg_length': 0,
+                'min_length': 0,
+                'max_length': 0,
+                'error_count': 0
+            }
+
+            # Progress update: starting classification
+            yield None, None, None, None, f"🔄 **Classifying PDF pages...** This may take a moment."
+
+            # Capture timing
+            start_time = time.time()
+
+            result = catllm.pdf_multi_class(
+                pdf_description=pdf_description or "document",
+                pdf_input=pdf_path,
+                categories=categories,
+                api_key=actual_api_key,
+                user_model=actual_model,
+                model_source=model_source,
+                mode=actual_pdf_mode
+            )
+
+            processing_time = time.time() - start_time
+            num_items = len(result)
+            original_filename = pdf_path.split("/")[-1]
+            column_name = "PDF Pages"
+
+            # Build prompt template for PDF
+            prompt_template = f'''Categorize this PDF page from "{pdf_description or 'document'}" into the following categories that apply:
+{{categories}}
+
+Let's think step by step:
+1. First, identify the main themes present in this page
+2. Then, match each theme to the relevant categories
+3. Finally, assign 1 to matching categories and 0 to non-matching categories
+
+Provide your work in JSON format where the number belonging to each category is the key and a 1 if the category is present and a 0 if it is not present as key values.'''
+
         else:
-            df = pd.read_excel(file_path)
+            # Text data validation
+            if not spreadsheet_file:
+                yield None, None, None, None, "**Error:** Please upload a file"
+                return
+            if not spreadsheet_column:
+                yield None, None, None, None, "**Error:** Please select a column to classify"
+                return
 
-        if spreadsheet_column not in df.columns:
-            yield None, None, None, None, f"**Error:** Column '{spreadsheet_column}' not found"
-            return
+            file_path = spreadsheet_file if isinstance(spreadsheet_file, str) else spreadsheet_file.name
+            if file_path.endswith('.csv'):
+                df = pd.read_csv(file_path)
+            else:
+                df = pd.read_excel(file_path)
 
-        input_data = df[spreadsheet_column].tolist()
+            if spreadsheet_column not in df.columns:
+                yield None, None, None, None, f"**Error:** Column '{spreadsheet_column}' not found"
+                return
 
-        # Progress update: data loaded
-        yield None, None, None, None, f"⏳ **Loading data...** Found {len(input_data)} responses to classify."
+            input_data = df[spreadsheet_column].tolist()
 
-        # Calculate data quality metrics before classification
-        text_series = df[spreadsheet_column].dropna().astype(str)
-        data_quality = {
-            'null_count': int(df[spreadsheet_column].isna().sum()),
-            'avg_length': round(text_series.str.len().mean(), 1) if len(text_series) > 0 else 0,
-            'min_length': int(text_series.str.len().min()) if len(text_series) > 0 else 0,
-            'max_length': int(text_series.str.len().max()) if len(text_series) > 0 else 0,
-            'error_count': 0  # Will be updated after classification
-        }
+            # Progress update: data loaded
+            yield None, None, None, None, f"⏳ **Loading data...** Found {len(input_data)} responses to classify."
 
-        # Progress update: starting classification
-        yield None, None, None, None, f"🔄 **Classifying {len(input_data)} responses...** This may take a moment."
+            # Calculate data quality metrics before classification
+            text_series = df[spreadsheet_column].dropna().astype(str)
+            data_quality = {
+                'null_count': int(df[spreadsheet_column].isna().sum()),
+                'avg_length': round(text_series.str.len().mean(), 1) if len(text_series) > 0 else 0,
+                'min_length': int(text_series.str.len().min()) if len(text_series) > 0 else 0,
+                'max_length': int(text_series.str.len().max()) if len(text_series) > 0 else 0,
+                'error_count': 0  # Will be updated after classification
+            }
 
-        # Capture timing
-        start_time = time.time()
+            # Progress update: starting classification
+            yield None, None, None, None, f"🔄 **Classifying {len(input_data)} responses...** This may take a moment."
 
-        result = catllm.multi_class(
-            survey_input=input_data,
-            categories=categories,
-            api_key=actual_api_key,
-            user_model=actual_model,
-            model_source=model_source
-        )
+            # Capture timing
+            start_time = time.time()
 
-        processing_time = time.time() - start_time
+            result = catllm.multi_class(
+                survey_input=input_data,
+                categories=categories,
+                api_key=actual_api_key,
+                user_model=actual_model,
+                model_source=model_source
+            )
+
+            processing_time = time.time() - start_time
+            num_items = len(input_data)
+            original_filename = file_path.split("/")[-1]
+            column_name = spreadsheet_column
+
+            # Build prompt template for documentation (chain of thought - default)
+            prompt_template = '''Categorize this survey response "{response}" into the following categories that apply:
+{categories}
+
+Let's think step by step:
+1. First, identify the main themes mentioned in the response
+2. Then, match each theme to the relevant categories
+3. Finally, assign 1 to matching categories and 0 to non-matching categories
+
+Provide your work in JSON format where the number belonging to each category is the key and a 1 if the category is present and a 0 if it is not present as key values.'''
 
         # Update error count from results
         if 'processing_status' in result.columns:
@@ -572,26 +652,12 @@ def classify_data(spreadsheet_file, spreadsheet_column,
             result.to_csv(f.name, index=False)
             csv_path = f.name
 
-        # Get original filename for methodology report
-        original_filename = file_path.split("/")[-1]
-
         # Calculate success rate
         if 'processing_status' in result.columns:
             success_count = (result['processing_status'] == 'success').sum()
             success_rate = (success_count / len(result)) * 100
         else:
             success_rate = 100.0
-
-        # Build prompt template for documentation (chain of thought - default)
-        prompt_template = '''Categorize this survey response "{response}" into the following categories that apply:
-{categories}
-
-Let's think step by step:
-1. First, identify the main themes mentioned in the response
-2. Then, match each theme to the relevant categories
-3. Finally, assign 1 to matching categories and 0 to non-matching categories
-
-Provide your work in JSON format where the number belonging to each category is the key and a 1 if the category is present and a 0 if it is not present as key values.'''
 
         # Get version info
         try:
@@ -604,11 +670,11 @@ Provide your work in JSON format where the number belonging to each category is 
         yield None, None, None, None, f"📄 **Generating methodology report...** Classification complete in {processing_time:.1f}s."
 
         # Generate PDF methodology report with all new data
-        pdf_path = generate_methodology_report_pdf(
+        report_pdf_path = generate_methodology_report_pdf(
             categories=categories,
             model=actual_model,
-            column_name=spreadsheet_column,
-            num_rows=len(input_data),
+            column_name=column_name,
+            num_rows=num_items,
             model_source=model_source,
             filename=original_filename,
             success_rate=success_rate,
@@ -657,26 +723,33 @@ Provide your work in JSON format where the number belonging to each category is 
 
         # Build sample results DataFrame (first 5 rows)
         sample_data = []
+        # Determine the input column name based on mode
+        input_col = 'pdf_input' if is_pdf_mode else 'survey_input'
+        input_label = "PDF Page" if is_pdf_mode else "Original Text"
+
         for _, row in result.head(5).iterrows():
-            original_text = str(row.get('survey_input', ''))[:100]
-            if len(str(row.get('survey_input', ''))) > 100:
+            original_text = str(row.get(input_col, ''))[:100]
+            if len(str(row.get(input_col, ''))) > 100:
                 original_text += "..."
             assigned = row.get('categories_id', '')
             if pd.isna(assigned) or assigned == '':
                 assigned = "None"
             sample_data.append({
-                "Original Text": original_text,
+                input_label: original_text,
                 "Assigned Categories": str(assigned)
             })
         sample_df = pd.DataFrame(sample_data)
+
+        # Determine success message based on mode
+        item_type = "pages" if is_pdf_mode else "responses"
 
         # Final yield: distribution plot (visible), samples (visible), full results (visible), files, status
         yield (
             gr.update(value=distribution_fig, visible=True),
             gr.update(value=sample_df, visible=True),
             gr.update(value=result, visible=True),
-            [csv_path, pdf_path],
-            f"✅ **Success!** Classified {len(input_data)} responses in {processing_time:.1f}s"
+            [csv_path, report_pdf_path],
+            f"✅ **Success!** Classified {num_items} {item_type} in {processing_time:.1f}s"
         )
 
     except Exception as e:
@@ -696,8 +769,14 @@ def add_category_field(current_count):
 def reset_all():
     """Reset all inputs and outputs to initial state."""
     updates = [
+        "Text Data (CSV/Excel)",  # input_type
+        gr.update(visible=True),  # text_input_group
+        gr.update(visible=False),  # pdf_input_group
         None,  # spreadsheet_file
         gr.update(choices=[], value=None),  # spreadsheet_column
+        None,  # pdf_file
+        "",  # pdf_description
+        "Image (visual documents)",  # pdf_mode
     ]
     # Reset category inputs (first 3 visible, rest hidden, all empty)
     for i in range(MAX_CATEGORIES):
@@ -780,10 +859,10 @@ custom_css = """
 }
 """
 
-with gr.Blocks(title="CatLLM - Survey Response Classifier", theme=gr.themes.Soft(), css=custom_css) as demo:
+with gr.Blocks(title="CatLLM - Research Data Classifier", theme=gr.themes.Soft(), css=custom_css) as demo:
     gr.Image("logo.png", show_label=False, show_download_button=False, height=115, container=False)
-    gr.Markdown("# CatLLM - Survey Response Classifier")
-    gr.Markdown("Classify survey responses into custom categories using LLMs.")
+    gr.Markdown("# CatLLM - Research Data Classifier")
+    gr.Markdown("Classify text data (CSV/Excel) and PDF documents into custom categories using LLMs.")
 
     with gr.Accordion("About This App", open=False):
         gr.Markdown("""
@@ -791,12 +870,12 @@ with gr.Blocks(title="CatLLM - Survey Response Classifier", theme=gr.themes.Soft
 
 ---
 
-**CatLLM** is an open-source Python package for classifying text data using Large Language Models.
+**CatLLM** is an open-source Python package for classifying text and document data using Large Language Models.
 
 ### What It Does
-- Classifies survey responses, open-ended text, and other unstructured data into custom categories
+- Classifies survey responses, open-ended text, PDF documents, and other unstructured data into custom categories
 - Supports multiple LLM providers: OpenAI, Anthropic, Google, HuggingFace, and more
-- Returns structured results with category assignments for each response
+- Returns structured results with category assignments for each response or PDF page
 - Tested on over 40,000 rows of data with a 100% structured output rate (actual output rate ~99.98% due to occasional server errors)
 
 ### Beta Test - We Want Your Feedback!
@@ -823,17 +902,44 @@ Soria, C. (2025). CatLLM: A Python package for LLM-based text classification. DO
 
     with gr.Row():
         with gr.Column():
-            spreadsheet_file = gr.File(
-                label="Upload Survey Data (CSV or Excel)",
-                file_types=[".csv", ".xlsx", ".xls"]
+            # Input type toggle
+            input_type = gr.Radio(
+                choices=["Text Data (CSV/Excel)", "PDF Documents"],
+                value="Text Data (CSV/Excel)",
+                label="Input Type"
             )
-            example_btn = gr.Button("📋 Try Example Dataset", variant="secondary", size="sm")
 
-            spreadsheet_column = gr.Dropdown(
-                label="Column to Classify",
-                choices=[],
-                info="Select the column containing text to classify"
-            )
+            # Text data input group
+            with gr.Group(visible=True) as text_input_group:
+                spreadsheet_file = gr.File(
+                    label="Upload Data (CSV or Excel)",
+                    file_types=[".csv", ".xlsx", ".xls"]
+                )
+                example_btn = gr.Button("📋 Try Example Dataset", variant="secondary", size="sm")
+
+                spreadsheet_column = gr.Dropdown(
+                    label="Column to Classify",
+                    choices=[],
+                    info="Select the column containing text to classify"
+                )
+
+            # PDF input group
+            with gr.Group(visible=False) as pdf_input_group:
+                pdf_file = gr.File(
+                    label="Upload PDF Document",
+                    file_types=[".pdf"]
+                )
+                pdf_description = gr.Textbox(
+                    label="Document Description",
+                    placeholder="e.g., 'research papers', 'interview transcripts', 'policy documents'",
+                    info="Helps the LLM understand the context of your PDF"
+                )
+                pdf_mode = gr.Radio(
+                    choices=["Image (visual documents)", "Text (text-heavy)", "Both (comprehensive)"],
+                    value="Image (visual documents)",
+                    label="Processing Mode",
+                    info="Image mode is best for scans/charts; Text mode is faster for text-heavy docs"
+                )
 
             gr.Markdown("### Categories")
             category_inputs = []
@@ -910,6 +1016,19 @@ Soria, C. (2025). CatLLM: A Python package for LLM-based text classification. DO
             )
 
     # Event handlers
+    def switch_input_type(input_type_val):
+        """Toggle visibility between text and PDF input groups."""
+        if input_type_val == "Text Data (CSV/Excel)":
+            return gr.update(visible=True), gr.update(visible=False), "Ready to classify text data"
+        else:
+            return gr.update(visible=False), gr.update(visible=True), "Ready to classify PDF document"
+
+    input_type.change(
+        fn=switch_input_type,
+        inputs=[input_type],
+        outputs=[text_input_group, pdf_input_group, status]
+    )
+
     def update_model_tier(tier):
         """Update model choices and API key visibility based on tier."""
         if tier == "Free Models":
@@ -951,7 +1070,7 @@ Soria, C. (2025). CatLLM: A Python package for LLM-based text classification. DO
 
     classify_btn.click(
         fn=classify_data,
-        inputs=[spreadsheet_file, spreadsheet_column] + category_inputs + [model_tier, model, model_source, api_key],
+        inputs=[input_type, spreadsheet_file, spreadsheet_column, pdf_file, pdf_description, pdf_mode] + category_inputs + [model_tier, model, model_source, api_key],
         outputs=[distribution_plot, sample_results, results, download_file, status]
     )
 
@@ -964,7 +1083,7 @@ Soria, C. (2025). CatLLM: A Python package for LLM-based text classification. DO
     reset_btn.click(
         fn=reset_all,
         inputs=[],
-        outputs=[spreadsheet_file, spreadsheet_column] + category_inputs + [add_category_btn, category_count, model_tier, model, model_source, api_key, api_key_status, status, distribution_plot, sample_results, results, download_file, code_output]
+        outputs=[input_type, text_input_group, pdf_input_group, spreadsheet_file, spreadsheet_column, pdf_file, pdf_description, pdf_mode] + category_inputs + [add_category_btn, category_count, model_tier, model, model_source, api_key, api_key_status, status, distribution_plot, sample_results, results, download_file, code_output]
     )
 
 
