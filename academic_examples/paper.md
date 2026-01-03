@@ -35,7 +35,7 @@ Current solutions present several limitations for academic researchers analyzing
 
 The software has demonstrated practical impact across diverse research domains. It has been successfully applied by institutional researchers at UC Berkeley to track student experience and outcomes, in studies examining demographic differences in LLM performance using the UC Berkeley Social Networks Study [@soria_empirical_2025], categorizing occupational data according to Standard Occupational Classification codes, and implementing automated scoring for cognitive assessments in the Caribbean-American Dementia and Aging Study [@llibre-guerra_caribbean-american_2021]. These applications demonstrate the package's versatility in addressing real-world research challenges that require systematic analysis of unstructured data at scale.
 
-The package can be easily installed via `pip install cat-llm`, with comprehensive documentation available at <https://github.com/chrissoria/cat-llm>. A no-code web interface is also available at <https://huggingface.co/spaces/CatLLM/survey-classifier>.
+The package can be easily installed via `pip install cat-llm`, with comprehensive documentation available at <https://github.com/chrissoria/cat-llm>. A simplified no-code web interface for text classification is also available at <https://huggingface.co/spaces/CatLLM/survey-classifier>.
 
 # Features
 
