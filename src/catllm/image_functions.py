@@ -1372,12 +1372,13 @@ def explore_image_categories(
     if divisions != original_divisions:
         print(f"Auto-adjusted divisions from {original_divisions} to {divisions} for {n} images.")
 
-    # Chunk sizing
+    # Chunk sizing - images often contain multiple categories each
     chunk_size = int(round(max(1, n / divisions), 0))
-    if chunk_size < (categories_per_chunk / 2):
-        # Auto-reduce categories_per_chunk instead of erroring
+    # Don't reduce categories_per_chunk as aggressively for images since each image can yield many categories
+    if chunk_size < 2:
+        # Only reduce if we have very few images
         old_categories_per_chunk = categories_per_chunk
-        categories_per_chunk = max(3, chunk_size * 2)
+        categories_per_chunk = max(5, chunk_size * 4)
         print(f"Auto-adjusted categories_per_chunk from {old_categories_per_chunk} to {categories_per_chunk} for chunk size {chunk_size}.")
 
     print(
