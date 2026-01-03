@@ -198,7 +198,8 @@ def pdf_multi_class(
     Args:
         pdf_description (str): Description of the PDF documents being categorized.
         pdf_input (str or list): Directory path containing PDFs, or list of PDF file paths.
-        categories (list): List of category names for classification.
+        categories (list or "auto"): List of category names for classification,
+            or "auto" to automatically extract categories from the PDFs first.
         api_key (str): API key for the model provider.
         user_model (str): Model name to use. Default "gpt-4o".
         mode (str): How to process PDF pages. Options:
@@ -278,6 +279,24 @@ def pdf_multi_class(
         all_pages.extend(pages)
 
     print(f"Total pages to process: {len(all_pages)}")
+
+    # Handle "auto" categories - extract categories first
+    if categories == "auto":
+        if not pdf_description:
+            raise ValueError("pdf_description is required when using categories='auto'")
+
+        print("\nAuto-extracting categories from PDFs...")
+        auto_result = explore_pdf_categories(
+            pdf_input=pdf_input,
+            api_key=api_key,
+            pdf_description=pdf_description,
+            user_model=user_model,
+            mode=mode,
+            model_source=model_source,
+            creativity=creativity
+        )
+        categories = auto_result["top_categories"]
+        print(f"Extracted {len(categories)} categories: {categories}\n")
 
     categories_str = "\n".join(f"{i + 1}. {cat}" for i, cat in enumerate(categories))
     cat_num = len(categories)
@@ -1103,21 +1122,538 @@ Provide the final categorization in the same JSON format:"""
     )
     categorized_data[cat_cols] = categorized_data[cat_cols].astype('Int64')
 
-    # Create categories_id (list of category numbers where value=1)
-    def get_category_ids(row):
-        ids = []
-        for col in cat_cols:
-            val = row[col]
-            if pd.notna(val) and val == 1:
-                # Extract category number from column name (e.g., "category_1" -> "1")
-                cat_num = col.replace('category_', '')
-                ids.append(cat_num)
-        return ','.join(ids)
-
-    categorized_data['categories_id'] = categorized_data.apply(get_category_ids, axis=1)
+    # Create categories_id (comma-separated binary values for each category)
+    categorized_data['categories_id'] = categorized_data[cat_cols].apply(
+        lambda x: ','.join(x.dropna().astype(int).astype(str)), axis=1
+    )
 
     if filename:
         save_path = os.path.join(save_directory, filename) if save_directory else filename
         categorized_data.to_csv(save_path, index=False)
 
     return categorized_data
+
+
+def explore_pdf_categories(
+    pdf_input,
+    api_key,
+    pdf_description="",
+    max_categories=12,
+    categories_per_chunk=10,
+    divisions=5,
+    user_model="gpt-4o",
+    creativity=None,
+    specificity="broad",
+    research_question=None,
+    mode="text",
+    filename=None,
+    model_source="auto",
+    iterations=3,
+    random_state=None
+):
+    """
+    Explore and extract common categories from PDF pages.
+
+    Modes:
+        - "text" (default): Extracts text from pages, concatenates pages within
+          each chunk, and sends combined text to identify categories. Similar to
+          how explore_common_categories works with survey responses. Best for
+          text-heavy documents.
+
+        - "image": Samples random pages from the full pool of all pages across
+          all PDFs and sends them as images to a vision model. Best for visual
+          documents where layout matters.
+
+        - "both": Samples random pages, uses vision model to describe each page's
+          content (text + visual elements), then extracts categories from those
+          descriptions. Best for documents with mixed text and visual content
+          (charts, diagrams, scanned documents).
+
+    Args:
+        pdf_input: Path to PDF file, directory of PDFs, or list of PDF paths
+        api_key: API key for the model provider
+        pdf_description: Description of what the PDFs contain
+        max_categories: Maximum number of final categories to return
+        categories_per_chunk: Categories to extract per chunk of pages
+        divisions: Number of chunks to divide pages into
+        user_model: Model to use (vision model required for image/both modes)
+        creativity: Temperature setting (None for default)
+        specificity: "broad" or "specific" category granularity
+        research_question: Optional research context
+        mode: "text", "image", or "both"
+        filename: Optional CSV filename to save results
+        model_source: "auto", "openai", "anthropic", "google", "mistral"
+        iterations: Number of passes over the data
+        random_state: Random seed for reproducibility
+
+    Returns:
+        dict with keys:
+            - counts_df: DataFrame of categories with counts
+            - top_categories: List of top category names
+            - raw_top_text: Raw model output from final merge step
+    """
+    import os
+    import re
+    import pandas as pd
+    import numpy as np
+    from tqdm import tqdm
+
+    model_source = _detect_model_source(user_model, model_source)
+
+    # Load all PDF pages
+    pdf_files = _load_pdf_files(pdf_input)
+    if not pdf_files:
+        raise ValueError("No PDF files found in the specified input.")
+
+    all_pages = []
+    for pdf_path in pdf_files:
+        pages = _get_pdf_pages(pdf_path)
+        all_pages.extend(pages)
+
+    n = len(all_pages)
+    if n == 0:
+        raise ValueError("No pages found in the PDF files.")
+
+    # Chunk sizing
+    chunk_size = int(round(max(1, n / divisions), 0))
+    if chunk_size < (categories_per_chunk / 2):
+        raise ValueError(
+            f"Cannot extract {categories_per_chunk} categories from chunks of only {chunk_size} pages.\n"
+            f"Solutions:\n"
+            f"  (1) Reduce 'divisions' (currently {divisions}) to make larger chunks, or\n"
+            f"  (2) Reduce 'categories_per_chunk' (currently {categories_per_chunk})."
+        )
+
+    print(
+        f"Exploring categories in PDFs: '{pdf_description}'.\n"
+        f"          {n} total pages, {categories_per_chunk * divisions} categories to extract, "
+        f"{max_categories} final categories. Mode: {mode}\n"
+    )
+
+    # RNG for reproducible sampling
+    rng = np.random.default_rng(random_state)
+
+    # Initialize client based on model source
+    if model_source in ["openai", "huggingface", "xai"]:
+        from openai import OpenAI
+        base_url = (
+            "https://router.huggingface.co/v1" if model_source == "huggingface"
+            else "https://api.x.ai/v1" if model_source == "xai"
+            else None
+        )
+        client = OpenAI(api_key=api_key, base_url=base_url)
+    elif model_source == "anthropic":
+        import anthropic
+        client = anthropic.Anthropic(api_key=api_key)
+    elif model_source == "google":
+        import requests
+        client = None
+    elif model_source == "mistral":
+        from mistralai import Mistral
+        client = Mistral(api_key=api_key)
+    else:
+        raise ValueError(f"Unsupported model_source: {model_source}")
+
+    def make_text_prompt(text_blob: str) -> str:
+        """Build prompt for text mode - concatenated page text."""
+        return (
+            f"Identify {categories_per_chunk} {specificity} categories of content found in this document text. "
+            f"The document is: {pdf_description}. "
+            f"{'Research context: ' + research_question + '. ' if research_question else ''}"
+            f"The text is contained within triple backticks: ```{text_blob}``` "
+            f"Number your categories from 1 through {categories_per_chunk} and provide concise labels only (no descriptions)."
+        )
+
+    def make_image_prompt() -> str:
+        """Build prompt for image mode - single page image."""
+        return (
+            f"Identify {categories_per_chunk} {specificity} categories of content found in this PDF page. "
+            f"The document is: {pdf_description}. "
+            f"{'Research context: ' + research_question if research_question else ''}\n\n"
+            f"Number your categories from 1 through {categories_per_chunk} and provide concise labels only (no descriptions)."
+        )
+
+    def make_describe_prompt() -> str:
+        """Build prompt for 'both' mode - describe page content."""
+        return (
+            f"Describe the content of this PDF page in detail. "
+            f"Include all text, images, charts, diagrams, tables, and layout elements. "
+            f"The document is: {pdf_description}. "
+            f"{'Research context: ' + research_question if research_question else ''}\n\n"
+            f"Provide a comprehensive text description that captures both visual and textual content."
+        )
+
+    def describe_page_with_vision(pdf_path, page_index):
+        """Use vision model to describe a page's content as text."""
+        image_bytes, is_valid = _extract_page_as_image_bytes(pdf_path, page_index)
+        if not is_valid:
+            return None
+        encoded_image = _encode_bytes_to_base64(image_bytes)
+        prompt_text = make_describe_prompt()
+
+        try:
+            if model_source in ["openai", "huggingface", "xai"]:
+                messages = [{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt_text},
+                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded_image}"}}
+                    ]
+                }]
+                resp = client.chat.completions.create(
+                    model=user_model,
+                    messages=messages,
+                    **({"temperature": creativity} if creativity is not None else {})
+                )
+                return resp.choices[0].message.content
+
+            elif model_source == "anthropic":
+                content = [
+                    {"type": "text", "text": prompt_text},
+                    {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": encoded_image}}
+                ]
+                resp = client.messages.create(
+                    model=user_model,
+                    max_tokens=4096,
+                    messages=[{"role": "user", "content": content}],
+                    **({"temperature": creativity} if creativity is not None else {})
+                )
+                return resp.content[0].text
+
+            elif model_source == "google":
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
+                headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
+                parts = [
+                    {"text": prompt_text},
+                    {"inline_data": {"mime_type": "image/png", "data": encoded_image}}
+                ]
+                payload = {
+                    "contents": [{"parts": parts}],
+                    "generationConfig": {**({"temperature": creativity} if creativity is not None else {})}
+                }
+                response = requests.post(url, headers=headers, json=payload)
+                response.raise_for_status()
+                result = response.json()
+                if "candidates" in result and result["candidates"]:
+                    return result["candidates"][0]["content"]["parts"][0]["text"]
+                return None
+
+            elif model_source == "mistral":
+                messages = [{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt_text},
+                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded_image}"}}
+                    ]
+                }]
+                resp = client.chat.complete(
+                    model=user_model,
+                    messages=messages,
+                    **({"temperature": creativity} if creativity is not None else {})
+                )
+                return resp.choices[0].message.content
+
+        except Exception as e:
+            print(f"Error describing page {page_index}: {e}")
+            return None
+
+    def call_model_with_text(prompt_text):
+        """Send concatenated text to the model."""
+        try:
+            if model_source in ["openai", "huggingface", "xai"]:
+                resp = client.chat.completions.create(
+                    model=user_model,
+                    messages=[{"role": "user", "content": prompt_text}],
+                    **({"temperature": creativity} if creativity is not None else {})
+                )
+                return resp.choices[0].message.content
+
+            elif model_source == "anthropic":
+                resp = client.messages.create(
+                    model=user_model,
+                    max_tokens=2048,
+                    messages=[{"role": "user", "content": prompt_text}],
+                    **({"temperature": creativity} if creativity is not None else {})
+                )
+                return resp.content[0].text
+
+            elif model_source == "google":
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
+                headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
+                payload = {
+                    "contents": [{"parts": [{"text": prompt_text}]}],
+                    "generationConfig": {**({"temperature": creativity} if creativity is not None else {})}
+                }
+                response = requests.post(url, headers=headers, json=payload)
+                response.raise_for_status()
+                result = response.json()
+                if "candidates" in result and result["candidates"]:
+                    return result["candidates"][0]["content"]["parts"][0]["text"]
+                return None
+
+            elif model_source == "mistral":
+                resp = client.chat.complete(
+                    model=user_model,
+                    messages=[{"role": "user", "content": prompt_text}],
+                    **({"temperature": creativity} if creativity is not None else {})
+                )
+                return resp.choices[0].message.content
+
+        except Exception as e:
+            print(f"Error in text mode: {e}")
+            return None
+
+    def call_model_with_image(pdf_path, page_index, prompt_text):
+        """Send a page image to the model."""
+        image_bytes, is_valid = _extract_page_as_image_bytes(pdf_path, page_index)
+        if not is_valid:
+            return None
+        encoded_image = _encode_bytes_to_base64(image_bytes)
+
+        try:
+            if model_source in ["openai", "huggingface", "xai"]:
+                messages = [{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt_text},
+                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded_image}"}}
+                    ]
+                }]
+                resp = client.chat.completions.create(
+                    model=user_model,
+                    messages=messages,
+                    **({"temperature": creativity} if creativity is not None else {})
+                )
+                return resp.choices[0].message.content
+
+            elif model_source == "anthropic":
+                content = [
+                    {"type": "text", "text": prompt_text},
+                    {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": encoded_image}}
+                ]
+                resp = client.messages.create(
+                    model=user_model,
+                    max_tokens=2048,
+                    messages=[{"role": "user", "content": content}],
+                    **({"temperature": creativity} if creativity is not None else {})
+                )
+                return resp.content[0].text
+
+            elif model_source == "google":
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
+                headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
+                parts = [
+                    {"text": prompt_text},
+                    {"inline_data": {"mime_type": "image/png", "data": encoded_image}}
+                ]
+                payload = {
+                    "contents": [{"parts": parts}],
+                    "generationConfig": {**({"temperature": creativity} if creativity is not None else {})}
+                }
+                response = requests.post(url, headers=headers, json=payload)
+                response.raise_for_status()
+                result = response.json()
+                if "candidates" in result and result["candidates"]:
+                    return result["candidates"][0]["content"]["parts"][0]["text"]
+                return None
+
+            elif model_source == "mistral":
+                messages = [{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt_text},
+                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded_image}"}}
+                    ]
+                }]
+                resp = client.chat.complete(
+                    model=user_model,
+                    messages=messages,
+                    **({"temperature": creativity} if creativity is not None else {})
+                )
+                return resp.choices[0].message.content
+
+        except Exception as e:
+            print(f"Error processing page {page_index}: {e}")
+            return None
+
+    # Parse numbered list pattern
+    line_pat = re.compile(r"^\s*\d+\s*[\.\)\-]\s*(.+)$")
+
+    all_items = []
+
+    for pass_idx in range(iterations):
+        # Shuffle page indices for this pass
+        page_indices = list(range(n))
+        rng.shuffle(page_indices)
+
+        # Create chunks
+        chunks = [page_indices[i:i + chunk_size] for i in range(0, len(page_indices), chunk_size)][:divisions]
+
+        for chunk_idx, chunk in enumerate(tqdm(chunks, desc=f"Processing chunks (pass {pass_idx+1}/{iterations})")):
+            if not chunk:
+                continue
+
+            if mode == "text":
+                # TEXT MODE: Extract and concatenate text from all pages in chunk
+                chunk_texts = []
+                for idx in chunk:
+                    page_tuple = all_pages[idx]
+                    pdf_path, page_index, page_label = page_tuple
+                    text, is_valid, _ = _extract_page_text(pdf_path, page_index)
+                    if is_valid and text:
+                        chunk_texts.append(text)
+
+                if not chunk_texts:
+                    continue
+
+                # Concatenate texts with separator
+                combined_text = "\n---\n".join(chunk_texts)
+                prompt = make_text_prompt(combined_text)
+                reply = call_model_with_text(prompt)
+
+            elif mode == "image":
+                # IMAGE MODE: Sample one random page from the full pool
+                random_idx = rng.choice(page_indices)
+                page_tuple = all_pages[random_idx]
+                pdf_path, page_index, _ = page_tuple
+                prompt = make_image_prompt()
+                reply = call_model_with_image(pdf_path, page_index, prompt)
+
+            elif mode == "both":
+                # BOTH MODE: Sample random page, describe with vision, then extract categories from description
+                random_idx = rng.choice(page_indices)
+                page_tuple = all_pages[random_idx]
+                pdf_path, page_index, _ = page_tuple
+
+                # Step 1: Get text description of the page using vision
+                page_description = describe_page_with_vision(pdf_path, page_index)
+                if not page_description:
+                    continue
+
+                # Step 2: Extract categories from the description
+                prompt = make_text_prompt(page_description)
+                reply = call_model_with_text(prompt)
+
+            else:
+                raise ValueError(f"Invalid mode: {mode}. Must be 'text', 'image', or 'both'.")
+
+            if reply:
+                # Extract numbered items
+                items = []
+                for raw_line in reply.splitlines():
+                    m = line_pat.match(raw_line.strip())
+                    if m:
+                        items.append(m.group(1).strip())
+                # Fallback for unnumbered lines
+                if not items:
+                    for raw_line in reply.splitlines():
+                        s = raw_line.strip()
+                        if s:
+                            items.append(s)
+                all_items.extend(items)
+
+    # Normalize and count
+    def normalize_category(cat):
+        terms = sorted([t.strip().lower() for t in str(cat).split("/")])
+        return "/".join(terms)
+
+    flat_list = [str(x).strip() for x in all_items if str(x).strip()]
+    if not flat_list:
+        raise ValueError("No categories were extracted from the PDF pages.")
+
+    df = pd.DataFrame(flat_list, columns=["Category"])
+    df["normalized"] = df["Category"].map(normalize_category)
+
+    result = (
+        df.groupby("normalized")
+          .agg(Category=("Category", lambda x: x.value_counts().index[0]),
+               counts=("Category", "size"))
+          .sort_values("counts", ascending=False)
+          .reset_index(drop=True)
+    )
+
+    # Second-pass semantic merge
+    seed_list = result["Category"].head(max_categories * 3).tolist()
+
+    second_prompt = f"""
+You are a data analyst reviewing categorized document data.
+
+Task: From the provided categories, identify and return the top {max_categories} CONCEPTUALLY UNIQUE categories.
+
+Critical Instructions:
+1) Exact duplicates are already removed.
+2) Merge SEMANTIC duplicates (same concept, different wording).
+3) When merging:
+   - Combine frequencies mentally
+   - Keep the most frequent OR clearest label
+   - Each concept appears ONLY ONCE
+4) Keep category names {specificity}.
+5) Return ONLY a numbered list of {max_categories} categories. No extra text.
+
+Pre-processed Categories (sorted by frequency, top sample):
+{seed_list}
+
+Output:
+1. category
+2. category
+...
+{max_categories}. category
+""".strip()
+
+    try:
+        if model_source in ["openai", "huggingface", "xai"]:
+            resp2 = client.chat.completions.create(
+                model=user_model,
+                messages=[{"role": "user", "content": second_prompt}],
+                **({"temperature": creativity} if creativity is not None else {})
+            )
+            top_categories_text = resp2.choices[0].message.content
+        elif model_source == "anthropic":
+            resp2 = client.messages.create(
+                model=user_model,
+                max_tokens=2048,
+                messages=[{"role": "user", "content": second_prompt}],
+                **({"temperature": creativity} if creativity is not None else {})
+            )
+            top_categories_text = resp2.content[0].text
+        elif model_source == "google":
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
+            headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
+            payload = {
+                "contents": [{"parts": [{"text": second_prompt}]}],
+                "generationConfig": {**({"temperature": creativity} if creativity is not None else {})}
+            }
+            response = requests.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+            res = response.json()
+            top_categories_text = res["candidates"][0]["content"]["parts"][0]["text"]
+        elif model_source == "mistral":
+            resp2 = client.chat.complete(
+                model=user_model,
+                messages=[{"role": "user", "content": second_prompt}],
+                **({"temperature": creativity} if creativity is not None else {})
+            )
+            top_categories_text = resp2.choices[0].message.content
+    except Exception as e:
+        print(f"Error in second-pass merge: {e}")
+        top_categories_text = ""
+
+    # Parse final list
+    final = []
+    for line in top_categories_text.splitlines():
+        m = line_pat.match(line.strip())
+        if m:
+            final.append(m.group(1).strip())
+    if not final:
+        final = [l.strip("-*• ").strip() for l in top_categories_text.splitlines() if l.strip()]
+
+    print("\nTop categories:\n" + "\n".join(f"{i+1}. {c}" for i, c in enumerate(final[:max_categories])))
+
+    if filename:
+        result.to_csv(filename, index=False)
+
+    return {
+        "counts_df": result,
+        "top_categories": final[:max_categories],
+        "raw_top_text": top_categories_text
+    }

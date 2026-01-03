@@ -446,7 +446,8 @@ def load_columns(file):
 def classify_data(input_type, spreadsheet_file, spreadsheet_column,
                   pdf_file, pdf_description, pdf_mode,
                   cat1, cat2, cat3, cat4, cat5, cat6, cat7, cat8, cat9, cat10,
-                  model_tier, model, model_source_input, api_key_input):
+                  model_tier, model, model_source_input, api_key_input,
+                  progress=gr.Progress(track_tqdm=True)):
     """Main classification function with progress updates. Yields status updates then final results."""
     if not CATLLM_AVAILABLE:
         yield None, None, None, None, "**Error:** catllm package not available"
@@ -769,7 +770,7 @@ def add_category_field(current_count):
 def reset_all():
     """Reset all inputs and outputs to initial state."""
     updates = [
-        "Text Data (CSV/Excel)",  # input_type
+        "Survey Responses (CSV/Excel)",  # input_type
         gr.update(visible=True),  # text_input_group
         gr.update(visible=False),  # pdf_input_group
         None,  # spreadsheet_file
@@ -904,8 +905,8 @@ Soria, C. (2025). CatLLM: A Python package for LLM-based text classification. DO
         with gr.Column():
             # Input type toggle
             input_type = gr.Radio(
-                choices=["Text Data (CSV/Excel)", "PDF Documents"],
-                value="Text Data (CSV/Excel)",
+                choices=["Survey Responses (CSV/Excel)", "PDF Documents"],
+                value="Survey Responses (CSV/Excel)",
                 label="Input Type"
             )
 
@@ -1018,7 +1019,7 @@ Soria, C. (2025). CatLLM: A Python package for LLM-based text classification. DO
     # Event handlers
     def switch_input_type(input_type_val):
         """Toggle visibility between text and PDF input groups."""
-        if input_type_val == "Text Data (CSV/Excel)":
+        if input_type_val == "Survey Responses (CSV/Excel)":
             return gr.update(visible=True), gr.update(visible=False), "Ready to classify text data"
         else:
             return gr.update(visible=False), gr.update(visible=True), "Ready to classify PDF document"

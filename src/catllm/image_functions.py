@@ -100,6 +100,23 @@ def image_multi_class(
 
     image_files = _load_image_files(image_input)
 
+    # Handle "auto" categories - extract categories first
+    if categories == "auto":
+        if not image_description:
+            raise ValueError("image_description is required when using categories='auto'")
+
+        print("\nAuto-extracting categories from images...")
+        auto_result = explore_image_categories(
+            image_input=image_input,
+            api_key=api_key,
+            image_description=image_description,
+            user_model=user_model,
+            model_source=model_source,
+            creativity=creativity
+        )
+        categories = auto_result["top_categories"]
+        print(f"Extracted {len(categories)} categories: {categories}\n")
+
     categories_str = "\n".join(f"{i + 1}. {cat}" for i, cat in enumerate(categories))
     cat_num = len(categories)
     category_dict = {str(i+1): "0" for i in range(cat_num)}
@@ -676,18 +693,10 @@ Provide the final categorization in the same JSON format:"""
     )
     categorized_data[cat_cols] = categorized_data[cat_cols].astype('Int64')
 
-    # Create categories_id (list of category numbers where value=1)
-    def get_category_ids(row):
-        ids = []
-        for col in cat_cols:
-            val = row[col]
-            if pd.notna(val) and val == 1:
-                # Extract category number from column name (e.g., "category_1" -> "1")
-                cat_num = col.replace('category_', '')
-                ids.append(cat_num)
-        return ','.join(ids)
-
-    categorized_data['categories_id'] = categorized_data.apply(get_category_ids, axis=1)
+    # Create categories_id (comma-separated binary values for each category)
+    categorized_data['categories_id'] = categorized_data[cat_cols].apply(
+        lambda x: ','.join(x.dropna().astype(int).astype(str)), axis=1
+    )
 
     if filename:
         save_path = os.path.join(save_directory, filename) if save_directory else filename
@@ -1286,3 +1295,496 @@ def image_features(
         categorized_data.to_csv(os.path.join(save_directory, filename), index=False)
 
     return categorized_data
+
+
+def explore_image_categories(
+    image_input,
+    api_key,
+    image_description="",
+    max_categories=12,
+    categories_per_chunk=10,
+    divisions=5,
+    user_model="gpt-4o",
+    creativity=None,
+    specificity="broad",
+    research_question=None,
+    mode="image",
+    filename=None,
+    model_source="auto",
+    iterations=3,
+    random_state=None
+):
+    """
+    Explore and extract common categories from a collection of images.
+
+    Modes:
+        - "image" (default): Samples random images and sends them directly to
+          a vision model for category extraction. Best for visual categorization.
+
+        - "both": Samples random images, uses vision model to describe each
+          image's content (including any text), then extracts categories from
+          those descriptions. Best for images that contain text or mixed content.
+
+    Args:
+        image_input: Path to image file, directory of images, or list of image paths
+        api_key: API key for the model provider
+        image_description: Description of what the images contain
+        max_categories: Maximum number of final categories to return
+        categories_per_chunk: Categories to extract per chunk of images
+        divisions: Number of chunks to divide images into
+        user_model: Model to use (must support vision)
+        creativity: Temperature setting (None for default)
+        specificity: "broad" or "specific" category granularity
+        research_question: Optional research context
+        mode: "image" or "both"
+        filename: Optional CSV filename to save results
+        model_source: "auto", "openai", "anthropic", "google", "mistral"
+        iterations: Number of passes over the data
+        random_state: Random seed for reproducibility
+
+    Returns:
+        dict with keys:
+            - counts_df: DataFrame of categories with counts
+            - top_categories: List of top category names
+            - raw_top_text: Raw model output from final merge step
+    """
+    import os
+    import re
+    import pandas as pd
+    import numpy as np
+    from tqdm import tqdm
+
+    model_source = _detect_model_source(user_model, model_source)
+
+    # Load all images
+    image_files = _load_image_files(image_input)
+    if not image_files:
+        raise ValueError("No image files found in the specified input.")
+
+    n = len(image_files)
+    if n == 0:
+        raise ValueError("No images found.")
+
+    # Chunk sizing
+    chunk_size = int(round(max(1, n / divisions), 0))
+    if chunk_size < (categories_per_chunk / 2):
+        raise ValueError(
+            f"Cannot extract {categories_per_chunk} categories from chunks of only {chunk_size} images.\n"
+            f"Solutions:\n"
+            f"  (1) Reduce 'divisions' (currently {divisions}) to make larger chunks, or\n"
+            f"  (2) Reduce 'categories_per_chunk' (currently {categories_per_chunk})."
+        )
+
+    print(
+        f"Exploring categories in images: '{image_description}'.\n"
+        f"          {n} total images, {categories_per_chunk * divisions} categories to extract, "
+        f"{max_categories} final categories. Mode: {mode}\n"
+    )
+
+    # RNG for reproducible sampling
+    rng = np.random.default_rng(random_state)
+
+    # Initialize client based on model source
+    if model_source in ["openai", "huggingface", "xai"]:
+        from openai import OpenAI
+        base_url = (
+            "https://router.huggingface.co/v1" if model_source == "huggingface"
+            else "https://api.x.ai/v1" if model_source == "xai"
+            else None
+        )
+        client = OpenAI(api_key=api_key, base_url=base_url)
+    elif model_source == "anthropic":
+        import anthropic
+        client = anthropic.Anthropic(api_key=api_key)
+    elif model_source == "google":
+        import requests
+        client = None
+    elif model_source == "mistral":
+        from mistralai import Mistral
+        client = Mistral(api_key=api_key)
+    else:
+        raise ValueError(f"Unsupported model_source: {model_source}")
+
+    def make_image_prompt() -> str:
+        """Build prompt for image mode - direct category extraction."""
+        return (
+            f"Identify {categories_per_chunk} {specificity} categories of content found in this image. "
+            f"The image is: {image_description}. "
+            f"{'Research context: ' + research_question if research_question else ''}\n\n"
+            f"Number your categories from 1 through {categories_per_chunk} and provide concise labels only (no descriptions)."
+        )
+
+    def make_describe_prompt() -> str:
+        """Build prompt for 'both' mode - describe image content."""
+        return (
+            f"Describe the content of this image in detail. "
+            f"Include all visual elements, text, objects, people, and any other content. "
+            f"The image is: {image_description}. "
+            f"{'Research context: ' + research_question if research_question else ''}\n\n"
+            f"Provide a comprehensive text description that captures both visual and textual content."
+        )
+
+    def make_text_prompt(text_blob: str) -> str:
+        """Build prompt for extracting categories from text descriptions."""
+        return (
+            f"Identify {categories_per_chunk} {specificity} categories of content found in this description. "
+            f"The content is: {image_description}. "
+            f"{'Research context: ' + research_question + '. ' if research_question else ''}"
+            f"The description is contained within triple backticks: ```{text_blob}``` "
+            f"Number your categories from 1 through {categories_per_chunk} and provide concise labels only (no descriptions)."
+        )
+
+    def call_model_with_image(img_path, prompt_text):
+        """Send an image to the model and get category extraction."""
+        encoded, ext, is_valid = _encode_image(img_path)
+        if not is_valid:
+            return None
+
+        try:
+            if model_source in ["openai", "huggingface", "xai"]:
+                messages = [{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt_text},
+                        {"type": "image_url", "image_url": {"url": f"data:image/{ext};base64,{encoded}"}}
+                    ]
+                }]
+                resp = client.chat.completions.create(
+                    model=user_model,
+                    messages=messages,
+                    **({"temperature": creativity} if creativity is not None else {})
+                )
+                return resp.choices[0].message.content
+
+            elif model_source == "anthropic":
+                media_type = f"image/{ext}" if ext else "image/jpeg"
+                content = [
+                    {"type": "text", "text": prompt_text},
+                    {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": encoded}}
+                ]
+                resp = client.messages.create(
+                    model=user_model,
+                    max_tokens=2048,
+                    messages=[{"role": "user", "content": content}],
+                    **({"temperature": creativity} if creativity is not None else {})
+                )
+                return resp.content[0].text
+
+            elif model_source == "google":
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
+                headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
+                mime_type = f"image/{ext}" if ext else "image/jpeg"
+                parts = [
+                    {"text": prompt_text},
+                    {"inline_data": {"mime_type": mime_type, "data": encoded}}
+                ]
+                payload = {
+                    "contents": [{"parts": parts}],
+                    "generationConfig": {**({"temperature": creativity} if creativity is not None else {})}
+                }
+                response = requests.post(url, headers=headers, json=payload)
+                response.raise_for_status()
+                result = response.json()
+                if "candidates" in result and result["candidates"]:
+                    return result["candidates"][0]["content"]["parts"][0]["text"]
+                return None
+
+            elif model_source == "mistral":
+                messages = [{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt_text},
+                        {"type": "image_url", "image_url": {"url": f"data:image/{ext};base64,{encoded}"}}
+                    ]
+                }]
+                resp = client.chat.complete(
+                    model=user_model,
+                    messages=messages,
+                    **({"temperature": creativity} if creativity is not None else {})
+                )
+                return resp.choices[0].message.content
+
+        except Exception as e:
+            print(f"Error processing image {img_path}: {e}")
+            return None
+
+    def describe_image_with_vision(img_path):
+        """Use vision model to describe an image's content as text."""
+        encoded, ext, is_valid = _encode_image(img_path)
+        if not is_valid:
+            return None
+        prompt_text = make_describe_prompt()
+
+        try:
+            if model_source in ["openai", "huggingface", "xai"]:
+                messages = [{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt_text},
+                        {"type": "image_url", "image_url": {"url": f"data:image/{ext};base64,{encoded}"}}
+                    ]
+                }]
+                resp = client.chat.completions.create(
+                    model=user_model,
+                    messages=messages,
+                    **({"temperature": creativity} if creativity is not None else {})
+                )
+                return resp.choices[0].message.content
+
+            elif model_source == "anthropic":
+                media_type = f"image/{ext}" if ext else "image/jpeg"
+                content = [
+                    {"type": "text", "text": prompt_text},
+                    {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": encoded}}
+                ]
+                resp = client.messages.create(
+                    model=user_model,
+                    max_tokens=4096,
+                    messages=[{"role": "user", "content": content}],
+                    **({"temperature": creativity} if creativity is not None else {})
+                )
+                return resp.content[0].text
+
+            elif model_source == "google":
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
+                headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
+                mime_type = f"image/{ext}" if ext else "image/jpeg"
+                parts = [
+                    {"text": prompt_text},
+                    {"inline_data": {"mime_type": mime_type, "data": encoded}}
+                ]
+                payload = {
+                    "contents": [{"parts": parts}],
+                    "generationConfig": {**({"temperature": creativity} if creativity is not None else {})}
+                }
+                response = requests.post(url, headers=headers, json=payload)
+                response.raise_for_status()
+                result = response.json()
+                if "candidates" in result and result["candidates"]:
+                    return result["candidates"][0]["content"]["parts"][0]["text"]
+                return None
+
+            elif model_source == "mistral":
+                messages = [{
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": prompt_text},
+                        {"type": "image_url", "image_url": {"url": f"data:image/{ext};base64,{encoded}"}}
+                    ]
+                }]
+                resp = client.chat.complete(
+                    model=user_model,
+                    messages=messages,
+                    **({"temperature": creativity} if creativity is not None else {})
+                )
+                return resp.choices[0].message.content
+
+        except Exception as e:
+            print(f"Error describing image {img_path}: {e}")
+            return None
+
+    def call_model_with_text(prompt_text):
+        """Send text to the model for category extraction."""
+        try:
+            if model_source in ["openai", "huggingface", "xai"]:
+                resp = client.chat.completions.create(
+                    model=user_model,
+                    messages=[{"role": "user", "content": prompt_text}],
+                    **({"temperature": creativity} if creativity is not None else {})
+                )
+                return resp.choices[0].message.content
+
+            elif model_source == "anthropic":
+                resp = client.messages.create(
+                    model=user_model,
+                    max_tokens=2048,
+                    messages=[{"role": "user", "content": prompt_text}],
+                    **({"temperature": creativity} if creativity is not None else {})
+                )
+                return resp.content[0].text
+
+            elif model_source == "google":
+                url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
+                headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
+                payload = {
+                    "contents": [{"parts": [{"text": prompt_text}]}],
+                    "generationConfig": {**({"temperature": creativity} if creativity is not None else {})}
+                }
+                response = requests.post(url, headers=headers, json=payload)
+                response.raise_for_status()
+                result = response.json()
+                if "candidates" in result and result["candidates"]:
+                    return result["candidates"][0]["content"]["parts"][0]["text"]
+                return None
+
+            elif model_source == "mistral":
+                resp = client.chat.complete(
+                    model=user_model,
+                    messages=[{"role": "user", "content": prompt_text}],
+                    **({"temperature": creativity} if creativity is not None else {})
+                )
+                return resp.choices[0].message.content
+
+        except Exception as e:
+            print(f"Error in text mode: {e}")
+            return None
+
+    # Parse numbered list pattern
+    line_pat = re.compile(r"^\s*\d+\s*[\.\)\-]\s*(.+)$")
+
+    all_items = []
+
+    for pass_idx in range(iterations):
+        # Sample images for this pass
+        image_indices = list(range(n))
+        rng.shuffle(image_indices)
+
+        # Create chunks
+        chunks = [image_indices[i:i + chunk_size] for i in range(0, len(image_indices), chunk_size)][:divisions]
+
+        for chunk_idx, chunk in enumerate(tqdm(chunks, desc=f"Processing chunks (pass {pass_idx+1}/{iterations})")):
+            if not chunk:
+                continue
+
+            # Sample one random image from the full pool
+            random_idx = rng.choice(image_indices)
+            img_path = image_files[random_idx]
+
+            if mode == "image":
+                # IMAGE MODE: Send image directly for category extraction
+                prompt = make_image_prompt()
+                reply = call_model_with_image(img_path, prompt)
+
+            elif mode == "both":
+                # BOTH MODE: Describe image first, then extract categories from description
+                image_description_text = describe_image_with_vision(img_path)
+                if not image_description_text:
+                    continue
+
+                prompt = make_text_prompt(image_description_text)
+                reply = call_model_with_text(prompt)
+
+            else:
+                raise ValueError(f"Invalid mode: {mode}. Must be 'image' or 'both'.")
+
+            if reply:
+                # Extract numbered items
+                items = []
+                for raw_line in reply.splitlines():
+                    m = line_pat.match(raw_line.strip())
+                    if m:
+                        items.append(m.group(1).strip())
+                # Fallback for unnumbered lines
+                if not items:
+                    for raw_line in reply.splitlines():
+                        s = raw_line.strip()
+                        if s:
+                            items.append(s)
+                all_items.extend(items)
+
+    # Normalize and count
+    def normalize_category(cat):
+        terms = sorted([t.strip().lower() for t in str(cat).split("/")])
+        return "/".join(terms)
+
+    flat_list = [str(x).strip() for x in all_items if str(x).strip()]
+    if not flat_list:
+        raise ValueError("No categories were extracted from the images.")
+
+    df = pd.DataFrame(flat_list, columns=["Category"])
+    df["normalized"] = df["Category"].map(normalize_category)
+
+    result = (
+        df.groupby("normalized")
+          .agg(Category=("Category", lambda x: x.value_counts().index[0]),
+               counts=("Category", "size"))
+          .sort_values("counts", ascending=False)
+          .reset_index(drop=True)
+    )
+
+    # Second-pass semantic merge
+    seed_list = result["Category"].head(max_categories * 3).tolist()
+
+    second_prompt = f"""
+You are a data analyst reviewing categorized image data.
+
+Task: From the provided categories, identify and return the top {max_categories} CONCEPTUALLY UNIQUE categories.
+
+Critical Instructions:
+1) Exact duplicates are already removed.
+2) Merge SEMANTIC duplicates (same concept, different wording).
+3) When merging:
+   - Combine frequencies mentally
+   - Keep the most frequent OR clearest label
+   - Each concept appears ONLY ONCE
+4) Keep category names {specificity}.
+5) Return ONLY a numbered list of {max_categories} categories. No extra text.
+
+Pre-processed Categories (sorted by frequency, top sample):
+{seed_list}
+
+Output:
+1. category
+2. category
+...
+{max_categories}. category
+""".strip()
+
+    try:
+        if model_source in ["openai", "huggingface", "xai"]:
+            resp2 = client.chat.completions.create(
+                model=user_model,
+                messages=[{"role": "user", "content": second_prompt}],
+                **({"temperature": creativity} if creativity is not None else {})
+            )
+            top_categories_text = resp2.choices[0].message.content
+        elif model_source == "anthropic":
+            resp2 = client.messages.create(
+                model=user_model,
+                max_tokens=2048,
+                messages=[{"role": "user", "content": second_prompt}],
+                **({"temperature": creativity} if creativity is not None else {})
+            )
+            top_categories_text = resp2.content[0].text
+        elif model_source == "google":
+            import requests
+            url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
+            headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
+            payload = {
+                "contents": [{"parts": [{"text": second_prompt}]}],
+                "generationConfig": {**({"temperature": creativity} if creativity is not None else {})}
+            }
+            response = requests.post(url, headers=headers, json=payload)
+            response.raise_for_status()
+            res = response.json()
+            top_categories_text = res["candidates"][0]["content"]["parts"][0]["text"]
+        elif model_source == "mistral":
+            resp2 = client.chat.complete(
+                model=user_model,
+                messages=[{"role": "user", "content": second_prompt}],
+                **({"temperature": creativity} if creativity is not None else {})
+            )
+            top_categories_text = resp2.choices[0].message.content
+    except Exception as e:
+        print(f"Error in second-pass merge: {e}")
+        top_categories_text = ""
+
+    # Parse final list
+    final = []
+    for line in top_categories_text.splitlines():
+        m = line_pat.match(line.strip())
+        if m:
+            final.append(m.group(1).strip())
+    if not final:
+        final = [l.strip("-*• ").strip() for l in top_categories_text.splitlines() if l.strip()]
+
+    print("\nTop categories:\n" + "\n".join(f"{i+1}. {c}" for i, c in enumerate(final[:max_categories])))
+
+    if filename:
+        result.to_csv(filename, index=False)
+
+    return {
+        "counts_df": result,
+        "top_categories": final[:max_categories],
+        "raw_top_text": top_categories_text
+    }
