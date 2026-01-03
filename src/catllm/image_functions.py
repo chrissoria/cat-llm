@@ -1365,15 +1365,20 @@ def explore_image_categories(
     if n == 0:
         raise ValueError("No images found.")
 
+    # Auto-adjust divisions for small datasets
+    # Images can have multiple categories each, so we can use fewer divisions
+    original_divisions = divisions
+    divisions = min(divisions, max(1, n // 2))  # At least 2 images per chunk
+    if divisions != original_divisions:
+        print(f"Auto-adjusted divisions from {original_divisions} to {divisions} for {n} images.")
+
     # Chunk sizing
     chunk_size = int(round(max(1, n / divisions), 0))
     if chunk_size < (categories_per_chunk / 2):
-        raise ValueError(
-            f"Cannot extract {categories_per_chunk} categories from chunks of only {chunk_size} images.\n"
-            f"Solutions:\n"
-            f"  (1) Reduce 'divisions' (currently {divisions}) to make larger chunks, or\n"
-            f"  (2) Reduce 'categories_per_chunk' (currently {categories_per_chunk})."
-        )
+        # Auto-reduce categories_per_chunk instead of erroring
+        old_categories_per_chunk = categories_per_chunk
+        categories_per_chunk = max(3, chunk_size * 2)
+        print(f"Auto-adjusted categories_per_chunk from {old_categories_per_chunk} to {categories_per_chunk} for chunk size {chunk_size}.")
 
     print(
         f"Exploring categories in images: '{image_description}'.\n"
