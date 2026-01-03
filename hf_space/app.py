@@ -1193,6 +1193,179 @@ custom_css = """
 .task-btn {
     min-width: 150px !important;
 }
+
+/* Mobile-responsive styles */
+@media screen and (max-width: 768px) {
+    /* Reduce overall padding */
+    .gradio-container {
+        padding: 8px !important;
+    }
+
+    /* Stack columns vertically on mobile */
+    .gradio-row {
+        flex-direction: column !important;
+    }
+
+    /* Full width columns on mobile */
+    .gradio-column {
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: 1 1 100% !important;
+    }
+
+    /* Smaller task buttons on mobile */
+    .task-btn {
+        min-width: 100px !important;
+        padding: 8px 12px !important;
+        font-size: 13px !important;
+    }
+
+    /* Compact file upload areas */
+    .file-upload, .upload-button, [data-testid="file"], .gr-file {
+        min-height: 80px !important;
+        padding: 10px !important;
+    }
+
+    /* Smaller upload button text */
+    .upload-button span, .gr-file span, [data-testid="file"] span {
+        font-size: 13px !important;
+    }
+
+    /* Compact buttons */
+    button {
+        padding: 8px 14px !important;
+        font-size: 14px !important;
+    }
+
+    /* Smaller primary action button */
+    button.primary, button.lg {
+        padding: 10px 16px !important;
+        font-size: 15px !important;
+    }
+
+    /* Compact form inputs */
+    input, textarea, select {
+        padding: 8px !important;
+        font-size: 14px !important;
+    }
+
+    /* Reduce textbox heights */
+    textarea {
+        min-height: 60px !important;
+    }
+
+    /* Smaller dropdown */
+    .gr-dropdown {
+        font-size: 14px !important;
+    }
+
+    /* Compact radio buttons */
+    .gr-radio, .gr-checkbox {
+        gap: 6px !important;
+    }
+
+    .gr-radio label, .gr-checkbox label {
+        font-size: 13px !important;
+        padding: 6px 10px !important;
+    }
+
+    /* Smaller headings */
+    h1 {
+        font-size: 1.4rem !important;
+    }
+
+    h2, h3 {
+        font-size: 1.1rem !important;
+    }
+
+    /* Compact markdown text */
+    .prose, .gr-markdown {
+        font-size: 14px !important;
+    }
+
+    /* Compact accordion */
+    .gr-accordion {
+        padding: 8px !important;
+    }
+
+    /* Smaller logo on mobile */
+    img[alt="logo"], .gr-image img {
+        height: 80px !important;
+        max-height: 80px !important;
+    }
+
+    /* Compact group containers */
+    .gr-group {
+        padding: 10px !important;
+        gap: 8px !important;
+    }
+
+    /* Reduce spacing between form elements */
+    .gr-form > *, .gr-block > * {
+        margin-bottom: 8px !important;
+    }
+
+    /* Compact dataframe/table on mobile */
+    .gr-dataframe, .dataframe {
+        font-size: 12px !important;
+    }
+
+    .gr-dataframe th, .gr-dataframe td {
+        padding: 4px 6px !important;
+    }
+
+    /* Make plot responsive */
+    .gr-plot {
+        max-width: 100% !important;
+        overflow-x: auto !important;
+    }
+
+    /* Compact download buttons */
+    .gr-file-download, [data-testid="download"] {
+        padding: 8px !important;
+    }
+}
+
+/* Extra small devices (phones in portrait) */
+@media screen and (max-width: 480px) {
+    .gradio-container {
+        padding: 4px !important;
+    }
+
+    .task-btn {
+        min-width: 80px !important;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+    }
+
+    button {
+        padding: 6px 12px !important;
+        font-size: 13px !important;
+    }
+
+    h1 {
+        font-size: 1.2rem !important;
+    }
+
+    h2, h3 {
+        font-size: 1rem !important;
+    }
+
+    .prose, .gr-markdown {
+        font-size: 13px !important;
+    }
+
+    img[alt="logo"], .gr-image img {
+        height: 60px !important;
+        max-height: 60px !important;
+    }
+
+    /* Stack task buttons vertically on very small screens */
+    .task-btn {
+        width: 100% !important;
+        min-width: unset !important;
+    }
+}
 """
 
 with gr.Blocks(title="CatLLM - Research Data Classifier", theme=gr.themes.Soft(), css=custom_css) as demo:
