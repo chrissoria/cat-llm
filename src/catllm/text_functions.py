@@ -1061,10 +1061,18 @@ def multi_class(
     categorized_data[cat_cols] = categorized_data[cat_cols].astype('Int64')
 
 
-    # Step 6: Create categories_id
-    categorized_data['categories_id'] = categorized_data[cat_cols].apply(
-        lambda x: ','.join(x.dropna().astype(str)), axis=1
-    )
+    # Step 6: Create categories_id (list of category numbers where value=1)
+    def get_category_ids(row):
+        ids = []
+        for col in cat_cols:
+            val = row[col]
+            if pd.notna(val) and val == 1:
+                # Extract category number from column name (e.g., "category_1" -> "1")
+                cat_num = col.replace('category_', '')
+                ids.append(cat_num)
+        return ','.join(ids)
+
+    categorized_data['categories_id'] = categorized_data.apply(get_category_ids, axis=1)
 
     if filename:
         categorized_data.to_csv(filename, index=False)

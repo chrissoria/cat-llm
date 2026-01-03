@@ -9,11 +9,19 @@ from .calls.pdf_CoVe import (
 
 
 def _load_pdf_files(pdf_input):
-    """Load PDF files from directory path or return list as-is."""
+    """Load PDF files from directory path, single file path, or return list as-is."""
     import os
     import glob
 
-    if not isinstance(pdf_input, list):
+    if isinstance(pdf_input, list):
+        pdf_files = pdf_input
+        print(f"Provided a list of {len(pdf_input)} PDFs.")
+    elif os.path.isfile(pdf_input):
+        # Single file path
+        pdf_files = [pdf_input]
+        print(f"Provided 1 PDF file.")
+    elif os.path.isdir(pdf_input):
+        # Directory path - glob for PDFs
         pdf_files = glob.glob(os.path.join(pdf_input, '*.pdf'))
         pdf_files.extend(glob.glob(os.path.join(pdf_input, '*.PDF')))
         # Remove duplicates (case-insensitive systems)
@@ -24,10 +32,9 @@ def _load_pdf_files(pdf_input):
                 seen.add(f.lower())
                 unique_files.append(f)
         pdf_files = unique_files
-        print(f"Found {len(pdf_files)} PDFs.")
+        print(f"Found {len(pdf_files)} PDFs in directory.")
     else:
-        pdf_files = pdf_input
-        print(f"Provided a list of {len(pdf_input)} PDFs.")
+        raise FileNotFoundError(f"PDF input not found: {pdf_input}")
 
     return pdf_files
 
@@ -1095,6 +1102,19 @@ Provide the final categorization in the same JSON format:"""
         categorized_data.loc[~has_invalid_strings, cat_cols].fillna(0)
     )
     categorized_data[cat_cols] = categorized_data[cat_cols].astype('Int64')
+
+    # Create categories_id (list of category numbers where value=1)
+    def get_category_ids(row):
+        ids = []
+        for col in cat_cols:
+            val = row[col]
+            if pd.notna(val) and val == 1:
+                # Extract category number from column name (e.g., "category_1" -> "1")
+                cat_num = col.replace('category_', '')
+                ids.append(cat_num)
+        return ','.join(ids)
+
+    categorized_data['categories_id'] = categorized_data.apply(get_category_ids, axis=1)
 
     if filename:
         save_path = os.path.join(save_directory, filename) if save_directory else filename
