@@ -9,7 +9,7 @@ from .calls.image_CoVe import (
 
 
 def _load_image_files(image_input):
-    """Load image files from directory path or return list as-is."""
+    """Load image files from directory path, single file path, or return list as-is."""
     import os
     import glob
 
@@ -21,14 +21,21 @@ def _load_image_files(image_input):
         '*.psd'
     ]
 
-    if not isinstance(image_input, list):
+    if isinstance(image_input, list):
+        image_files = image_input
+        print(f"Provided a list of {len(image_input)} images.")
+    elif os.path.isfile(image_input):
+        # Single file path
+        image_files = [image_input]
+        print(f"Provided 1 image file.")
+    elif os.path.isdir(image_input):
+        # Directory path - glob for images
         image_files = []
         for ext in image_extensions:
             image_files.extend(glob.glob(os.path.join(image_input, ext)))
-        print(f"Found {len(image_files)} images.")
+        print(f"Found {len(image_files)} images in directory.")
     else:
-        image_files = image_input
-        print(f"Provided a list of {len(image_input)} images.")
+        raise FileNotFoundError(f"Image input not found: {image_input}")
 
     return image_files
 
@@ -668,6 +675,19 @@ Provide the final categorization in the same JSON format:"""
         categorized_data.loc[~has_invalid_strings, cat_cols].fillna(0)
     )
     categorized_data[cat_cols] = categorized_data[cat_cols].astype('Int64')
+
+    # Create categories_id (list of category numbers where value=1)
+    def get_category_ids(row):
+        ids = []
+        for col in cat_cols:
+            val = row[col]
+            if pd.notna(val) and val == 1:
+                # Extract category number from column name (e.g., "category_1" -> "1")
+                cat_num = col.replace('category_', '')
+                ids.append(cat_num)
+        return ','.join(ids)
+
+    categorized_data['categories_id'] = categorized_data.apply(get_category_ids, axis=1)
 
     if filename:
         save_path = os.path.join(save_directory, filename) if save_directory else filename
