@@ -872,13 +872,56 @@ def multi_class_unified(
                 + "="*60
             )
 
-        # Auto-pull model if not installed
-        if not check_ollama_model(model):
+        # Check system resources before proceeding
+        resources = check_system_resources(model)
+
+        # Check if model needs to be downloaded
+        model_installed = check_ollama_model(model)
+
+        if not model_installed:
+            # Show resource info and download prompt
             if not pull_ollama_model(model, auto_confirm=auto_download):
                 raise RuntimeError(
                     f"Model '{model}' not available. "
                     f"To download manually: ollama pull {model}"
                 )
+        else:
+            # Model is installed - still check if it can run
+            if resources["warnings"] or not resources["can_run"]:
+                print(f"\n{'='*60}")
+                print(f"  Model '{model}' - System Resource Check")
+                print(f"{'='*60}")
+                size_estimate = get_ollama_model_size_estimate(model)
+                print(f"  Model size:      {size_estimate}")
+                if resources["details"].get("estimated_ram"):
+                    print(f"  RAM required:    ~{resources['details']['estimated_ram']}")
+                if resources["details"].get("total_ram"):
+                    print(f"  System RAM:      {resources['details']['total_ram']}")
+
+                if resources["warnings"]:
+                    print(f"\n  {'!'*50}")
+                    for warning in resources["warnings"]:
+                        print(f"  ⚠️  {warning}")
+                    print(f"  {'!'*50}")
+
+                if not resources["can_run"]:
+                    print(f"\n  ⚠️  Warning: Model may not run well on this system.")
+                    print(f"  Consider a smaller variant (e.g., '{model}:1b' or '{model}:3b').")
+                    print(f"{'='*60}")
+
+                    # Ask if they want to continue
+                    if not auto_download:
+                        try:
+                            response = input(f"\n  Continue anyway? [y/N]: ").strip().lower()
+                            if response not in ['y', 'yes']:
+                                raise RuntimeError(
+                                    f"Model '{model}' may be too large for this system. "
+                                    f"Try a smaller variant like '{model}:3b' or '{model}:1b'."
+                                )
+                        except (EOFError, KeyboardInterrupt):
+                            raise RuntimeError("Operation cancelled by user.")
+
+                print()  # Add spacing
 
     print(f"Using provider: {provider}, model: {model}")
 
