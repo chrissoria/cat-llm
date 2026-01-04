@@ -446,6 +446,72 @@ def check_ollama_model(model: str, host: str = "localhost", port: int = 11434) -
     )
 
 
+def pull_ollama_model(model: str, host: str = "localhost", port: int = 11434) -> bool:
+    """
+    Pull/download a model in Ollama.
+
+    Args:
+        model: Model name to pull (e.g., "llama3.2", "mistral")
+        host: Hostname where Ollama is running
+        port: Port number
+
+    Returns:
+        True if model was pulled successfully, False otherwise
+    """
+    print(f"Model '{model}' not found locally. Downloading from Ollama...")
+
+    try:
+        # Ollama pull endpoint streams the response
+        response = requests.post(
+            f"http://{host}:{port}/api/pull",
+            json={"name": model},
+            stream=True,
+            timeout=600  # 10 minute timeout for large models
+        )
+
+        if response.status_code != 200:
+            print(f"Failed to pull model: HTTP {response.status_code}")
+            return False
+
+        # Process streaming response to show progress
+        last_status = ""
+        for line in response.iter_lines():
+            if line:
+                try:
+                    data = json.loads(line)
+                    status = data.get("status", "")
+
+                    # Show progress for downloads
+                    if "completed" in data and "total" in data:
+                        completed = data["completed"]
+                        total = data["total"]
+                        pct = (completed / total * 100) if total > 0 else 0
+                        print(f"\r  {status}: {pct:.1f}% ({completed}/{total})", end="", flush=True)
+                    elif status != last_status:
+                        if last_status:
+                            print()  # newline after progress
+                        print(f"  {status}")
+                        last_status = status
+
+                    # Check for errors
+                    if "error" in data:
+                        print(f"\nError: {data['error']}")
+                        return False
+
+                except json.JSONDecodeError:
+                    continue
+
+        print(f"\nModel '{model}' downloaded successfully!")
+        return True
+
+    except requests.exceptions.Timeout:
+        print(f"\nTimeout while downloading model '{model}'. Try again or download manually: ollama pull {model}")
+        return False
+    except requests.exceptions.RequestException as e:
+        print(f"\nError pulling model: {e}")
+        return False
+
+
 def build_json_schema(categories: list) -> dict:
     """Build a JSON schema for the classification output."""
     properties = {}
@@ -549,18 +615,12 @@ def multi_class_unified(
                 "  - Download from: https://ollama.ai"
             )
 
+        # Auto-pull model if not installed
         if not check_ollama_model(model):
-            available = list_ollama_models()
-            if available:
-                raise ValueError(
-                    f"Model '{model}' not found in Ollama.\n"
-                    f"Available models: {', '.join(available)}\n"
-                    f"To download: ollama pull {model}"
-                )
-            else:
-                raise ValueError(
-                    f"Model '{model}' not found. No models installed in Ollama.\n"
-                    f"To download: ollama pull {model}"
+            if not pull_ollama_model(model):
+                raise RuntimeError(
+                    f"Failed to download model '{model}'. "
+                    f"Please try manually: ollama pull {model}"
                 )
 
     print(f"Using provider: {provider}, model: {model}")
