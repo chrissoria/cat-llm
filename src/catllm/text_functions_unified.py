@@ -515,7 +515,7 @@ def get_ollama_model_size_estimate(model: str) -> str:
     return "unknown"
 
 
-def pull_ollama_model(model: str, host: str = "localhost", port: int = 11434) -> bool:
+def pull_ollama_model(model: str, host: str = "localhost", port: int = 11434, auto_confirm: bool = False) -> bool:
     """
     Pull/download a model in Ollama.
 
@@ -523,6 +523,7 @@ def pull_ollama_model(model: str, host: str = "localhost", port: int = 11434) ->
         model: Model name to pull (e.g., "llama3.2", "mistral")
         host: Hostname where Ollama is running
         port: Port number
+        auto_confirm: If True, skip confirmation prompt
 
     Returns:
         True if model was pulled successfully, False otherwise
@@ -533,9 +534,21 @@ def pull_ollama_model(model: str, host: str = "localhost", port: int = 11434) ->
     print(f"\n{'='*60}")
     print(f"  Model '{model}' not found locally")
     print(f"  Estimated download size: {size_estimate}")
-    print(f"  Downloading from Ollama registry...")
-    print(f"  (Press Ctrl+C to cancel)")
-    print(f"{'='*60}\n")
+    print(f"{'='*60}")
+
+    # Ask for confirmation
+    if not auto_confirm:
+        try:
+            response = input(f"\n  Download '{model}'? [y/N]: ").strip().lower()
+            if response not in ['y', 'yes']:
+                print("  Download cancelled.")
+                return False
+        except (EOFError, KeyboardInterrupt):
+            print("\n  Download cancelled.")
+            return False
+
+    print(f"\n  Downloading from Ollama registry...")
+    print(f"  (Press Ctrl+C to cancel)\n")
 
     try:
         # Ollama pull endpoint streams the response
@@ -647,6 +660,7 @@ def multi_class_unified(
     chain_of_thought: bool = True,
     use_json_schema: bool = True,
     filename: str = None,
+    auto_download: bool = False,
 ):
     """
     Multi-class text classification using a unified HTTP-based approach.
@@ -667,6 +681,8 @@ def multi_class_unified(
         chain_of_thought: Whether to use step-by-step reasoning in prompt
         use_json_schema: Whether to use strict JSON schema (vs just json_object mode)
         filename: Optional CSV filename to save results
+        auto_download: If True, automatically download missing Ollama models without
+                      prompting. If False (default), asks for confirmation before downloading.
 
     Returns:
         DataFrame with classification results
@@ -714,10 +730,10 @@ def multi_class_unified(
 
         # Auto-pull model if not installed
         if not check_ollama_model(model):
-            if not pull_ollama_model(model):
+            if not pull_ollama_model(model, auto_confirm=auto_download):
                 raise RuntimeError(
-                    f"Failed to download model '{model}'. "
-                    f"Please try manually: ollama pull {model}"
+                    f"Model '{model}' not available. "
+                    f"To download manually: ollama pull {model}"
                 )
 
     print(f"Using provider: {provider}, model: {model}")
