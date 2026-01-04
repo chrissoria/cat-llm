@@ -458,6 +458,119 @@ def _format_bytes(size_bytes: int) -> str:
         return f"{size_bytes / (1024 ** 3):.2f} GB"
 
 
+def _parse_size_string(size_str: str) -> int:
+    """Parse a size string like '2.0 GB' into bytes."""
+    if size_str == "unknown":
+        return 0
+
+    size_str = size_str.strip().upper()
+    try:
+        if "GB" in size_str:
+            return int(float(size_str.replace("GB", "").strip()) * 1024 ** 3)
+        elif "MB" in size_str:
+            return int(float(size_str.replace("MB", "").strip()) * 1024 ** 2)
+        elif "KB" in size_str:
+            return int(float(size_str.replace("KB", "").strip()) * 1024)
+        else:
+            return int(float(size_str.replace("B", "").strip()))
+    except ValueError:
+        return 0
+
+
+def check_system_resources(model: str) -> dict:
+    """
+    Check if system has enough resources to download and run a model.
+
+    Args:
+        model: Model name to check
+
+    Returns:
+        dict with 'can_download', 'can_run', 'warnings', and 'details'
+    """
+    import shutil
+    import os
+
+    result = {
+        "can_download": True,
+        "can_run": True,
+        "warnings": [],
+        "details": {}
+    }
+
+    size_estimate = get_ollama_model_size_estimate(model)
+    model_size_bytes = _parse_size_string(size_estimate)
+
+    # Check disk space (Ollama typically stores models in ~/.ollama)
+    ollama_dir = os.path.expanduser("~/.ollama")
+    if not os.path.exists(ollama_dir):
+        ollama_dir = os.path.expanduser("~")
+
+    try:
+        disk_usage = shutil.disk_usage(ollama_dir)
+        free_space = disk_usage.free
+        result["details"]["free_disk_space"] = _format_bytes(free_space)
+        result["details"]["model_size"] = size_estimate
+
+        # Need at least 1.5x model size for download + extraction
+        required_space = int(model_size_bytes * 1.5) if model_size_bytes > 0 else 0
+
+        if required_space > 0 and free_space < required_space:
+            result["can_download"] = False
+            result["warnings"].append(
+                f"Insufficient disk space. Need ~{_format_bytes(required_space)}, "
+                f"but only {_format_bytes(free_space)} available."
+            )
+        elif required_space > 0 and free_space < required_space * 2:
+            result["warnings"].append(
+                f"Low disk space warning: {_format_bytes(free_space)} available."
+            )
+    except Exception:
+        result["details"]["free_disk_space"] = "unknown"
+
+    # Estimate RAM requirements (rough guide: model size * 1.2 for inference)
+    # This is approximate - actual requirements vary by quantization
+    if model_size_bytes > 0:
+        estimated_ram = model_size_bytes * 1.2
+        result["details"]["estimated_ram"] = _format_bytes(int(estimated_ram))
+
+        # Try to get system RAM (works on most systems)
+        try:
+            import subprocess
+            if os.name == 'posix':  # Linux/macOS
+                if os.path.exists('/proc/meminfo'):  # Linux
+                    with open('/proc/meminfo', 'r') as f:
+                        for line in f:
+                            if line.startswith('MemTotal:'):
+                                total_ram = int(line.split()[1]) * 1024  # Convert KB to bytes
+                                break
+                else:  # macOS
+                    output = subprocess.check_output(['sysctl', '-n', 'hw.memsize'], text=True)
+                    total_ram = int(output.strip())
+
+                result["details"]["total_ram"] = _format_bytes(total_ram)
+
+                if estimated_ram > total_ram * 0.8:
+                    result["can_run"] = False
+                    result["warnings"].append(
+                        f"Model may be too large for your system. "
+                        f"Requires ~{_format_bytes(int(estimated_ram))} RAM, "
+                        f"but system has {_format_bytes(total_ram)}."
+                    )
+                elif estimated_ram > total_ram * 0.5:
+                    result["warnings"].append(
+                        f"Model will use significant RAM (~{_format_bytes(int(estimated_ram))})."
+                    )
+        except Exception:
+            result["details"]["total_ram"] = "unknown"
+            # If we can't check RAM, warn for large models
+            if model_size_bytes > 8 * 1024 ** 3:  # > 8GB models
+                result["warnings"].append(
+                    f"Large model (~{size_estimate}). Ensure you have sufficient RAM."
+                )
+
+    return result
+
+
 # Common model sizes (approximate) for user reference
 OLLAMA_MODEL_SIZES = {
     "llama3.2": "2.0 GB",
@@ -528,18 +641,49 @@ def pull_ollama_model(model: str, host: str = "localhost", port: int = 11434, au
     Returns:
         True if model was pulled successfully, False otherwise
     """
-    # Get size estimate and warn user
+    # Get size estimate and check system resources
     size_estimate = get_ollama_model_size_estimate(model)
+    resources = check_system_resources(model)
 
     print(f"\n{'='*60}")
     print(f"  Model '{model}' not found locally")
-    print(f"  Estimated download size: {size_estimate}")
+    print(f"{'='*60}")
+    print(f"  Model size:      {size_estimate}")
+    if resources["details"].get("estimated_ram"):
+        print(f"  RAM required:    ~{resources['details']['estimated_ram']}")
+    if resources["details"].get("free_disk_space"):
+        print(f"  Free disk space: {resources['details']['free_disk_space']}")
+    if resources["details"].get("total_ram"):
+        print(f"  System RAM:      {resources['details']['total_ram']}")
+
+    # Show warnings
+    if resources["warnings"]:
+        print(f"\n  {'!'*50}")
+        for warning in resources["warnings"]:
+            print(f"  ⚠️  {warning}")
+        print(f"  {'!'*50}")
+
+    # Block if can't download
+    if not resources["can_download"]:
+        print(f"\n  ❌ Cannot download: insufficient disk space.")
+        print(f"  Free up disk space and try again.")
+        return False
+
+    # Warn but allow if can't run (user might want to try anyway)
+    if not resources["can_run"]:
+        print(f"\n  ⚠️  Warning: Model may not run on this system.")
+        print(f"  Consider a smaller model variant (e.g., '{model}:1b' or '{model}:3b').")
+
     print(f"{'='*60}")
 
     # Ask for confirmation
     if not auto_confirm:
         try:
-            response = input(f"\n  Download '{model}'? [y/N]: ").strip().lower()
+            if not resources["can_run"]:
+                prompt = f"\n  Download anyway? [y/N]: "
+            else:
+                prompt = f"\n  Download '{model}'? [y/N]: "
+            response = input(prompt).strip().lower()
             if response not in ['y', 'yes']:
                 print("  Download cancelled.")
                 return False
