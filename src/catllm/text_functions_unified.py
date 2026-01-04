@@ -446,6 +446,75 @@ def check_ollama_model(model: str, host: str = "localhost", port: int = 11434) -
     )
 
 
+def _format_bytes(size_bytes: int) -> str:
+    """Format bytes into human-readable string."""
+    if size_bytes < 1024:
+        return f"{size_bytes} B"
+    elif size_bytes < 1024 ** 2:
+        return f"{size_bytes / 1024:.1f} KB"
+    elif size_bytes < 1024 ** 3:
+        return f"{size_bytes / (1024 ** 2):.1f} MB"
+    else:
+        return f"{size_bytes / (1024 ** 3):.2f} GB"
+
+
+# Common model sizes (approximate) for user reference
+OLLAMA_MODEL_SIZES = {
+    "llama3.2": "2.0 GB",
+    "llama3.2:1b": "1.3 GB",
+    "llama3.2:3b": "2.0 GB",
+    "llama3.1": "4.7 GB",
+    "llama3.1:8b": "4.7 GB",
+    "llama3.1:70b": "40 GB",
+    "llama3": "4.7 GB",
+    "llama2": "3.8 GB",
+    "mistral": "4.1 GB",
+    "mixtral": "26 GB",
+    "phi3": "2.2 GB",
+    "phi3:mini": "2.2 GB",
+    "gemma": "5.0 GB",
+    "gemma:2b": "1.7 GB",
+    "gemma:7b": "5.0 GB",
+    "gemma2": "5.4 GB",
+    "gemma2:2b": "1.6 GB",
+    "gemma2:9b": "5.4 GB",
+    "gemma2:27b": "16 GB",
+    "qwen2.5": "4.7 GB",
+    "qwen2.5:0.5b": "397 MB",
+    "qwen2.5:1.5b": "986 MB",
+    "qwen2.5:3b": "1.9 GB",
+    "qwen2.5:7b": "4.7 GB",
+    "deepseek-r1": "4.7 GB",
+    "codellama": "3.8 GB",
+    "codegemma": "5.0 GB",
+    "nomic-embed-text": "274 MB",
+}
+
+
+def get_ollama_model_size_estimate(model: str) -> str:
+    """
+    Get estimated download size for an Ollama model.
+
+    Args:
+        model: Model name
+
+    Returns:
+        Human-readable size estimate or "unknown"
+    """
+    model_lower = model.lower()
+
+    # Check exact match first
+    if model_lower in OLLAMA_MODEL_SIZES:
+        return OLLAMA_MODEL_SIZES[model_lower]
+
+    # Check base model name (without tag)
+    base_model = model_lower.split(":")[0]
+    if base_model in OLLAMA_MODEL_SIZES:
+        return OLLAMA_MODEL_SIZES[base_model]
+
+    return "unknown"
+
+
 def pull_ollama_model(model: str, host: str = "localhost", port: int = 11434) -> bool:
     """
     Pull/download a model in Ollama.
@@ -458,7 +527,15 @@ def pull_ollama_model(model: str, host: str = "localhost", port: int = 11434) ->
     Returns:
         True if model was pulled successfully, False otherwise
     """
-    print(f"Model '{model}' not found locally. Downloading from Ollama...")
+    # Get size estimate and warn user
+    size_estimate = get_ollama_model_size_estimate(model)
+
+    print(f"\n{'='*60}")
+    print(f"  Model '{model}' not found locally")
+    print(f"  Estimated download size: {size_estimate}")
+    print(f"  Downloading from Ollama registry...")
+    print(f"  (Press Ctrl+C to cancel)")
+    print(f"{'='*60}\n")
 
     try:
         # Ollama pull endpoint streams the response
@@ -466,7 +543,7 @@ def pull_ollama_model(model: str, host: str = "localhost", port: int = 11434) ->
             f"http://{host}:{port}/api/pull",
             json={"name": model},
             stream=True,
-            timeout=600  # 10 minute timeout for large models
+            timeout=None  # No timeout - large models can take a while
         )
 
         if response.status_code != 200:
@@ -475,6 +552,8 @@ def pull_ollama_model(model: str, host: str = "localhost", port: int = 11434) ->
 
         # Process streaming response to show progress
         last_status = ""
+        total_size_shown = False
+
         for line in response.iter_lines():
             if line:
                 try:
@@ -486,29 +565,39 @@ def pull_ollama_model(model: str, host: str = "localhost", port: int = 11434) ->
                         completed = data["completed"]
                         total = data["total"]
                         pct = (completed / total * 100) if total > 0 else 0
-                        print(f"\r  {status}: {pct:.1f}% ({completed}/{total})", end="", flush=True)
+
+                        # Show actual total size on first progress update
+                        if not total_size_shown and total > 0:
+                            print(f"  Actual size: {_format_bytes(total)}")
+                            total_size_shown = True
+
+                        print(f"\r  {status}: {pct:.1f}% ({_format_bytes(completed)}/{_format_bytes(total)})", end="", flush=True)
                     elif status != last_status:
-                        if last_status:
-                            print()  # newline after progress
+                        if last_status and "completed" in str(last_status):
+                            print()  # newline after progress bar
                         print(f"  {status}")
                         last_status = status
 
                     # Check for errors
                     if "error" in data:
-                        print(f"\nError: {data['error']}")
+                        print(f"\n  Error: {data['error']}")
                         return False
 
                 except json.JSONDecodeError:
                     continue
 
-        print(f"\nModel '{model}' downloaded successfully!")
+        print(f"\n  Model '{model}' downloaded successfully!")
         return True
 
+    except KeyboardInterrupt:
+        print(f"\n\n  Download cancelled by user.")
+        return False
     except requests.exceptions.Timeout:
-        print(f"\nTimeout while downloading model '{model}'. Try again or download manually: ollama pull {model}")
+        print(f"\n  Timeout while downloading model '{model}'.")
+        print(f"  Try again or download manually: ollama pull {model}")
         return False
     except requests.exceptions.RequestException as e:
-        print(f"\nError pulling model: {e}")
+        print(f"\n  Error pulling model: {e}")
         return False
 
 
@@ -609,10 +698,18 @@ def multi_class_unified(
     if provider == "ollama":
         if not check_ollama_running():
             raise ConnectionError(
-                "Ollama is not running. Please start Ollama first:\n"
-                "  - macOS/Linux: Run 'ollama serve' in terminal\n"
-                "  - Or ensure the Ollama app is running\n"
-                "  - Download from: https://ollama.ai"
+                "\n" + "="*60 + "\n"
+                "  OLLAMA NOT RUNNING\n"
+                "="*60 + "\n\n"
+                "Ollama must be running to use local models.\n\n"
+                "To start Ollama:\n"
+                "  macOS:   Open the Ollama app, or run 'ollama serve'\n"
+                "  Linux:   Run 'ollama serve' in terminal\n"
+                "  Windows: Open the Ollama app\n\n"
+                "Don't have Ollama installed?\n"
+                "  Download from: https://ollama.ai/download\n\n"
+                "After starting Ollama, run your code again.\n"
+                + "="*60
             )
 
         # Auto-pull model if not installed
