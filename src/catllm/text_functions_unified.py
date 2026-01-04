@@ -53,6 +53,11 @@ PROVIDER_CONFIG = {
         "auth_header": "Authorization",
         "auth_prefix": "Bearer ",
     },
+    "ollama": {
+        "endpoint": "http://localhost:11434/v1/chat/completions",
+        "auth_header": None,  # No auth required for local Ollama
+        "auth_prefix": "",
+    },
 }
 
 
@@ -86,7 +91,10 @@ class UnifiedLLMClient:
         headers = {"Content-Type": "application/json"}
         auth_header = self.config["auth_header"]
         auth_prefix = self.config["auth_prefix"]
-        headers[auth_header] = f"{auth_prefix}{self.api_key}"
+
+        # Some providers (like Ollama) don't require auth
+        if auth_header is not None:
+            headers[auth_header] = f"{auth_prefix}{self.api_key}"
 
         # Anthropic requires additional headers
         if self.provider == "anthropic":
@@ -124,7 +132,8 @@ class UnifiedLLMClient:
         }
 
         # Structured output
-        if json_schema:
+        # Ollama only supports json_object mode, not strict json_schema
+        if json_schema and self.provider not in ["ollama"]:
             payload["response_format"] = {
                 "type": "json_schema",
                 "json_schema": {
@@ -354,8 +363,25 @@ def detect_provider(model_name: str, provider: str = "auto") -> str:
     else:
         raise ValueError(
             f"Could not auto-detect provider from '{model_name}'. "
-            "Please specify provider explicitly."
+            "Please specify provider explicitly: openai, anthropic, google, mistral, "
+            "perplexity, xai, huggingface, or ollama."
         )
+
+
+def set_ollama_endpoint(host: str = "localhost", port: int = 11434):
+    """
+    Configure a custom Ollama endpoint.
+
+    Useful if Ollama is running on a different host or port.
+
+    Args:
+        host: Hostname where Ollama is running (default: localhost)
+        port: Port number (default: 11434)
+
+    Example:
+        set_ollama_endpoint("192.168.1.100", 11434)
+    """
+    PROVIDER_CONFIG["ollama"]["endpoint"] = f"http://{host}:{port}/v1/chat/completions"
 
 
 def build_json_schema(categories: list) -> dict:
@@ -396,7 +422,7 @@ def extract_json(reply: str) -> str:
 def multi_class_unified(
     survey_input,
     categories: list,
-    api_key: str,
+    api_key: str = None,
     model: str = "gpt-4o",
     provider: str = "auto",
     survey_question: str = "",
@@ -414,9 +440,11 @@ def multi_class_unified(
     Args:
         survey_input: List or Series of text responses to classify
         categories: List of category names
-        api_key: API key for the LLM provider
-        model: Model name (e.g., "gpt-4o", "claude-3-5-sonnet-20241022", "gemini-1.5-flash")
-        provider: Provider name or "auto" to detect from model name
+        api_key: API key for the LLM provider (not required for Ollama)
+        model: Model name (e.g., "gpt-4o", "claude-3-5-sonnet-20241022", "gemini-1.5-flash",
+               or any Ollama model like "llama3.2", "mistral", "phi3")
+        provider: Provider name or "auto" to detect from model name.
+                  For local models, use provider="ollama"
         survey_question: Optional context about what question was asked
         creativity: Temperature setting (None for provider default)
         chain_of_thought: Whether to use step-by-step reasoning in prompt
@@ -425,9 +453,30 @@ def multi_class_unified(
 
     Returns:
         DataFrame with classification results
+
+    Example with Ollama (local):
+        results = multi_class_unified(
+            survey_input=["I moved for work"],
+            categories=["Employment", "Family"],
+            model="llama3.2",
+            provider="ollama",
+        )
+
+    Example with cloud provider:
+        results = multi_class_unified(
+            survey_input=["I moved for work"],
+            categories=["Employment", "Family"],
+            api_key="your-api-key",
+            model="gpt-4o",
+        )
     """
     # Detect provider
     provider = detect_provider(model, provider)
+
+    # Validate api_key requirement
+    if provider != "ollama" and not api_key:
+        raise ValueError(f"api_key is required for provider '{provider}'")
+
     print(f"Using provider: {provider}, model: {model}")
 
     # Initialize client
