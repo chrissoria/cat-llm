@@ -21,6 +21,167 @@ except ImportError as e:
 
 MAX_CATEGORIES = 10
 INITIAL_CATEGORIES = 3
+MAX_FILE_SIZE_MB = 100  # Warn users if total file size exceeds this
+
+
+def calculate_total_file_size(files):
+    """Calculate total size of uploaded files in MB."""
+    if files is None:
+        return 0
+    if not isinstance(files, list):
+        files = [files]
+
+    total_bytes = 0
+    for f in files:
+        try:
+            file_path = f if isinstance(f, str) else f.name
+            total_bytes += os.path.getsize(file_path)
+        except (OSError, AttributeError):
+            pass
+    return total_bytes / (1024 * 1024)  # Convert to MB
+
+
+def generate_extract_code(input_type, description, model, model_source, max_categories, mode=None):
+    """Generate Python code for category extraction."""
+    if input_type == "text":
+        return f'''import catllm
+import pandas as pd
+
+# Load your data
+df = pd.read_csv("your_data.csv")
+
+# Extract categories from the text column
+result = catllm.extract(
+    input_data=df["{description}"].tolist(),
+    api_key="YOUR_API_KEY",
+    input_type="text",
+    description="{description}",
+    user_model="{model}",
+    model_source="{model_source}",
+    max_categories={max_categories}
+)
+
+# View extracted categories
+print(result["top_categories"])
+print(result["counts_df"])
+'''
+    elif input_type == "pdf":
+        mode_line = f',\n    mode="{mode}"' if mode else ''
+        return f'''import catllm
+
+# Extract categories from PDF documents
+result = catllm.extract(
+    input_data="path/to/your/pdfs/",  # or list of PDF paths
+    api_key="YOUR_API_KEY",
+    input_type="pdf",
+    description="{description}"{mode_line},
+    user_model="{model}",
+    model_source="{model_source}",
+    max_categories={max_categories}
+)
+
+# View extracted categories
+print(result["top_categories"])
+print(result["counts_df"])
+'''
+    else:  # image
+        return f'''import catllm
+
+# Extract categories from images
+result = catllm.extract(
+    input_data="path/to/your/images/",  # or list of image paths
+    api_key="YOUR_API_KEY",
+    input_type="image",
+    description="{description}",
+    user_model="{model}",
+    model_source="{model_source}",
+    max_categories={max_categories}
+)
+
+# View extracted categories
+print(result["top_categories"])
+print(result["counts_df"])
+'''
+
+
+def generate_classify_code(input_type, description, categories, model, model_source, mode=None):
+    """Generate Python code for classification."""
+    categories_str = ",\n    ".join([f'"{cat}"' for cat in categories])
+
+    if input_type == "text":
+        return f'''import catllm
+import pandas as pd
+
+# Load your data
+df = pd.read_csv("your_data.csv")
+
+# Define categories
+categories = [
+    {categories_str}
+]
+
+# Classify the text data
+result = catllm.classify(
+    input_data=df["{description}"].tolist(),
+    categories=categories,
+    api_key="YOUR_API_KEY",
+    input_type="text",
+    description="{description}",
+    user_model="{model}",
+    model_source="{model_source}"
+)
+
+# View results
+print(result)
+result.to_csv("classified_results.csv", index=False)
+'''
+    elif input_type == "pdf":
+        mode_line = f',\n    mode="{mode}"' if mode else ''
+        return f'''import catllm
+
+# Define categories
+categories = [
+    {categories_str}
+]
+
+# Classify PDF documents
+result = catllm.classify(
+    input_data="path/to/your/pdfs/",  # or list of PDF paths
+    categories=categories,
+    api_key="YOUR_API_KEY",
+    input_type="pdf",
+    description="{description}"{mode_line},
+    user_model="{model}",
+    model_source="{model_source}"
+)
+
+# View results
+print(result)
+result.to_csv("classified_results.csv", index=False)
+'''
+    else:  # image
+        return f'''import catllm
+
+# Define categories
+categories = [
+    {categories_str}
+]
+
+# Classify images
+result = catllm.classify(
+    input_data="path/to/your/images/",  # or list of image paths
+    categories=categories,
+    api_key="YOUR_API_KEY",
+    input_type="image",
+    description="{description}",
+    user_model="{model}",
+    model_source="{model_source}"
+)
+
+# View results
+print(result)
+result.to_csv("classified_results.csv", index=False)
+'''
 
 # Free models (uses Space secrets - no user API key needed)
 FREE_MODEL_CHOICES = [
@@ -108,8 +269,13 @@ def get_api_key(model, model_tier, api_key_input):
 
 def generate_methodology_report_pdf(categories, model, column_name, num_rows, model_source, filename, success_rate,
                           result_df=None, processing_time=None, prompt_template=None,
-                          data_quality=None, catllm_version=None, python_version=None):
-    """Generate a PDF methodology report for reproducibility and transparency."""
+                          data_quality=None, catllm_version=None, python_version=None,
+                          task_type="assign", extracted_categories_df=None, max_categories=None,
+                          input_type="text", description=None):
+    """Generate a PDF methodology report for reproducibility and transparency.
+
+    task_type: "extract", "assign", or "extract_and_assign"
+    """
     from reportlab.lib.pagesizes import letter
     from reportlab.lib import colors
     from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
@@ -126,60 +292,100 @@ def generate_methodology_report_pdf(categories, model, column_name, num_rows, mo
 
     story = []
 
-    story.append(Paragraph("CatLLM Methodology Report", title_style))
+    # Title based on task type
+    if task_type == "extract":
+        report_title = "CatLLM Category Extraction Report"
+    elif task_type == "extract_and_assign":
+        report_title = "CatLLM Extraction &amp; Classification Report"
+    else:
+        report_title = "CatLLM Classification Report"
+
+    story.append(Paragraph(report_title, title_style))
     story.append(Paragraph(f"Generated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}", normal_style))
     story.append(Spacer(1, 15))
 
     story.append(Paragraph("About This Report", heading_style))
-    about_text = """This methodology report documents the classification process for reproducibility and transparency. \
+
+    if task_type == "extract":
+        about_text = """This methodology report documents the category extraction process for reproducibility and transparency. \
+CatLLM uses Large Language Models to automatically discover meaningful categories from your data. The extraction process \
+analyzes your data in chunks, identifies recurring themes, and consolidates them into a final set of categories. \
+This automated approach helps researchers avoid confirmation bias in category selection."""
+    elif task_type == "extract_and_assign":
+        about_text = """This methodology report documents the automated category extraction and classification process. \
+CatLLM first discovers categories from your data using LLMs, then classifies each item into those categories. \
+This two-phase approach combines exploratory category discovery with systematic classification, ensuring both \
+data-driven category selection and reproducible assignments."""
+    else:
+        about_text = """This methodology report documents the classification process for reproducibility and transparency. \
 CatLLM addresses an issue identified by researchers in "Prompt-Hacking: The New p-Hacking?" (Kosch &amp; Feger, 2025; \
 arXiv:2504.14571): researchers could keep modifying prompts to obtain outputs that support desired conclusions, and \
 this variability in pseudo-natural language poses a challenge for reproducibility since each prompt, even if only \
 slightly altered, can yield different outputs, making it impossible to replicate findings reliably. CatLLM restricts \
 the prompt to a standard template that is impartial to the researcher's inclinations, ensuring \
 consistent and reproducible results."""
+
     story.append(Paragraph(about_text, normal_style))
     story.append(Spacer(1, 15))
 
-    story.append(Paragraph("Category Mapping", heading_style))
-    story.append(Paragraph("Each category column contains binary values: 1 = present, 0 = not present", normal_style))
-    story.append(Spacer(1, 8))
+    # For extract_and_assign, show extraction methodology first
+    if task_type in ["extract", "extract_and_assign"]:
+        story.append(Paragraph("Category Extraction Methodology", heading_style))
+        extraction_text = f"""Categories were automatically extracted from your data using the following process:
 
-    category_data = [["Column Name", "Category Description"]]
-    for i, cat in enumerate(categories, 1):
-        category_data.append([f"category_{i}", cat])
+1. Data was divided into chunks for analysis
+2. Each chunk was analyzed by the LLM to identify themes and categories
+3. Categories from all chunks were consolidated and deduplicated
+4. Final categories were selected based on frequency and relevance
+5. Maximum categories requested: {max_categories or 'default'}"""
+        story.append(Paragraph(extraction_text.replace('\n', '<br/>'), normal_style))
+        story.append(Spacer(1, 15))
 
-    cat_table = Table(category_data, colWidths=[120, 330])
-    cat_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ('PADDING', (0, 0), (-1, -1), 6),
-        ('BACKGROUND', (0, 1), (0, -1), colors.lightgrey),
-        ('FONTSIZE', (0, 0), (-1, -1), 9),
-    ]))
-    story.append(cat_table)
-    story.append(Spacer(1, 15))
+    # Category mapping section - for assign and extract_and_assign
+    if task_type in ["assign", "extract_and_assign"] and categories:
+        story.append(Paragraph("Category Mapping", heading_style))
+        story.append(Paragraph("Each category column contains binary values: 1 = present, 0 = not present", normal_style))
+        story.append(Spacer(1, 8))
 
-    story.append(Paragraph("Other Output Columns", heading_style))
-    other_cols = [
-        ["Column Name", "Description"],
-        ["survey_input", "The original text that was classified"],
-        ["model_response", "Raw response from the LLM"],
-        ["json", "Extracted JSON with category assignments"],
-        ["processing_status", "'success' if classification worked, 'error' if failed"],
-        ["categories_id", "Comma-separated list of assigned category numbers"],
-    ]
-    other_table = Table(other_cols, colWidths=[120, 330])
-    other_table.setStyle(TableStyle([
-        ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-        ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-        ('GRID', (0, 0), (-1, -1), 1, colors.black),
-        ('PADDING', (0, 0), (-1, -1), 6),
-        ('BACKGROUND', (0, 1), (0, -1), colors.lightgrey),
-        ('FONTSIZE', (0, 0), (-1, -1), 9),
-    ]))
-    story.append(other_table)
+    # Category table - show for all task types that have categories
+    if categories:
+        category_data = [["Column Name", "Category Description"]]
+        for i, cat in enumerate(categories, 1):
+            category_data.append([f"category_{i}", cat])
+
+        cat_table = Table(category_data, colWidths=[120, 330])
+        cat_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('PADDING', (0, 0), (-1, -1), 6),
+            ('BACKGROUND', (0, 1), (0, -1), colors.lightgrey),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ]))
+        story.append(cat_table)
+        story.append(Spacer(1, 15))
+
+    # Output columns description - only for classification tasks
+    if task_type in ["assign", "extract_and_assign"]:
+        story.append(Paragraph("Other Output Columns", heading_style))
+        other_cols = [
+            ["Column Name", "Description"],
+            ["survey_input", "The original text that was classified"],
+            ["model_response", "Raw response from the LLM"],
+            ["json", "Extracted JSON with category assignments"],
+            ["processing_status", "'success' if classification worked, 'error' if failed"],
+            ["categories_id", "Comma-separated list of assigned category numbers"],
+        ]
+        other_table = Table(other_cols, colWidths=[120, 330])
+        other_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+            ('GRID', (0, 0), (-1, -1), 1, colors.black),
+            ('PADDING', (0, 0), (-1, -1), 6),
+            ('BACKGROUND', (0, 1), (0, -1), colors.lightgrey),
+            ('FONTSIZE', (0, 0), (-1, -1), 9),
+        ]))
+        story.append(other_table)
 
     story.append(Spacer(1, 30))
     story.append(Paragraph("Citation", heading_style))
@@ -187,7 +393,8 @@ consistent and reproducible results."""
     story.append(Spacer(1, 5))
     story.append(Paragraph("Soria, C. (2025). CatLLM: A Python package for LLM-based text classification. DOI: 10.5281/zenodo.15532316", normal_style))
 
-    if result_df is not None and len(result_df) > 0:
+    # Sample results - only for classification tasks
+    if task_type in ["assign", "extract_and_assign"] and result_df is not None and len(result_df) > 0:
         story.append(PageBreak())
         story.append(Paragraph("Sample Results (First 5 Rows)", title_style))
         story.append(Paragraph("Example classifications showing original text and assigned categories:", normal_style))
@@ -216,52 +423,75 @@ consistent and reproducible results."""
         ]))
         story.append(sample_table)
 
-    story.append(PageBreak())
-    story.append(Paragraph("Category Distribution", title_style))
-    story.append(Paragraph("Count and percentage of responses assigned to each category:", normal_style))
-    story.append(Spacer(1, 15))
-
-    if result_df is not None:
-        dist_data = [["Category", "Description", "Count", "Percentage"]]
-        total_rows = len(result_df)
-
-        for i, cat in enumerate(categories, 1):
-            col_name = f"category_{i}"
-            if col_name in result_df.columns:
-                count = int(result_df[col_name].sum())
-                pct = (count / total_rows) * 100 if total_rows > 0 else 0
-                dist_data.append([col_name, cat[:40], str(count), f"{pct:.1f}%"])
-            else:
-                dist_data.append([col_name, cat[:40], "N/A", "N/A"])
-
-        dist_table = Table(dist_data, colWidths=[80, 200, 60, 80])
-        dist_table.setStyle(TableStyle([
-            ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
-            ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
-            ('GRID', (0, 0), (-1, -1), 1, colors.black),
-            ('PADDING', (0, 0), (-1, -1), 6),
-            ('FONTSIZE', (0, 0), (-1, -1), 9),
-            ('ALIGN', (2, 1), (-1, -1), 'CENTER'),
-        ]))
-        story.append(dist_table)
+    # Category distribution - only for classification tasks
+    if task_type in ["assign", "extract_and_assign"]:
+        story.append(PageBreak())
+        story.append(Paragraph("Category Distribution", title_style))
+        story.append(Paragraph("Count and percentage of responses assigned to each category:", normal_style))
         story.append(Spacer(1, 15))
-        story.append(Paragraph(f"<i>Note: Percentages may sum to more than 100% as responses can be assigned to multiple categories.</i>", normal_style))
 
+        if result_df is not None:
+            dist_data = [["Category", "Description", "Count", "Percentage"]]
+            total_rows = len(result_df)
+
+            for i, cat in enumerate(categories, 1):
+                col_name = f"category_{i}"
+                if col_name in result_df.columns:
+                    count = int(result_df[col_name].sum())
+                    pct = (count / total_rows) * 100 if total_rows > 0 else 0
+                    dist_data.append([col_name, cat[:40], str(count), f"{pct:.1f}%"])
+                else:
+                    dist_data.append([col_name, cat[:40], "N/A", "N/A"])
+
+            dist_table = Table(dist_data, colWidths=[80, 200, 60, 80])
+            dist_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('PADDING', (0, 0), (-1, -1), 6),
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+                ('ALIGN', (2, 1), (-1, -1), 'CENTER'),
+            ]))
+            story.append(dist_table)
+            story.append(Spacer(1, 15))
+            story.append(Paragraph(f"<i>Note: Percentages may sum to more than 100% as responses can be assigned to multiple categories.</i>", normal_style))
+
+    # Summary section - adjust title based on task type
     story.append(PageBreak())
-    story.append(Paragraph("Classification Summary", title_style))
+    if task_type == "extract":
+        story.append(Paragraph("Extraction Summary", title_style))
+    elif task_type == "extract_and_assign":
+        story.append(Paragraph("Processing Summary", title_style))
+    else:
+        story.append(Paragraph("Classification Summary", title_style))
     story.append(Spacer(1, 15))
 
-    story.append(Paragraph("Classification Details", heading_style))
-    summary_data = [
-        ["Source File", filename],
-        ["Source Column", column_name],
-        ["Model Used", model],
-        ["Model Source", model_source],
-        ["Temperature", "default"],
-        ["Rows Classified", str(num_rows)],
-        ["Number of Categories", str(len(categories))],
-        ["Success Rate", f"{success_rate:.2f}%"],
-    ]
+    # Build summary data based on task type
+    if task_type == "extract":
+        story.append(Paragraph("Extraction Details", heading_style))
+        summary_data = [
+            ["Source File", filename],
+            ["Source Column/Description", column_name],
+            ["Input Type", input_type],
+            ["Model Used", model],
+            ["Model Source", model_source],
+            ["Max Categories Requested", str(max_categories or "default")],
+            ["Categories Extracted", str(len(categories)) if categories else "0"],
+        ]
+    else:
+        story.append(Paragraph("Classification Details", heading_style))
+        summary_data = [
+            ["Source File", filename],
+            ["Source Column", column_name],
+            ["Model Used", model],
+            ["Model Source", model_source],
+            ["Temperature", "default"],
+            ["Rows Classified", str(num_rows)],
+            ["Number of Categories", str(len(categories)) if categories else "0"],
+            ["Success Rate", f"{success_rate:.2f}%"],
+        ]
+        if task_type == "extract_and_assign":
+            summary_data.insert(4, ["Categories Auto-Extracted", "Yes"])
     summary_table = Table(summary_data, colWidths=[150, 300])
     summary_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (0, -1), colors.lightgrey),
@@ -326,12 +556,13 @@ consistent and reproducible results."""
     ]))
     story.append(version_table)
 
-    story.append(PageBreak())
-    story.append(Paragraph("Prompt Template Used", title_style))
-    story.append(Paragraph("The following prompt template was sent to the LLM for each classification:", normal_style))
-    story.append(Spacer(1, 15))
+    # Prompt template - only for classification tasks
+    if task_type in ["assign", "extract_and_assign"] and prompt_template:
+        story.append(PageBreak())
+        story.append(Paragraph("Prompt Template Used", title_style))
+        story.append(Paragraph("The following prompt template was sent to the LLM for each classification:", normal_style))
+        story.append(Spacer(1, 15))
 
-    if prompt_template:
         story.append(Paragraph("Template with Placeholders:", heading_style))
         story.append(Spacer(1, 8))
 
@@ -344,30 +575,92 @@ consistent and reproducible results."""
 
         story.append(Spacer(1, 20))
 
-        story.append(Paragraph("Example with Your Categories:", heading_style))
-        story.append(Spacer(1, 8))
+        if categories:
+            story.append(Paragraph("Example with Your Categories:", heading_style))
+            story.append(Spacer(1, 8))
 
-        categories_list = "\n".join([f"  {i}. {cat}" for i, cat in enumerate(categories, 1)])
-        example_prompt = f'''Categorize this survey response "[YOUR TEXT HERE]" into the following categories:
+            categories_list = "\n".join([f"  {i}. {cat}" for i, cat in enumerate(categories, 1)])
+            example_prompt = f'''Categorize this survey response "[YOUR TEXT HERE]" into the following categories:
 {categories_list}
 Provide your work in JSON format where the number belonging to each category
 is the key and a 1 if the category is present and a 0 if not.'''
 
-        for line in example_prompt.split('\n'):
-            escaped_line = line.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
-            if escaped_line.strip():
-                story.append(Paragraph(escaped_line, code_style))
-            else:
-                story.append(Spacer(1, 5))
+            for line in example_prompt.split('\n'):
+                escaped_line = line.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+                if escaped_line.strip():
+                    story.append(Paragraph(escaped_line, code_style))
+                else:
+                    story.append(Spacer(1, 5))
 
+    # Reproducibility code section
     story.append(PageBreak())
     story.append(Paragraph("Reproducibility Code", title_style))
-    story.append(Paragraph("Use the following Python code to reproduce this classification:", normal_style))
-    story.append(Spacer(1, 15))
 
-    categories_str = ", ".join([f'"{cat}"' for cat in categories])
+    if task_type == "extract":
+        story.append(Paragraph("Use the following Python code to reproduce this category extraction:", normal_style))
+        story.append(Spacer(1, 15))
 
-    code_text = f'''import catllm
+        code_text = f'''import catllm
+
+# Extract categories from your data
+result = catllm.extract(
+    input_data="path/to/your/data",  # file path, list of paths, or list of text
+    api_key="YOUR_API_KEY",
+    input_type="{input_type}",
+    description="{description or column_name}",
+    user_model="{model}",
+    model_source="{model_source}",
+    max_categories={max_categories or 12}
+)
+
+# View extracted categories
+print(result["top_categories"])
+print(result["counts_df"])'''
+
+    elif task_type == "extract_and_assign":
+        story.append(Paragraph("Use the following Python code to reproduce this extraction and classification:", normal_style))
+        story.append(Spacer(1, 15))
+
+        categories_str = ", ".join([f'"{cat}"' for cat in categories]) if categories else ""
+
+        code_text = f'''import catllm
+
+# Step 1: Extract categories from your data
+extract_result = catllm.extract(
+    input_data="path/to/your/data",
+    api_key="YOUR_API_KEY",
+    input_type="{input_type}",
+    description="{description or column_name}",
+    user_model="{model}",
+    model_source="{model_source}",
+    max_categories={max_categories or 12}
+)
+
+categories = extract_result["top_categories"]
+print("Extracted categories:", categories)
+
+# Step 2: Classify data using extracted categories
+result = catllm.classify(
+    input_data="path/to/your/data",
+    categories=categories,
+    api_key="YOUR_API_KEY",
+    input_type="{input_type}",
+    description="{description or column_name}",
+    user_model="{model}",
+    model_source="{model_source}"
+)
+
+# View results
+print(result)
+result.to_csv("classified_results.csv", index=False)'''
+
+    else:  # assign
+        story.append(Paragraph("Use the following Python code to reproduce this classification:", normal_style))
+        story.append(Spacer(1, 15))
+
+        categories_str = ", ".join([f'"{cat}"' for cat in categories]) if categories else ""
+
+        code_text = f'''import catllm
 import pandas as pd
 
 # Load your survey data
@@ -377,10 +670,12 @@ df = pd.read_csv("{filename}")
 categories = [{categories_str}]
 
 # Classify the responses
-result = catllm.multi_class(
-    survey_input=df["{column_name}"].tolist(),
+result = catllm.classify(
+    input_data=df["{column_name}"].tolist(),
     categories=categories,
     api_key="YOUR_API_KEY",
+    input_type="{input_type}",
+    description="{description or column_name}",
     user_model="{model}",
     model_source="{model_source}"
 )
@@ -450,6 +745,7 @@ def update_task_visibility(task):
     if task == "extract":
         return (
             gr.update(visible=False),  # categories_group
+            gr.update(visible=True),   # extract_settings_group
             gr.update(visible=True),   # model_group
             gr.update(visible=True, value="Extract Categories"),  # run_btn
             gr.update(visible=True),   # extract_output_group
@@ -459,6 +755,7 @@ def update_task_visibility(task):
     elif task == "assign":
         return (
             gr.update(visible=True),   # categories_group
+            gr.update(visible=False),  # extract_settings_group
             gr.update(visible=True),   # model_group
             gr.update(visible=True, value="Classify Data"),  # run_btn
             gr.update(visible=False),  # extract_output_group
@@ -468,6 +765,7 @@ def update_task_visibility(task):
     elif task == "extract_and_assign":
         return (
             gr.update(visible=False),  # categories_group
+            gr.update(visible=True),   # extract_settings_group
             gr.update(visible=True),   # model_group
             gr.update(visible=True, value="Extract & Classify"),  # run_btn
             gr.update(visible=True),   # extract_output_group (will show extracted cats)
@@ -481,6 +779,7 @@ def update_task_visibility(task):
             gr.update(visible=False),
             gr.update(visible=False),
             gr.update(visible=False),
+            gr.update(visible=False),
             "Select a task to continue."
         )
 
@@ -488,16 +787,17 @@ def update_task_visibility(task):
 def run_extract_categories(input_type, spreadsheet_file, spreadsheet_column,
                            pdf_file, pdf_folder, pdf_description, pdf_mode,
                            image_file, image_folder, image_description,
+                           max_categories_val,
                            model_tier, model, model_source_input, api_key_input,
                            progress=gr.Progress(track_tqdm=True)):
     """Extract categories from data and display them in a table."""
     if not CATLLM_AVAILABLE:
-        yield None, None, "**Error:** catllm package not available"
+        yield None, None, None, "**Error:** catllm package not available"
         return
 
     actual_api_key, provider = get_api_key(model, model_tier, api_key_input)
     if not actual_api_key:
-        yield None, None, f"**Error:** {provider} API key not configured"
+        yield None, None, None, f"**Error:** {provider} API key not configured"
         return
 
     if model_source_input == "auto":
@@ -505,17 +805,48 @@ def run_extract_categories(input_type, spreadsheet_file, spreadsheet_column,
     else:
         model_source = model_source_input
 
+    # Check file size for images and PDFs
+    files_to_check = None
+    if input_type == "Images":
+        files_to_check = image_folder if image_folder else image_file
+    elif input_type == "PDF Documents":
+        files_to_check = pdf_folder if pdf_folder else pdf_file
+
+    if files_to_check:
+        total_size_mb = calculate_total_file_size(files_to_check)
+        if total_size_mb > MAX_FILE_SIZE_MB:
+            # Generate the code for the user
+            if input_type == "Images":
+                code = generate_extract_code("image", image_description or "images", model, model_source, int(max_categories_val))
+            else:
+                mode_mapping = {"Image (visual documents)": "image", "Text (text-heavy)": "text", "Both (comprehensive)": "both"}
+                actual_mode = mode_mapping.get(pdf_mode, "image")
+                code = generate_extract_code("pdf", pdf_description or "document", model, model_source, int(max_categories_val), actual_mode)
+
+            warning_msg = f"""**⚠️ Large Upload Detected ({total_size_mb:.1f} MB)**
+
+Uploads over {MAX_FILE_SIZE_MB} MB may experience performance issues or timeouts on this web app.
+
+**Recommended:** Run the code locally using the Python package instead. See the code below, or click "See the Code" after this message.
+
+```
+pip install cat-llm
+```
+"""
+            yield None, None, code, warning_msg
+            return
+
     try:
-        yield None, None, "Extracting categories from your data..."
+        yield None, None, None, "Extracting categories from your data..."
 
         start_time = time.time()
 
         if input_type == "Survey Responses":
             if not spreadsheet_file:
-                yield None, None, "**Error:** Please upload a CSV/Excel file"
+                yield None, None, None, "**Error:** Please upload a CSV/Excel file"
                 return
             if not spreadsheet_column:
-                yield None, None, "**Error:** Please select a column"
+                yield None, None, None, "**Error:** Please select a column"
                 return
 
             file_path = spreadsheet_file if isinstance(spreadsheet_file, str) else spreadsheet_file.name
@@ -532,7 +863,8 @@ def run_extract_categories(input_type, spreadsheet_file, spreadsheet_column,
                 input_type="text",
                 description=spreadsheet_column,
                 user_model=model,
-                model_source=model_source
+                model_source=model_source,
+                max_categories=int(max_categories_val)
             )
 
         elif input_type == "PDF Documents":
@@ -548,7 +880,7 @@ def run_extract_categories(input_type, spreadsheet_file, spreadsheet_column,
                 else:
                     pdf_input = pdf_file if isinstance(pdf_file, str) else pdf_file.name
             else:
-                yield None, None, "**Error:** Please upload PDF file(s) or a folder"
+                yield None, None, None, "**Error:** Please upload PDF file(s) or a folder"
                 return
 
             mode_mapping = {
@@ -570,7 +902,8 @@ def run_extract_categories(input_type, spreadsheet_file, spreadsheet_column,
                 mode=actual_mode,
                 user_model=model,
                 model_source=model_source,
-                divisions=divisions
+                divisions=divisions,
+                max_categories=int(max_categories_val)
             )
 
         elif input_type == "Images":
@@ -586,7 +919,7 @@ def run_extract_categories(input_type, spreadsheet_file, spreadsheet_column,
                 else:
                     image_input = image_file if isinstance(image_file, str) else image_file.name
             else:
-                yield None, None, "**Error:** Please upload image file(s) or a folder"
+                yield None, None, None, "**Error:** Please upload image file(s) or a folder"
                 return
 
             # For images, use fewer divisions since each image can have multiple categories
@@ -602,11 +935,12 @@ def run_extract_categories(input_type, spreadsheet_file, spreadsheet_column,
                 user_model=model,
                 model_source=model_source,
                 divisions=divisions,
-                categories_per_chunk=12  # Images often have multiple categories each
+                categories_per_chunk=12,  # Images often have multiple categories each
+                max_categories=int(max_categories_val)
             )
 
         else:
-            yield None, None, f"**Error:** Unknown input type: {input_type}"
+            yield None, None, None, f"**Error:** Unknown input type: {input_type}"
             return
 
         processing_time = time.time() - start_time
@@ -627,14 +961,25 @@ def run_extract_categories(input_type, spreadsheet_file, spreadsheet_column,
             categories_df.to_csv(f.name, index=False)
             csv_path = f.name
 
+        # Generate reproducibility code
+        if input_type == "Survey Responses":
+            code = generate_extract_code("text", spreadsheet_column, model, model_source, int(max_categories_val))
+        elif input_type == "PDF Documents":
+            mode_mapping = {"Image (visual documents)": "image", "Text (text-heavy)": "text", "Both (comprehensive)": "both"}
+            actual_mode = mode_mapping.get(pdf_mode, "image")
+            code = generate_extract_code("pdf", pdf_description or "document", model, model_source, int(max_categories_val), actual_mode)
+        else:  # Images
+            code = generate_extract_code("image", image_description or "images", model, model_source, int(max_categories_val))
+
         yield (
             gr.update(value=categories_df, visible=True),
             csv_path,
+            code,
             f"Extracted {len(top_categories)} categories in {processing_time:.1f}s"
         )
 
     except Exception as e:
-        yield None, None, f"**Error:** {str(e)}"
+        yield None, None, None, f"**Error:** {str(e)}"
 
 
 def run_classify_data(input_type, spreadsheet_file, spreadsheet_column,
@@ -645,19 +990,19 @@ def run_classify_data(input_type, spreadsheet_file, spreadsheet_column,
                       progress=gr.Progress(track_tqdm=True)):
     """Classify data with user-provided categories."""
     if not CATLLM_AVAILABLE:
-        yield None, None, None, None, "**Error:** catllm package not available"
+        yield None, None, None, None, None, "**Error:** catllm package not available"
         return
 
     all_cats = [cat1, cat2, cat3, cat4, cat5, cat6, cat7, cat8, cat9, cat10]
     categories = [c.strip() for c in all_cats if c and c.strip()]
 
     if not categories:
-        yield None, None, None, None, "**Error:** Please enter at least one category"
+        yield None, None, None, None, None, "**Error:** Please enter at least one category"
         return
 
     actual_api_key, provider = get_api_key(model, model_tier, api_key_input)
     if not actual_api_key:
-        yield None, None, None, None, f"**Error:** {provider} API key not configured"
+        yield None, None, None, None, None, f"**Error:** {provider} API key not configured"
         return
 
     if model_source_input == "auto":
@@ -665,17 +1010,48 @@ def run_classify_data(input_type, spreadsheet_file, spreadsheet_column,
     else:
         model_source = model_source_input
 
+    # Check file size for images and PDFs
+    files_to_check = None
+    if input_type == "Images":
+        files_to_check = image_folder if image_folder else image_file
+    elif input_type == "PDF Documents":
+        files_to_check = pdf_folder if pdf_folder else pdf_file
+
+    if files_to_check:
+        total_size_mb = calculate_total_file_size(files_to_check)
+        if total_size_mb > MAX_FILE_SIZE_MB:
+            # Generate the code for the user
+            if input_type == "Images":
+                code = generate_classify_code("image", image_description or "images", categories, model, model_source)
+            else:
+                mode_mapping = {"Image (visual documents)": "image", "Text (text-heavy)": "text", "Both (comprehensive)": "both"}
+                actual_mode = mode_mapping.get(pdf_mode, "image")
+                code = generate_classify_code("pdf", pdf_description or "document", categories, model, model_source, actual_mode)
+
+            warning_msg = f"""**⚠️ Large Upload Detected ({total_size_mb:.1f} MB)**
+
+Uploads over {MAX_FILE_SIZE_MB} MB may experience performance issues or timeouts on this web app.
+
+**Recommended:** Run the code locally using the Python package instead. See the code below, or click "See the Code" after this message.
+
+```
+pip install cat-llm
+```
+"""
+            yield None, None, None, code, None, warning_msg
+            return
+
     try:
-        yield None, None, None, None, "Classifying your data..."
+        yield None, None, None, None, None, "Classifying your data..."
 
         start_time = time.time()
 
         if input_type == "Survey Responses":
             if not spreadsheet_file:
-                yield None, None, None, None, "**Error:** Please upload a CSV/Excel file"
+                yield None, None, None, None, None, "**Error:** Please upload a CSV/Excel file"
                 return
             if not spreadsheet_column:
-                yield None, None, None, None, "**Error:** Please select a column"
+                yield None, None, None, None, None, "**Error:** Please select a column"
                 return
 
             file_path = spreadsheet_file if isinstance(spreadsheet_file, str) else spreadsheet_file.name
@@ -715,7 +1091,7 @@ def run_classify_data(input_type, spreadsheet_file, spreadsheet_column,
                     pdf_input = pdf_file if isinstance(pdf_file, str) else pdf_file.name
                     original_filename = pdf_input.split("/")[-1]
             else:
-                yield None, None, None, None, "**Error:** Please upload PDF file(s) or a folder"
+                yield None, None, None, None, None, "**Error:** Please upload PDF file(s) or a folder"
                 return
 
             column_name = "PDF Pages"
@@ -755,7 +1131,7 @@ def run_classify_data(input_type, spreadsheet_file, spreadsheet_column,
                     image_input = image_file if isinstance(image_file, str) else image_file.name
                     original_filename = image_input.split("/")[-1]
             else:
-                yield None, None, None, None, "**Error:** Please upload image file(s) or a folder"
+                yield None, None, None, None, None, "**Error:** Please upload image file(s) or a folder"
                 return
 
             column_name = "Image Files"
@@ -771,7 +1147,7 @@ def run_classify_data(input_type, spreadsheet_file, spreadsheet_column,
             )
 
         else:
-            yield None, None, None, None, f"**Error:** Unknown input type: {input_type}"
+            yield None, None, None, None, None, f"**Error:** Unknown input type: {input_type}"
             return
 
         processing_time = time.time() - start_time
@@ -807,6 +1183,17 @@ Let's think step by step:
 
 Provide your work in JSON format where the number belonging to each category is the key and a 1 if the category is present and a 0 if it is not present as key values.'''
 
+        # Determine input_type_param for the report
+        if input_type == "Survey Responses":
+            input_type_param = "text"
+            description_param = spreadsheet_column
+        elif input_type == "PDF Documents":
+            input_type_param = "pdf"
+            description_param = pdf_description or "document"
+        else:
+            input_type_param = "image"
+            description_param = image_description or "images"
+
         report_pdf_path = generate_methodology_report_pdf(
             categories=categories,
             model=model,
@@ -820,7 +1207,10 @@ Provide your work in JSON format where the number belonging to each category is 
             prompt_template=prompt_template,
             data_quality={'null_count': 0, 'avg_length': 0, 'min_length': 0, 'max_length': 0, 'error_count': 0},
             catllm_version=catllm_version,
-            python_version=python_version
+            python_version=python_version,
+            task_type="assign",
+            input_type=input_type_param,
+            description=description_param
         )
 
         # Create distribution plot
@@ -848,31 +1238,43 @@ Provide your work in JSON format where the number belonging to each category is 
 
         plt.tight_layout()
 
+        # Generate reproducibility code
+        if input_type == "Survey Responses":
+            code = generate_classify_code("text", spreadsheet_column, categories, model, model_source)
+        elif input_type == "PDF Documents":
+            mode_mapping = {"Image (visual documents)": "image", "Text (text-heavy)": "text", "Both (comprehensive)": "both"}
+            actual_mode = mode_mapping.get(pdf_mode, "image")
+            code = generate_classify_code("pdf", pdf_description or "document", categories, model, model_source, actual_mode)
+        else:  # Images
+            code = generate_classify_code("image", image_description or "images", categories, model, model_source)
+
         yield (
             gr.update(value=fig, visible=True),
             gr.update(value=result, visible=True),
             [csv_path, report_pdf_path],
+            code,
             None,
             f"Classified {num_items} items in {processing_time:.1f}s"
         )
 
     except Exception as e:
-        yield None, None, None, None, f"**Error:** {str(e)}"
+        yield None, None, None, None, None, f"**Error:** {str(e)}"
 
 
 def run_extract_and_assign(input_type, spreadsheet_file, spreadsheet_column,
                            pdf_file, pdf_folder, pdf_description, pdf_mode,
                            image_file, image_folder, image_description,
+                           max_categories_val,
                            model_tier, model, model_source_input, api_key_input,
                            progress=gr.Progress(track_tqdm=True)):
     """Extract categories then classify data with them."""
     if not CATLLM_AVAILABLE:
-        yield None, None, None, None, None, None, "**Error:** catllm package not available"
+        yield None, None, None, None, None, None, None, None, "**Error:** catllm package not available"
         return
 
     actual_api_key, provider = get_api_key(model, model_tier, api_key_input)
     if not actual_api_key:
-        yield None, None, None, None, None, None, f"**Error:** {provider} API key not configured"
+        yield None, None, None, None, None, None, None, None, f"**Error:** {provider} API key not configured"
         return
 
     if model_source_input == "auto":
@@ -880,18 +1282,49 @@ def run_extract_and_assign(input_type, spreadsheet_file, spreadsheet_column,
     else:
         model_source = model_source_input
 
+    # Check file size for images and PDFs
+    files_to_check = None
+    if input_type == "Images":
+        files_to_check = image_folder if image_folder else image_file
+    elif input_type == "PDF Documents":
+        files_to_check = pdf_folder if pdf_folder else pdf_file
+
+    if files_to_check:
+        total_size_mb = calculate_total_file_size(files_to_check)
+        if total_size_mb > MAX_FILE_SIZE_MB:
+            # Generate the code for the user
+            if input_type == "Images":
+                extract_code = generate_extract_code("image", image_description or "images", model, model_source, int(max_categories_val))
+            else:
+                mode_mapping = {"Image (visual documents)": "image", "Text (text-heavy)": "text", "Both (comprehensive)": "both"}
+                actual_mode = mode_mapping.get(pdf_mode, "image")
+                extract_code = generate_extract_code("pdf", pdf_description or "document", model, model_source, int(max_categories_val), actual_mode)
+
+            warning_msg = f"""**⚠️ Large Upload Detected ({total_size_mb:.1f} MB)**
+
+Uploads over {MAX_FILE_SIZE_MB} MB may experience performance issues or timeouts on this web app.
+
+**Recommended:** Run the code locally using the Python package instead. See the code below, or click "See the Code" after this message.
+
+```
+pip install cat-llm
+```
+"""
+            yield None, None, extract_code, None, None, None, None, None, warning_msg
+            return
+
     try:
         # Phase 1: Extract categories
-        yield None, None, None, None, None, None, "Phase 1: Extracting categories..."
+        yield None, None, None, None, None, None, None, None, "Phase 1: Extracting categories..."
 
         start_time = time.time()
 
         if input_type == "Survey Responses":
             if not spreadsheet_file:
-                yield None, None, None, None, None, None, "**Error:** Please upload a CSV/Excel file"
+                yield None, None, None, None, None, None, None, None, "**Error:** Please upload a CSV/Excel file"
                 return
             if not spreadsheet_column:
-                yield None, None, None, None, None, None, "**Error:** Please select a column"
+                yield None, None, None, None, None, None, None, None, "**Error:** Please select a column"
                 return
 
             file_path = spreadsheet_file if isinstance(spreadsheet_file, str) else spreadsheet_file.name
@@ -924,7 +1357,7 @@ def run_extract_and_assign(input_type, spreadsheet_file, spreadsheet_column,
                     input_data = pdf_file if isinstance(pdf_file, str) else pdf_file.name
                     original_filename = input_data.split("/")[-1]
             else:
-                yield None, None, None, None, None, None, "**Error:** Please upload PDF file(s) or a folder"
+                yield None, None, None, None, None, None, None, None, "**Error:** Please upload PDF file(s) or a folder"
                 return
 
             column_name = "PDF Pages"
@@ -955,7 +1388,7 @@ def run_extract_and_assign(input_type, spreadsheet_file, spreadsheet_column,
                     input_data = image_file if isinstance(image_file, str) else image_file.name
                     original_filename = input_data.split("/")[-1]
             else:
-                yield None, None, None, None, None, None, "**Error:** Please upload image file(s) or a folder"
+                yield None, None, None, None, None, None, None, None, "**Error:** Please upload image file(s) or a folder"
                 return
 
             column_name = "Image Files"
@@ -964,7 +1397,7 @@ def run_extract_and_assign(input_type, spreadsheet_file, spreadsheet_column,
             mode_param = None
 
         else:
-            yield None, None, None, None, None, None, f"**Error:** Unknown input type: {input_type}"
+            yield None, None, None, None, None, None, None, None, f"**Error:** Unknown input type: {input_type}"
             return
 
         # Calculate sensible divisions based on input size and type
@@ -990,7 +1423,8 @@ def run_extract_and_assign(input_type, spreadsheet_file, spreadsheet_column,
             'user_model': model,
             'model_source': model_source,
             'divisions': divisions,
-            'categories_per_chunk': categories_per_chunk
+            'categories_per_chunk': categories_per_chunk,
+            'max_categories': int(max_categories_val)
         }
         if mode_param:
             extract_kwargs['mode'] = mode_param
@@ -1000,7 +1434,7 @@ def run_extract_and_assign(input_type, spreadsheet_file, spreadsheet_column,
         categories_df = extract_result.get('counts_df', pd.DataFrame())
 
         if not categories:
-            yield None, None, None, None, None, None, "**Error:** No categories were extracted"
+            yield None, None, None, None, None, None, None, None, "**Error:** No categories were extracted"
             return
 
         extract_time = time.time() - start_time
@@ -1016,10 +1450,14 @@ def run_extract_and_assign(input_type, spreadsheet_file, spreadsheet_column,
             categories_df.to_csv(f.name, index=False)
             extract_csv_path = f.name
 
+        # Generate extract code
+        extract_code = generate_extract_code(input_type_param, description, model, model_source, int(max_categories_val), mode_param)
+
         yield (
             gr.update(value=categories_df, visible=True),
             extract_csv_path,
-            None, None, None, None,
+            extract_code,
+            None, None, None, None, None,
             f"Extracted {len(categories)} categories in {extract_time:.1f}s. Now classifying..."
         )
 
@@ -1087,7 +1525,11 @@ Provide your work in JSON format where the number belonging to each category is 
             prompt_template=prompt_template,
             data_quality={'null_count': 0, 'avg_length': 0, 'min_length': 0, 'max_length': 0, 'error_count': 0},
             catllm_version=catllm_version,
-            python_version=python_version
+            python_version=python_version,
+            task_type="extract_and_assign",
+            max_categories=int(max_categories_val),
+            input_type=input_type_param,
+            description=description
         )
 
         # Create distribution plot
@@ -1115,18 +1557,23 @@ Provide your work in JSON format where the number belonging to each category is 
 
         plt.tight_layout()
 
+        # Generate classify code
+        classify_code = generate_classify_code(input_type_param, description, categories, model, model_source, mode_param)
+
         yield (
             gr.update(value=categories_df, visible=True),
             extract_csv_path,
+            extract_code,
             gr.update(value=fig, visible=True),
             gr.update(value=result, visible=True),
             [classify_csv_path, report_pdf_path],
+            classify_code,
             None,
             f"Extracted {len(categories)} categories and classified {num_items} items in {total_time:.1f}s"
         )
 
     except Exception as e:
-        yield None, None, None, None, None, None, f"**Error:** {str(e)}"
+        yield None, None, None, None, None, None, None, None, f"**Error:** {str(e)}"
 
 
 def add_category_field(current_count):
@@ -1166,6 +1613,8 @@ def reset_all():
         gr.update(visible=True),  # add_category_btn
         INITIAL_CATEGORIES,  # category_count
         gr.update(visible=False),  # categories_group
+        gr.update(visible=False),  # extract_settings_group
+        12,  # max_categories (reset to default)
         gr.update(visible=False),  # model_group
         gr.update(visible=False, value="Run"),  # run_btn
         "Free Models",  # model_tier
@@ -1178,10 +1627,12 @@ def reset_all():
         gr.update(visible=False),  # extract_output_group
         gr.update(value=None, visible=False),  # extracted_categories
         None,  # extract_download
+        "# Code will be generated after extraction",  # extract_code_display
         gr.update(visible=False),  # classify_output_group
         gr.update(value=None, visible=False),  # distribution_plot
         gr.update(value=None, visible=False),  # results
         None,  # download_file
+        "# Code will be generated after classification",  # classify_code_display
     ])
     return updates
 
@@ -1192,6 +1643,179 @@ custom_css = """
 }
 .task-btn {
     min-width: 150px !important;
+}
+
+/* Mobile-responsive styles */
+@media screen and (max-width: 768px) {
+    /* Reduce overall padding */
+    .gradio-container {
+        padding: 8px !important;
+    }
+
+    /* Stack columns vertically on mobile */
+    .gradio-row {
+        flex-direction: column !important;
+    }
+
+    /* Full width columns on mobile */
+    .gradio-column {
+        width: 100% !important;
+        max-width: 100% !important;
+        flex: 1 1 100% !important;
+    }
+
+    /* Smaller task buttons on mobile */
+    .task-btn {
+        min-width: 100px !important;
+        padding: 8px 12px !important;
+        font-size: 13px !important;
+    }
+
+    /* Compact file upload areas */
+    .file-upload, .upload-button, [data-testid="file"], .gr-file {
+        min-height: 80px !important;
+        padding: 10px !important;
+    }
+
+    /* Smaller upload button text */
+    .upload-button span, .gr-file span, [data-testid="file"] span {
+        font-size: 13px !important;
+    }
+
+    /* Compact buttons */
+    button {
+        padding: 8px 14px !important;
+        font-size: 14px !important;
+    }
+
+    /* Smaller primary action button */
+    button.primary, button.lg {
+        padding: 10px 16px !important;
+        font-size: 15px !important;
+    }
+
+    /* Compact form inputs */
+    input, textarea, select {
+        padding: 8px !important;
+        font-size: 14px !important;
+    }
+
+    /* Reduce textbox heights */
+    textarea {
+        min-height: 60px !important;
+    }
+
+    /* Smaller dropdown */
+    .gr-dropdown {
+        font-size: 14px !important;
+    }
+
+    /* Compact radio buttons */
+    .gr-radio, .gr-checkbox {
+        gap: 6px !important;
+    }
+
+    .gr-radio label, .gr-checkbox label {
+        font-size: 13px !important;
+        padding: 6px 10px !important;
+    }
+
+    /* Smaller headings */
+    h1 {
+        font-size: 1.4rem !important;
+    }
+
+    h2, h3 {
+        font-size: 1.1rem !important;
+    }
+
+    /* Compact markdown text */
+    .prose, .gr-markdown {
+        font-size: 14px !important;
+    }
+
+    /* Compact accordion */
+    .gr-accordion {
+        padding: 8px !important;
+    }
+
+    /* Smaller logo on mobile */
+    img[alt="logo"], .gr-image img {
+        height: 80px !important;
+        max-height: 80px !important;
+    }
+
+    /* Compact group containers */
+    .gr-group {
+        padding: 10px !important;
+        gap: 8px !important;
+    }
+
+    /* Reduce spacing between form elements */
+    .gr-form > *, .gr-block > * {
+        margin-bottom: 8px !important;
+    }
+
+    /* Compact dataframe/table on mobile */
+    .gr-dataframe, .dataframe {
+        font-size: 12px !important;
+    }
+
+    .gr-dataframe th, .gr-dataframe td {
+        padding: 4px 6px !important;
+    }
+
+    /* Make plot responsive */
+    .gr-plot {
+        max-width: 100% !important;
+        overflow-x: auto !important;
+    }
+
+    /* Compact download buttons */
+    .gr-file-download, [data-testid="download"] {
+        padding: 8px !important;
+    }
+}
+
+/* Extra small devices (phones in portrait) */
+@media screen and (max-width: 480px) {
+    .gradio-container {
+        padding: 4px !important;
+    }
+
+    .task-btn {
+        min-width: 80px !important;
+        padding: 6px 10px !important;
+        font-size: 12px !important;
+    }
+
+    button {
+        padding: 6px 12px !important;
+        font-size: 13px !important;
+    }
+
+    h1 {
+        font-size: 1.2rem !important;
+    }
+
+    h2, h3 {
+        font-size: 1rem !important;
+    }
+
+    .prose, .gr-markdown {
+        font-size: 13px !important;
+    }
+
+    img[alt="logo"], .gr-image img {
+        height: 60px !important;
+        max-height: 60px !important;
+    }
+
+    /* Stack task buttons vertically on very small screens */
+    .task-btn {
+        width: 100% !important;
+        min-width: unset !important;
+    }
 }
 """
 
@@ -1337,6 +1961,18 @@ Soria, C. (2025). CatLLM: A Python package for LLM-based text classification. DO
                     category_inputs.append(cat_input)
                 add_category_btn = gr.Button("+ Add More Categories", variant="secondary", size="sm")
 
+            # Extraction settings group (only visible for Extract and Extract & Assign)
+            with gr.Group(visible=False) as extract_settings_group:
+                gr.Markdown("### Extraction Settings")
+                max_categories = gr.Slider(
+                    minimum=3,
+                    maximum=25,
+                    value=12,
+                    step=1,
+                    label="Number of Categories to Extract",
+                    info="How many categories should be identified in your data"
+                )
+
             # Model selection group
             with gr.Group(visible=False) as model_group:
                 gr.Markdown("### Model")
@@ -1349,12 +1985,14 @@ Soria, C. (2025). CatLLM: A Python package for LLM-based text classification. DO
                     choices=FREE_MODEL_CHOICES,
                     value="Qwen/Qwen3-VL-235B-A22B-Instruct:novita",
                     label="Model",
-                    allow_custom_value=True
+                    allow_custom_value=False,  # Only allow custom for "Bring Your Own Key"
+                    interactive=True
                 )
                 model_source = gr.Dropdown(
                     choices=["auto", "openai", "anthropic", "google", "mistral", "xai", "huggingface", "perplexity"],
                     value="auto",
-                    label="Model Source"
+                    label="Model Source",
+                    visible=False  # Hide for free tier, show for BYOK
                 )
                 api_key = gr.Textbox(
                     label="API Key",
@@ -1380,6 +2018,13 @@ Soria, C. (2025). CatLLM: A Python package for LLM-based text classification. DO
                     wrap=True
                 )
                 extract_download = gr.File(label="Download Categories (CSV)")
+                with gr.Accordion("See the Code", open=False):
+                    extract_code_display = gr.Code(
+                        label="Python Code",
+                        language="python",
+                        value="# Code will be generated after extraction",
+                        interactive=False
+                    )
 
             # Classify output group
             with gr.Group(visible=False) as classify_output_group:
@@ -1387,6 +2032,13 @@ Soria, C. (2025). CatLLM: A Python package for LLM-based text classification. DO
                 distribution_plot = gr.Plot(label="Category Distribution (%)", visible=False)
                 results = gr.DataFrame(label="Full Results", visible=False)
                 download_file = gr.File(label="Download Results (CSV + Methodology Report)", file_count="multiple")
+                with gr.Accordion("See the Code", open=False):
+                    classify_code_display = gr.Code(
+                        label="Python Code",
+                        language="python",
+                        value="# Code will be generated after classification",
+                        interactive=False
+                    )
 
     # Event handlers
     def switch_input_type(input_type_val):
@@ -1407,21 +2059,23 @@ Soria, C. (2025). CatLLM: A Python package for LLM-based text classification. DO
     def update_model_tier(tier):
         if tier == "Free Models":
             return (
-                gr.update(choices=FREE_MODEL_CHOICES, value=FREE_MODEL_CHOICES[0]),
-                gr.update(visible=False),
+                gr.update(choices=FREE_MODEL_CHOICES, value=FREE_MODEL_CHOICES[0], allow_custom_value=False),
+                gr.update(visible=False),  # model_source hidden for free
+                gr.update(visible=False),  # api_key hidden for free
                 "**Free tier** - no API key required!"
             )
         else:
             return (
-                gr.update(choices=PAID_MODEL_CHOICES, value=PAID_MODEL_CHOICES[0]),
-                gr.update(visible=True),
+                gr.update(choices=PAID_MODEL_CHOICES, value=PAID_MODEL_CHOICES[0], allow_custom_value=True),
+                gr.update(visible=True),   # model_source shown for BYOK
+                gr.update(visible=True),   # api_key shown for BYOK
                 "**Bring Your Own Key** - enter your API key below."
             )
 
     model_tier.change(
         fn=update_model_tier,
         inputs=[model_tier],
-        outputs=[model, api_key, api_key_status]
+        outputs=[model, model_source, api_key, api_key_status]
     )
 
     spreadsheet_file.change(
@@ -1481,34 +2135,37 @@ Soria, C. (2025). CatLLM: A Python package for LLM-based text classification. DO
     extract_btn.click(
         fn=select_extract,
         inputs=[],
-        outputs=[task_mode, categories_group, model_group, run_btn, extract_output_group, classify_output_group, status]
+        outputs=[task_mode, categories_group, extract_settings_group, model_group, run_btn, extract_output_group, classify_output_group, status]
     )
 
     assign_btn.click(
         fn=select_assign,
         inputs=[],
-        outputs=[task_mode, categories_group, model_group, run_btn, extract_output_group, classify_output_group, status]
+        outputs=[task_mode, categories_group, extract_settings_group, model_group, run_btn, extract_output_group, classify_output_group, status]
     )
 
     extract_assign_btn.click(
         fn=select_extract_assign,
         inputs=[],
-        outputs=[task_mode, categories_group, model_group, run_btn, extract_output_group, classify_output_group, status]
+        outputs=[task_mode, categories_group, extract_settings_group, model_group, run_btn, extract_output_group, classify_output_group, status]
     )
 
     # Main run button handler - dispatches based on task_mode
     def dispatch_run(task, input_type, spreadsheet_file, spreadsheet_column,
                      pdf_file, pdf_folder_val, pdf_description, pdf_mode,
                      image_file, image_folder_val, image_description,
+                     max_categories_val,
                      cat1, cat2, cat3, cat4, cat5, cat6, cat7, cat8, cat9, cat10,
                      model_tier, model, model_source, api_key,
                      progress=gr.Progress(track_tqdm=True)):
         """Dispatch to appropriate function based on task mode."""
         if task == "extract":
+            # run_extract_categories yields: (categories_df, csv_path, code, status)
             for update in run_extract_categories(
                 input_type, spreadsheet_file, spreadsheet_column,
                 pdf_file, pdf_folder_val, pdf_description, pdf_mode,
                 image_file, image_folder_val, image_description,
+                max_categories_val,
                 model_tier, model, model_source, api_key,
                 progress
             ):
@@ -1516,12 +2173,15 @@ Soria, C. (2025). CatLLM: A Python package for LLM-based text classification. DO
                 yield (
                     update[0],  # extracted_categories
                     update[1],  # extract_download
+                    update[2],  # extract_code_display
                     None,       # distribution_plot
                     None,       # results
                     None,       # download_file
-                    update[2]   # status
+                    None,       # classify_code_display
+                    update[3]   # status
                 )
         elif task == "assign":
+            # run_classify_data yields: (plot, df, files, code, unused, status)
             for update in run_classify_data(
                 input_type, spreadsheet_file, spreadsheet_column,
                 pdf_file, pdf_folder_val, pdf_description, pdf_mode,
@@ -1534,36 +2194,43 @@ Soria, C. (2025). CatLLM: A Python package for LLM-based text classification. DO
                 yield (
                     None,       # extracted_categories
                     None,       # extract_download
+                    None,       # extract_code_display
                     update[0],  # distribution_plot
                     update[1],  # results
                     update[2],  # download_file
-                    update[4]   # status
+                    update[3],  # classify_code_display
+                    update[5]   # status
                 )
         elif task == "extract_and_assign":
+            # run_extract_and_assign yields: (categories_df, extract_csv, extract_code, plot, df, files, classify_code, unused, status)
             for update in run_extract_and_assign(
                 input_type, spreadsheet_file, spreadsheet_column,
                 pdf_file, pdf_folder_val, pdf_description, pdf_mode,
                 image_file, image_folder_val, image_description,
+                max_categories_val,
                 model_tier, model, model_source, api_key,
                 progress
             ):
                 yield (
                     update[0],  # extracted_categories
                     update[1],  # extract_download
-                    update[2],  # distribution_plot
-                    update[3],  # results
-                    update[4],  # download_file
-                    update[6]   # status
+                    update[2],  # extract_code_display
+                    update[3],  # distribution_plot
+                    update[4],  # results
+                    update[5],  # download_file
+                    update[6],  # classify_code_display
+                    update[8]   # status
                 )
         else:
-            yield (None, None, None, None, None, "Please select a task first.")
+            yield (None, None, None, None, None, None, None, "Please select a task first.")
 
     run_btn.click(
         fn=dispatch_run,
         inputs=[task_mode, input_type, spreadsheet_file, spreadsheet_column,
                 pdf_file, pdf_folder, pdf_description, pdf_mode,
-                image_file, image_folder, image_description] + category_inputs + [model_tier, model, model_source, api_key],
-        outputs=[extracted_categories, extract_download, distribution_plot, results, download_file, status]
+                image_file, image_folder, image_description,
+                max_categories] + category_inputs + [model_tier, model, model_source, api_key],
+        outputs=[extracted_categories, extract_download, extract_code_display, distribution_plot, results, download_file, classify_code_display, status]
     )
 
     reset_btn.click(
@@ -1577,11 +2244,11 @@ Soria, C. (2025). CatLLM: A Python package for LLM-based text classification. DO
             task_mode
         ] + category_inputs + [
             add_category_btn, category_count,
-            categories_group, model_group, run_btn,
+            categories_group, extract_settings_group, max_categories, model_group, run_btn,
             model_tier, model, model_source, api_key, api_key, api_key_status,
             status,
-            extract_output_group, extracted_categories, extract_download,
-            classify_output_group, distribution_plot, results, download_file
+            extract_output_group, extracted_categories, extract_download, extract_code_display,
+            classify_output_group, distribution_plot, results, download_file, classify_code_display
         ]
     )
 
