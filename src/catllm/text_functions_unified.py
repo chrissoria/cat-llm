@@ -384,6 +384,68 @@ def set_ollama_endpoint(host: str = "localhost", port: int = 11434):
     PROVIDER_CONFIG["ollama"]["endpoint"] = f"http://{host}:{port}/v1/chat/completions"
 
 
+def check_ollama_running(host: str = "localhost", port: int = 11434) -> bool:
+    """
+    Check if Ollama is running and accessible.
+
+    Args:
+        host: Hostname where Ollama should be running
+        port: Port number
+
+    Returns:
+        True if Ollama is running, False otherwise
+    """
+    try:
+        response = requests.get(f"http://{host}:{port}/api/tags", timeout=5)
+        return response.status_code == 200
+    except requests.exceptions.RequestException:
+        return False
+
+
+def list_ollama_models(host: str = "localhost", port: int = 11434) -> list:
+    """
+    List all models available in the local Ollama installation.
+
+    Args:
+        host: Hostname where Ollama is running
+        port: Port number
+
+    Returns:
+        List of model names, or empty list if Ollama is not running
+    """
+    try:
+        response = requests.get(f"http://{host}:{port}/api/tags", timeout=5)
+        if response.status_code == 200:
+            data = response.json()
+            return [model["name"] for model in data.get("models", [])]
+        return []
+    except requests.exceptions.RequestException:
+        return []
+
+
+def check_ollama_model(model: str, host: str = "localhost", port: int = 11434) -> bool:
+    """
+    Check if a specific model is available in Ollama.
+
+    Args:
+        model: Model name to check (e.g., "llama3.2", "mistral")
+        host: Hostname where Ollama is running
+        port: Port number
+
+    Returns:
+        True if model is available, False otherwise
+    """
+    available_models = list_ollama_models(host, port)
+    # Check for exact match or partial match (e.g., "llama3.2" matches "llama3.2:latest")
+    model_lower = model.lower()
+    return any(
+        model_lower == m.lower() or
+        m.lower().startswith(f"{model_lower}:") or
+        model_lower.startswith(m.lower().split(":")[0])
+        for m in available_models
+    )
+
+
 def build_json_schema(categories: list) -> dict:
     """Build a JSON schema for the classification output."""
     properties = {}
@@ -476,6 +538,30 @@ def multi_class_unified(
     # Validate api_key requirement
     if provider != "ollama" and not api_key:
         raise ValueError(f"api_key is required for provider '{provider}'")
+
+    # Ollama-specific checks
+    if provider == "ollama":
+        if not check_ollama_running():
+            raise ConnectionError(
+                "Ollama is not running. Please start Ollama first:\n"
+                "  - macOS/Linux: Run 'ollama serve' in terminal\n"
+                "  - Or ensure the Ollama app is running\n"
+                "  - Download from: https://ollama.ai"
+            )
+
+        if not check_ollama_model(model):
+            available = list_ollama_models()
+            if available:
+                raise ValueError(
+                    f"Model '{model}' not found in Ollama.\n"
+                    f"Available models: {', '.join(available)}\n"
+                    f"To download: ollama pull {model}"
+                )
+            else:
+                raise ValueError(
+                    f"Model '{model}' not found. No models installed in Ollama.\n"
+                    f"To download: ollama pull {model}"
+                )
 
     print(f"Using provider: {provider}, model: {model}")
 
