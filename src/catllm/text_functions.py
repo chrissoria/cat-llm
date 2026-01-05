@@ -454,7 +454,7 @@ Output:
 {max_categories}. category
 """.strip()
 
-    if model_source == "openai":
+    if model_source in ["openai", "perplexity", "huggingface", "xai"]:
         resp2 = client.chat.completions.create(
             model=user_model,
             messages=[{"role": "user", "content": second_prompt}],
@@ -462,6 +462,7 @@ Output:
         )
         top_categories_text = resp2.choices[0].message.content
     else:
+        # Anthropic
         resp2 = client.messages.create(
             model=user_model,
             max_tokens=2048,
