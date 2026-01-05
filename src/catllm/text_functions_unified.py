@@ -789,6 +789,176 @@ def extract_json(reply: str) -> str:
         return '{"1":"e"}'
 
 
+def validate_classification_json(json_str: str, num_categories: int) -> tuple[bool, dict | None]:
+    """
+    Validate that a JSON string contains valid classification output.
+
+    Args:
+        json_str: The JSON string to validate
+        num_categories: Expected number of categories
+
+    Returns:
+        tuple: (is_valid, parsed_dict or None)
+    """
+    try:
+        parsed = json.loads(json_str)
+
+        if not isinstance(parsed, dict):
+            return False, None
+
+        # Check that all expected keys are present and values are "0" or "1"
+        for i in range(1, num_categories + 1):
+            key = str(i)
+            if key not in parsed:
+                return False, None
+            val = str(parsed[key]).strip()
+            if val not in ("0", "1"):
+                return False, None
+
+        # Normalize values to strings
+        normalized = {str(i): str(parsed[str(i)]).strip() for i in range(1, num_categories + 1)}
+        return True, normalized
+
+    except (json.JSONDecodeError, KeyError, TypeError):
+        return False, None
+
+
+def ollama_two_step_classify(
+    client,
+    response_text: str,
+    categories: list,
+    categories_str: str,
+    survey_question: str = "",
+    creativity: float = None,
+    max_retries: int = 5,
+) -> tuple[str, str | None]:
+    """
+    Two-step classification for Ollama models.
+
+    Step 1: Classify the response (natural language output OK)
+    Step 2: Convert classification to strict JSON format
+
+    This approach is more reliable for local models that struggle with
+    simultaneous reasoning and JSON formatting.
+
+    TODO: Fine-tune a small local model specifically for Step 2 (JSON formatting).
+          This would eliminate the need for retries and improve speed/consistency.
+          Could train on examples of classification text -> JSON output pairs.
+
+    Args:
+        client: UnifiedLLMClient instance
+        response_text: The survey response to classify
+        categories: List of category names
+        categories_str: Pre-formatted category string
+        survey_question: Optional context
+        creativity: Temperature setting
+        max_retries: Number of retry attempts for JSON validation
+
+    Returns:
+        tuple: (json_string, error_message or None)
+    """
+    num_categories = len(categories)
+    survey_context = f"A respondent was asked: {survey_question}." if survey_question else ""
+
+    # ==========================================================================
+    # Step 1: Classification (natural language - focus on accuracy)
+    # ==========================================================================
+    step1_messages = [
+        {
+            "role": "system",
+            "content": "You are an expert at categorizing survey responses. Focus on accurate classification."
+        },
+        {
+            "role": "user",
+            "content": f"""{survey_context}
+
+Analyze this survey response and determine which categories apply:
+
+Response: "{response_text}"
+
+Categories:
+{categories_str}
+
+For each category, explain briefly whether it applies (YES) or not (NO) to this response.
+Format your answer as:
+1. [Category name]: YES/NO - [brief reason]
+2. [Category name]: YES/NO - [brief reason]
+...and so on for all categories."""
+        }
+    ]
+
+    step1_reply, step1_error = client.complete(
+        messages=step1_messages,
+        json_schema=None,  # No JSON requirement for step 1
+        creativity=creativity,
+    )
+
+    if step1_error:
+        return '{"1":"e"}', f"Step 1 failed: {step1_error}"
+
+    # ==========================================================================
+    # Step 2: JSON Formatting with validation and retry
+    # ==========================================================================
+    example_json = json.dumps({str(i): "0" for i in range(1, num_categories + 1)})
+
+    for attempt in range(max_retries):
+        step2_messages = [
+            {
+                "role": "system",
+                "content": "You convert classification results to JSON. Output ONLY valid JSON, nothing else."
+            },
+            {
+                "role": "user",
+                "content": f"""Convert this classification to JSON format.
+
+Classification results:
+{step1_reply}
+
+Rules:
+- Output ONLY a JSON object, no other text
+- Use category numbers as keys (1, 2, 3, etc.)
+- Use "1" if the category was marked YES, "0" if NO
+- Include ALL {num_categories} categories
+
+Example format:
+{example_json}
+
+Your JSON output:"""
+            }
+        ]
+
+        step2_reply, step2_error = client.complete(
+            messages=step2_messages,
+            json_schema=None,  # Ollama doesn't support strict schema anyway
+            creativity=0.1,  # Low temperature for formatting task
+        )
+
+        if step2_error:
+            if attempt < max_retries - 1:
+                continue
+            return '{"1":"e"}', f"Step 2 failed: {step2_error}"
+
+        # Extract and validate JSON
+        extracted = extract_json(step2_reply)
+        is_valid, normalized = validate_classification_json(extracted, num_categories)
+
+        if is_valid:
+            return json.dumps(normalized), None
+
+        # If invalid, try again with more explicit instructions
+        if attempt < max_retries - 1:
+            step1_reply = f"""Previous attempt produced invalid JSON.
+
+Original classification:
+{step1_reply}
+
+Please be more careful to output EXACTLY {num_categories} categories numbered 1 through {num_categories}."""
+
+    # All retries exhausted - try to salvage what we can
+    extracted = extract_json(step2_reply) if step2_reply else '{"1":"e"}'
+    return extracted, f"JSON validation failed after {max_retries} attempts"
+
+
 # =============================================================================
 # Main Classification Function
 # =============================================================================
@@ -971,25 +1141,51 @@ Provide your answer in JSON format where the category number is the key and "1" 
     results = []
     extracted_jsons = []
 
+    # Use two-step approach for Ollama (more reliable JSON output)
+    use_two_step = (provider == "ollama")
+
+    if use_two_step:
+        print("Using two-step classification for Ollama (classify → format JSON)")
+
     for response in tqdm(survey_input, desc="Classifying responses"):
         if pd.isna(response):
             results.append(("Skipped NaN", "Skipped NaN input"))
             extracted_jsons.append('{"1":"e"}')
             continue
 
-        messages = build_prompt(response)
-        reply, error = client.complete(
-            messages=messages,
-            json_schema=json_schema,
-            creativity=creativity,
-        )
+        if use_two_step:
+            # Two-step approach for Ollama: separate classification from JSON formatting
+            json_result, error = ollama_two_step_classify(
+                client=client,
+                response_text=response,
+                categories=categories,
+                categories_str=categories_str,
+                survey_question=survey_question,
+                creativity=creativity,
+                max_retries=5,
+            )
 
-        if error:
-            results.append((None, error))
-            extracted_jsons.append('{"1":"e"}')
+            if error:
+                results.append((json_result, error))
+            else:
+                results.append((json_result, None))
+            extracted_jsons.append(json_result)
+
         else:
-            results.append((reply, None))
-            extracted_jsons.append(extract_json(reply))
+            # Standard single-call approach for cloud providers
+            messages = build_prompt(response)
+            reply, error = client.complete(
+                messages=messages,
+                json_schema=json_schema,
+                creativity=creativity,
+            )
+
+            if error:
+                results.append((None, error))
+                extracted_jsons.append('{"1":"e"}')
+            else:
+                results.append((reply, None))
+                extracted_jsons.append(extract_json(reply))
 
     # Build output DataFrame
     normalized_data_list = []
