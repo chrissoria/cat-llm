@@ -187,7 +187,8 @@ def pdf_multi_class(
     example6=None,
     filename=None,
     save_directory=None,
-    model_source="auto"
+    model_source="auto",
+    progress_callback=None
 ):
     """
     Categorize PDF pages using LLMs with multi-label classification.
@@ -1051,7 +1052,12 @@ Provide the final categorization in the same JSON format:"""
             return """{"1":"e"}"""
 
     # Main processing loop
+    total_pages = len(all_pages)
     for idx, (pdf_path, page_index, page_label) in enumerate(tqdm(all_pages, desc="Categorizing PDF pages")):
+        # Call progress callback if provided
+        if progress_callback:
+            progress_callback(idx, total_pages, page_label)
+
         page_labels.append(page_label)
 
         reply, error_msg = _process_single_page(pdf_path, page_index, page_label)

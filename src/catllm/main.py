@@ -192,7 +192,8 @@ def classify(
     max_categories=12,
     categories_per_chunk=10,
     divisions=10,
-    research_question=None
+    research_question=None,
+    progress_callback=None
 ):
     """
     Unified classification function for text, image, and PDF inputs.
@@ -354,7 +355,8 @@ def classify(
             example6=example6,
             filename=filename,
             save_directory=save_directory,
-            model_source=model_source
+            model_source=model_source,
+            progress_callback=progress_callback
         )
 
     else:
