@@ -30,7 +30,7 @@ FREE_MODEL_CHOICES = [
     "deepseek-ai/DeepSeek-V3.1:novita",
     "meta-llama/Llama-3.3-70B-Instruct:groq",
     "gemini-2.5-flash",
-    "gpt-4o",
+    "gpt-4o-mini",
     "mistral-medium-2505",
     "claude-3-haiku-20240307",
     "grok-4-fast-non-reasoning",

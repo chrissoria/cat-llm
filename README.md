@@ -9,6 +9,23 @@ CatLLM: A Reproducible LLM Pipeline for Coding Open-Ended Survey Responses
 
 -----
 
+## The Problem
+
+If you work with open-ended survey data, you know the pain: hundreds or thousands of free-text responses that need to be categorized before you can do any quantitative analysis. The traditional approach is manual coding—either doing it yourself or hiring research assistants. It's slow, expensive, and doesn't scale.
+
+## The Solution
+
+CatLLM is a Python package designed specifically for survey research that uses LLMs to automate the categorization of open-ended responses. It handles both:
+
+- **Category Assignment**: Classify responses into your predefined categories (multi-label supported)
+- **Category Extraction**: Automatically discover and extract categories from your data when you don't have a predefined scheme
+
+With leading models like GPT-5, Gemini, and Qwen 3, CatLLM achieves **98% accuracy compared to human consensus** on classification tasks.
+
+**Try the web app:** [https://huggingface.co/spaces/CatLLM/survey-classifier](https://huggingface.co/spaces/CatLLM/survey-classifier)
+
+-----
+
 ## Table of Contents
 
 - [Installation](#installation)
@@ -40,15 +57,15 @@ pip install cat-llm
 
 ## Quick Start
 
-CatLLM helps social scientists and researchers automatically categorize open-ended survey responses and images using AI models like GPT-5 and Claude. Not to be confused with CAT-LLM for Chinese article‐style transfer ([Tao et al. 2024](https://arxiv.org/html/2401.05707v1)).
-
 **This package is designed for building datasets at scale**, not one-off queries. While you can categorize individual responses, its primary purpose is batch processing entire survey columns or image collections into structured research datasets.
 
-**Text Analysis:** Simply provide your survey responses and category list - the package handles the rest and outputs clean data ready for statistical analysis. It works with single or multiple categories per response and automatically skips missing data to save API costs.
+Simply provide your survey responses and category list—the package handles the rest and outputs clean data ready for statistical analysis. It works with single or multiple categories per response and automatically skips missing data to save API costs.
 
-**Image Categorization:** Uses the same intelligent categorization method to analyze images, extracting specific features, counting objects, identifying colors, or determining the presence of elements based on your research questions.
+Also supports **image and PDF classification** using the same methodology: extract features, count objects, identify categories, or determine presence of elements based on your research questions.
 
-Whether you're working with messy text responses or analyzing visual content, CatLLM consistently transforms unstructured data into structured categories you can actually analyze. All outputs are formatted for immediate statistical analysis and can be exported directly to CSV for further research workflows.
+All outputs are formatted for immediate statistical analysis and can be exported directly to CSV.
+
+*Not to be confused with CAT-LLM for Chinese article‐style transfer ([Tao et al. 2024](https://arxiv.org/html/2401.05707v1)).*
 
 
 

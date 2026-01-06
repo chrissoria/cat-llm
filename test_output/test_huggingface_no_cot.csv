@@ -1,36 +1,8 @@
-survey_input,model_response,json,category_1,category_2,category_3,category_4,category_5,processing_status,categories_id
+survey_input,model_response,json,1,2,3,4,5
 I moved because I got a new job in another city,"{
   ""1"": 0,
   ""2"": 0,
   ""3"": 1,
   ""4"": 0,
   ""5"": 0
-}","{""1"":0,""2"":0,""3"":1,""4"":0,""5"":0}",0,0,1,0,0,success,"0,0,1,0,0"
-My partner and I decided to move in together,"{
-  ""1"": 1,
-  ""2"": 0,
-  ""3"": 0,
-  ""4"": 0,
-  ""5"": 0
-}","{""1"":1,""2"":0,""3"":0,""4"":0,""5"":0}",1,0,0,0,0,success,"1,0,0,0,0"
-The rent was too expensive so we had to find somewhere cheaper,"{
-  ""1"": 0,
-  ""2"": 0,
-  ""3"": 0,
-  ""4"": 1,
-  ""5"": 0
-}","{""1"":0,""2"":0,""3"":0,""4"":1,""5"":0}",0,0,0,1,0,success,"0,0,0,1,0"
-I wanted a bigger yard for my kids to play in,"{
-  ""1"": 0,
-  ""2"": 0,
-  ""3"": 0,
-  ""4"": 0,
-  ""5"": 1
-}","{""1"":0,""2"":0,""3"":0,""4"":0,""5"":1}",0,0,0,0,1,success,"0,0,0,0,1"
-Got divorced and needed my own place,"{
-  ""1"": 0,
-  ""2"": 1,
-  ""3"": 0,
-  ""4"": 0,
-  ""5"": 0
-}","{""1"":0,""2"":1,""3"":0,""4"":0,""5"":0}",0,1,0,0,0,success,"0,1,0,0,0"
+}","{""1"":0,""2"":0,""3"":1,""4"":0,""5"":0}",0,0,1,0,0
