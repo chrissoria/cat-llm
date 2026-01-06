@@ -24,17 +24,87 @@ MAX_CATEGORIES = 10
 INITIAL_CATEGORIES = 3
 MAX_FILE_SIZE_MB = 100
 
-# Free models (uses Space secrets - no user API key needed)
-FREE_MODEL_CHOICES = [
-    "Qwen/Qwen3-VL-235B-A22B-Instruct:novita",
-    "deepseek-ai/DeepSeek-V3.1:novita",
-    "meta-llama/Llama-3.3-70B-Instruct:groq",
-    "gemini-2.5-flash",
-    "gpt-4o-mini",
-    "mistral-medium-2505",
-    "claude-3-haiku-20240307",
-    "grok-4-fast-non-reasoning",
-]
+def count_pdf_pages(pdf_path):
+    """Count the number of pages in a PDF file."""
+    try:
+        import fitz  # PyMuPDF
+        doc = fitz.open(pdf_path)
+        page_count = len(doc)
+        doc.close()
+        return page_count
+    except Exception:
+        return 1  # Default to 1 if can't read
+
+
+def extract_text_from_pdfs(pdf_paths):
+    """Extract text from all pages of all PDFs, returning list of page texts."""
+    import fitz  # PyMuPDF
+    all_texts = []
+    for pdf_path in pdf_paths:
+        try:
+            doc = fitz.open(pdf_path)
+            for page in doc:
+                text = page.get_text().strip()
+                if text:  # Only add non-empty pages
+                    all_texts.append(text)
+            doc.close()
+        except Exception as e:
+            print(f"Error extracting text from {pdf_path}: {e}")
+    return all_texts
+
+
+def extract_pdf_pages(pdf_paths, pdf_name_map, mode="image"):
+    """
+    Extract individual pages from PDFs.
+    Returns list of (page_data, page_label) tuples.
+    For image mode: page_data is path to temp image file
+    For text mode: page_data is extracted text
+    """
+    import fitz  # PyMuPDF
+    pages = []
+
+    for pdf_path in pdf_paths:
+        orig_name = pdf_name_map.get(pdf_path, os.path.basename(pdf_path).replace('.pdf', ''))
+        try:
+            doc = fitz.open(pdf_path)
+            for page_num, page in enumerate(doc, 1):
+                page_label = f"{orig_name}_p{page_num}"
+
+                if mode == "text":
+                    # Extract text
+                    text = page.get_text().strip()
+                    if text:
+                        pages.append((text, page_label, "text"))
+                else:
+                    # Render as image (for image or both mode)
+                    pix = page.get_pixmap(matrix=fitz.Matrix(2, 2))  # 2x zoom for better quality
+                    img_path = tempfile.NamedTemporaryFile(delete=False, suffix='.png').name
+                    pix.save(img_path)
+
+                    if mode == "both":
+                        text = page.get_text().strip()
+                        pages.append((img_path, page_label, "image", text))
+                    else:
+                        pages.append((img_path, page_label, "image"))
+            doc.close()
+        except Exception as e:
+            print(f"Error extracting pages from {pdf_path}: {e}")
+
+    return pages
+
+# Free models - display name -> actual API model name
+FREE_MODELS_MAP = {
+    "Qwen3 235B": "Qwen/Qwen3-VL-235B-A22B-Instruct:novita",
+    "DeepSeek V3.1": "deepseek-ai/DeepSeek-V3.1:novita",
+    "Llama 3.3 70B": "meta-llama/Llama-3.3-70B-Instruct:groq",
+    "Gemini 2.5 Flash": "gemini-2.5-flash",
+    "GPT-4o Mini": "gpt-4o-mini",
+    "Mistral Medium": "mistral-medium-2505",
+    "Claude 3 Haiku": "claude-3-haiku-20240307",
+    "Grok 4 Fast": "grok-4-fast-non-reasoning",
+}
+FREE_MODEL_DISPLAY_NAMES = list(FREE_MODELS_MAP.keys())
+FREE_MODEL_CHOICES = list(FREE_MODELS_MAP.values())  # Keep for backward compat
 
 # Paid models (user provides their own API key)
 PAID_MODEL_CHOICES = [
@@ -601,7 +671,7 @@ with col_logo:
     st.image("logo.png", width=100)
 with col_title:
     st.title("CatLLM - Research Data Classifier")
-    st.markdown("Extract categories from or classify text data, PDFs, and images using LLMs.")
+    st.markdown("Research-grade categorization of survey responses, PDFs, and images using LLMs.")
 
 # About section
 with st.expander("About This App"):
@@ -723,10 +793,13 @@ with col_input:
 
         if pdf_files:
             input_data = []
+            pdf_name_map = {}  # Map temp paths to original filenames
             for f in pdf_files:
                 with tempfile.NamedTemporaryFile(delete=False, suffix='.pdf') as tmp:
                     tmp.write(f.read())
                     input_data.append(tmp.name)
+                    pdf_name_map[tmp.name] = f.name.replace('.pdf', '')  # Store original name without extension
+            st.session_state.pdf_name_map = pdf_name_map
             description = pdf_description or "document"
             original_filename = "pdf_files"
             st.success(f"Uploaded {len(pdf_files)} PDF file(s)")
@@ -796,7 +869,8 @@ with col_input:
         )
 
         if model_tier == "Free Models":
-            model = st.selectbox("Model", options=FREE_MODEL_CHOICES, key="extract_model")
+            model_display = st.selectbox("Model", options=FREE_MODEL_DISPLAY_NAMES, key="extract_model")
+            model = FREE_MODELS_MAP[model_display]  # Convert to actual model name
             api_key = ""
             st.info("**Free tier** - no API key required!")
         else:
@@ -807,28 +881,70 @@ with col_input:
             if input_data is None:
                 st.error("Please upload data first")
             else:
-                with st.spinner("Extracting categories..."):
-                    mode = None
+                mode = None
+                if input_type_selected == "pdf":
+                    mode_mapping = {
+                        "Image (visual documents)": "image",
+                        "Text (text-heavy)": "text",
+                        "Both (comprehensive)": "both"
+                    }
+                    mode = mode_mapping.get(pdf_mode, "image")
+
+                actual_api_key, provider = get_api_key(model, model_tier, api_key)
+                if not actual_api_key:
+                    st.error(f"{provider} API key not configured")
+                else:
+                    model_source = get_model_source(model)
+
+                    # Calculate estimated time based on input size
+                    num_items = len(input_data) if isinstance(input_data, list) else 1
                     if input_type_selected == "pdf":
-                        mode_mapping = {
-                            "Image (visual documents)": "image",
-                            "Text (text-heavy)": "text",
-                            "Both (comprehensive)": "both"
-                        }
-                        mode = mode_mapping.get(pdf_mode, "image")
-
-                    categories, status = run_auto_extract(
-                        input_type_selected, input_data, description,
-                        max_categories, model_tier, model, api_key, mode
-                    )
-
-                    if categories:
-                        st.session_state.extracted_categories = categories
-                        st.session_state.task_mode = "manual"  # Switch to manual to show categories
-                        st.success(status)
-                        st.rerun()
+                        # PDFs take longer - estimate ~5s per page
+                        total_pages = sum(count_pdf_pages(p) for p in (input_data if isinstance(input_data, list) else [input_data]))
+                        est_seconds = total_pages * 5
+                    elif input_type_selected == "image":
+                        # Images ~4s each
+                        est_seconds = num_items * 4
                     else:
-                        st.error(status)
+                        # Text ~2s per item, but batched
+                        est_seconds = max(10, num_items * 0.5)
+
+                    est_time_str = f"{est_seconds:.0f}s" if est_seconds < 60 else f"{est_seconds/60:.1f}m"
+
+                    # Animated status indicator
+                    with st.status(f"Extracting categories (est. {est_time_str})...", expanded=True) as status:
+                        st.write("Analyzing your data to discover categories...")
+                        start_time = time.time()
+
+                        extract_kwargs = {
+                            'input_data': input_data,
+                            'api_key': actual_api_key,
+                            'input_type': input_type_selected,
+                            'description': description,
+                            'user_model': model,
+                            'model_source': model_source,
+                            'max_categories': int(max_categories)
+                        }
+                        if mode:
+                            extract_kwargs['mode'] = mode
+
+                        try:
+                            extract_result = catllm.extract(**extract_kwargs)
+                            categories = extract_result.get('top_categories', [])
+
+                            processing_time = time.time() - start_time
+
+                            if categories:
+                                status.update(label=f"Extracted {len(categories)} categories in {processing_time:.1f}s", state="complete", expanded=False)
+                                st.session_state.extracted_categories = categories
+                                st.session_state.task_mode = "manual"
+                                st.rerun()
+                            else:
+                                status.update(label="No categories extracted", state="error")
+                                st.error("No categories were extracted from the data")
+                        except Exception as e:
+                            status.update(label="Extraction failed", state="error")
+                            st.error(f"Error: {str(e)}")
 
     # Category inputs (shown for manual mode or after extraction)
     if st.session_state.task_mode == "manual":
@@ -877,48 +993,196 @@ with col_input:
         )
 
         if model_tier == "Free Models":
-            model = st.selectbox("Model", options=FREE_MODEL_CHOICES, key="classify_model")
+            model_display = st.selectbox("Model", options=FREE_MODEL_DISPLAY_NAMES, key="classify_model")
+            model = FREE_MODELS_MAP[model_display]  # Convert to actual model name
             api_key = ""
             st.info("**Free tier** - no API key required!")
         else:
             model = st.selectbox("Model", options=PAID_MODEL_CHOICES, key="classify_model_paid")
             api_key = st.text_input("API Key", type="password", key="classify_api_key")
 
-        if st.button("Classify Data", type="primary", use_container_width=True):
+        if st.button("Categorize Data", type="primary", use_container_width=True):
             if input_data is None:
                 st.error("Please upload data first")
             elif not categories_entered:
                 st.error("Please enter at least one category")
             else:
-                with st.spinner("Classifying data... This may take a few minutes."):
-                    mode = None
+                # Set up progress tracking
+                mode = None
+                if input_type_selected == "pdf":
+                    mode_mapping = {
+                        "Image (visual documents)": "image",
+                        "Text (text-heavy)": "text",
+                        "Both (comprehensive)": "both"
+                    }
+                    mode = mode_mapping.get(pdf_mode, "image")
+
+                actual_api_key, provider = get_api_key(model, model_tier, api_key)
+                if not actual_api_key:
+                    st.error(f"{provider} API key not configured")
+                else:
+                    model_source = get_model_source(model)
+                    items_list = input_data if isinstance(input_data, list) else [input_data]
+
+                    # Progress UI
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    start_time = time.time()
+
+                    # For PDFs, use progress callback
                     if input_type_selected == "pdf":
-                        mode_mapping = {
-                            "Image (visual documents)": "image",
-                            "Text (text-heavy)": "text",
-                            "Both (comprehensive)": "both"
-                        }
-                        mode = mode_mapping.get(pdf_mode, "image")
+                        # Progress callback for PDF page-by-page updates
+                        def pdf_progress_callback(current_idx, total_pages, page_label):
+                            progress = current_idx / total_pages if total_pages > 0 else 0
+                            progress_bar.progress(min(progress, 1.0))
 
-                    result_df, csv_path, pdf_path, code, status = run_classify_data(
-                        input_type_selected, input_data, description,
-                        categories_entered, model_tier, model, api_key, mode,
-                        original_filename, description
-                    )
+                            elapsed = time.time() - start_time
+                            if current_idx > 0:
+                                avg_time = elapsed / current_idx
+                                eta_seconds = avg_time * (total_pages - current_idx)
+                                eta_str = f" | ETA: {eta_seconds:.0f}s" if eta_seconds < 60 else f" | ETA: {eta_seconds/60:.1f}m"
+                            else:
+                                eta_str = ""
 
-                    if result_df is not None:
+                            status_text.text(f"Processing page {current_idx+1} of {total_pages} ({page_label}) ({progress*100:.0f}%){eta_str}")
+
+                        try:
+                            result_df = catllm.classify(
+                                input_data=items_list,
+                                categories=categories_entered,
+                                api_key=actual_api_key,
+                                input_type="pdf",
+                                description=description,
+                                user_model=model,
+                                model_source=model_source,
+                                mode=mode,
+                                progress_callback=pdf_progress_callback
+                            )
+
+                            processing_time = time.time() - start_time
+                            total_items = len(result_df)
+                            progress_bar.progress(1.0)
+                            status_text.text(f"Completed {total_items} pages in {processing_time:.1f}s")
+
+                            # Replace temp paths with original filenames in pdf_input column
+                            if 'pdf_input' in result_df.columns:
+                                pdf_name_map = st.session_state.get('pdf_name_map', {})
+                                def replace_temp_path(val):
+                                    if pd.isna(val):
+                                        return val
+                                    val_str = str(val)
+                                    for temp_path, orig_name in pdf_name_map.items():
+                                        # Check if the temp path's filename (without extension) is in the value
+                                        temp_name = os.path.basename(temp_path).replace('.pdf', '')
+                                        if temp_name in val_str:
+                                            return val_str.replace(temp_name, orig_name)
+                                    return val_str
+                                result_df['pdf_input'] = result_df['pdf_input'].apply(replace_temp_path)
+
+                            all_results = [result_df]
+
+                        except Exception as e:
+                            st.error(f"Error: {str(e)}")
+                            all_results = []
+
+                    else:
+                        # Non-PDF processing (text, images) - item by item
+                        all_results = []
+                        total_items = len(items_list)
+
+                        for i, item in enumerate(items_list):
+                            progress = i / total_items if total_items > 0 else 0
+                            progress_bar.progress(min(progress, 1.0))
+
+                            elapsed = time.time() - start_time
+                            if i > 0:
+                                avg_time = elapsed / i
+                                eta_seconds = avg_time * (total_items - i)
+                                eta_str = f" | ETA: {eta_seconds:.0f}s" if eta_seconds < 60 else f" | ETA: {eta_seconds/60:.1f}m"
+                            else:
+                                eta_str = ""
+
+                            status_text.text(f"Processing item {i+1} of {total_items} ({progress*100:.0f}%){eta_str}")
+
+                            try:
+                                item_result = catllm.classify(
+                                    input_data=[item],
+                                    categories=categories_entered,
+                                    api_key=actual_api_key,
+                                    input_type=input_type_selected,
+                                    description=description,
+                                    user_model=model,
+                                    model_source=model_source
+                                )
+                                all_results.append(item_result)
+
+                                progress = (i + 1) / total_items if total_items > 0 else 1.0
+                                progress_bar.progress(min(progress, 1.0))
+
+                            except Exception as e:
+                                st.warning(f"Error on item {i+1}: {str(e)}")
+                                continue
+
+                        processing_time = time.time() - start_time
+                        progress_bar.progress(1.0)
+                        status_text.text(f"Completed {total_items} items in {processing_time:.1f}s")
+
+                    if all_results:
+                        # Combine results
+                        result_df = pd.concat(all_results, ignore_index=True)
+
+                        # Save CSV
+                        with tempfile.NamedTemporaryFile(mode='w', suffix='_classified.csv', delete=False) as f:
+                            result_df.to_csv(f.name, index=False)
+                            csv_path = f.name
+
+                        # Calculate success rate
+                        if 'processing_status' in result_df.columns:
+                            success_count = (result_df['processing_status'] == 'success').sum()
+                            success_rate = (success_count / len(result_df)) * 100
+                        else:
+                            success_rate = 100.0
+
+                        # Get version info
+                        try:
+                            catllm_version = catllm.__version__
+                        except AttributeError:
+                            catllm_version = "unknown"
+                        python_version = sys.version.split()[0]
+
+                        # Generate methodology report
+                        pdf_path = generate_methodology_report_pdf(
+                            categories=categories_entered,
+                            model=model,
+                            column_name=description,
+                            num_rows=len(result_df),
+                            model_source=model_source,
+                            filename=original_filename,
+                            success_rate=success_rate,
+                            result_df=result_df,
+                            processing_time=processing_time,
+                            catllm_version=catllm_version,
+                            python_version=python_version,
+                            task_type="assign",
+                            input_type=input_type_selected,
+                            description=description
+                        )
+
+                        # Generate code
+                        code = generate_classify_code(input_type_selected, description, categories_entered, model, model_source, mode)
+
                         st.session_state.results = {
                             'df': result_df,
                             'csv_path': csv_path,
                             'pdf_path': pdf_path,
                             'code': code,
-                            'status': status,
+                            'status': f"Classified {len(result_df)} items in {processing_time:.1f}s",
                             'categories': categories_entered
                         }
-                        st.success(status)
+                        st.success(f"Classified {len(result_df)} items in {processing_time:.1f}s")
                         st.rerun()
                     else:
-                        st.error(status)
+                        st.error("No items were successfully classified")
 
 with col_output:
     st.markdown("### Results")
@@ -929,9 +1193,13 @@ with col_output:
         # Distribution chart
         fig = create_distribution_chart(results['df'], results['categories'])
         st.pyplot(fig)
+        st.caption("Note: Categories are not mutually exclusive—each item can belong to multiple categories.")
 
-        # Results dataframe
-        st.dataframe(results['df'], use_container_width=True)
+        # Results dataframe (hide technical columns from display)
+        display_df = results['df'].copy()
+        cols_to_hide = ['model_response', 'json', 'raw_response', 'raw_json']
+        display_df = display_df.drop(columns=[c for c in cols_to_hide if c in display_df.columns])
+        st.dataframe(display_df, use_container_width=True)
 
         # Downloads
         col_dl1, col_dl2 = st.columns(2)
@@ -956,15 +1224,32 @@ with col_output:
         with st.expander("See the Code"):
             st.code(results['code'], language='python')
     else:
-        st.info("Upload data, select categories, and click 'Classify Data' to see results here.")
+        st.info("Upload data, select categories, and click 'Categorize Data' to see results here.")
 
-# Reset button
-if st.button("Reset", type="secondary"):
-    st.session_state.categories = [''] * MAX_CATEGORIES
-    st.session_state.category_count = INITIAL_CATEGORIES
-    st.session_state.task_mode = None
-    st.session_state.extracted_categories = None
-    st.session_state.results = None
-    if hasattr(st.session_state, 'example_loaded'):
-        del st.session_state.example_loaded
-    st.rerun()
+# Bottom buttons
+col_reset, col_code = st.columns(2)
+with col_reset:
+    if st.button("Reset", type="secondary", use_container_width=True):
+        st.session_state.categories = [''] * MAX_CATEGORIES
+        st.session_state.category_count = INITIAL_CATEGORIES
+        st.session_state.task_mode = None
+        st.session_state.extracted_categories = None
+        st.session_state.results = None
+        if hasattr(st.session_state, 'example_loaded'):
+            del st.session_state.example_loaded
+        st.rerun()
+
+with col_code:
+    if st.session_state.results:
+        if st.button("See in Code", use_container_width=True):
+            st.session_state.show_code_modal = True
+
+# Code modal/dialog
+if st.session_state.get('show_code_modal') and st.session_state.results:
+    st.markdown("---")
+    st.markdown("### Reproducibility Code")
+    st.markdown("Use this code to reproduce the classification with the CatLLM Python package:")
+    st.code(st.session_state.results['code'], language='python')
+    if st.button("Close"):
+        st.session_state.show_code_modal = False
+        st.rerun()
