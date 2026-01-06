@@ -1,17 +1,17 @@
 ---
-title: catllm - Survey Response Classifier
-emoji: 🏷️
-colorFrom: blue
-colorTo: purple
-sdk: gradio
-sdk_version: "5.6.0"
+title: CatLLM - Survey Response Classifier
+emoji: 🐱
+colorFrom: yellow
+colorTo: yellow
+sdk: streamlit
+sdk_version: "1.32.0"
 app_file: app.py
 pinned: false
 license: mit
 short_description: Classify survey responses using LLMs
 ---
 
-# catllm - Survey Response Classifier
+# CatLLM - Survey Response Classifier
 
 A web interface for the [catllm](https://github.com/chrissoria/cat-llm) Python package. Classify survey responses into custom categories using various LLM providers.
 
