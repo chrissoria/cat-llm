@@ -1098,6 +1098,7 @@ def explore_corpus(
     provider: str = "auto",
     creativity=None,
     filename="corpus_exploration.csv",
+    focus: str = None,
 ):
     """
     Extract categories from survey corpus using LLM.
@@ -1116,6 +1117,9 @@ def explore_corpus(
         provider: Provider name or "auto" to detect from model name
         creativity: Temperature setting
         filename: Output CSV filename (None to skip saving)
+        focus: Optional focus instruction for category extraction (e.g., "decisions to move",
+               "emotional responses", "financial considerations"). When provided, the model
+               will prioritize extracting categories related to this focus.
 
     Returns:
         DataFrame with extracted categories and counts
@@ -1129,6 +1133,8 @@ def explore_corpus(
 
     print(f"Exploring categories for question: '{survey_question}'")
     print(f"Using provider: {provider}, model: {model}")
+    if focus:
+        print(f"Focus: {focus}")
     print(f"          {categories_per_chunk * divisions} unique categories to be extracted.")
     print()
 
@@ -1178,9 +1184,10 @@ def explore_corpus(
 
     for i in tqdm(range(divisions), desc="Processing chunks"):
         survey_participant_chunks = '; '.join(str(x) for x in random_chunks[i])
+        focus_text = f" Focus specifically on {focus}." if focus else ""
         prompt = (
             f'Identify {categories_per_chunk} {specificity} categories of responses to the question "{survey_question}" '
-            f"in the following list of responses. Responses are each separated by a semicolon. "
+            f"in the following list of responses.{focus_text} Responses are each separated by a semicolon. "
             f"Responses are contained within triple backticks here: ```{survey_participant_chunks}``` "
             f"Number your categories from 1 through {categories_per_chunk} and be concise with the category labels and provide no description of the categories."
         )
@@ -1252,6 +1259,7 @@ def explore_common_categories(
     filename: str = None,
     iterations: int = 5,
     random_state: int = None,
+    focus: str = None,
     # Legacy parameter names for backward compatibility
     user_model: str = None,
     model_source: str = None,
@@ -1276,6 +1284,9 @@ def explore_common_categories(
         filename: Output CSV filename (None to skip saving)
         iterations: Number of passes over the data
         random_state: Random seed for reproducibility
+        focus: Optional focus instruction for category extraction (e.g., "decisions to move",
+               "emotional responses", "financial considerations"). When provided, the model
+               will prioritize extracting categories related to this focus.
 
     Returns:
         dict with 'counts_df', 'top_categories', and 'raw_top_text'
@@ -1319,6 +1330,8 @@ def explore_common_categories(
 
     print(f"Exploring categories for question: '{survey_question}'")
     print(f"Using provider: {provider}, model: {model}")
+    if focus:
+        print(f"Focus: {focus}")
     print(f"          {categories_per_chunk * divisions * iterations} total category extractions across {iterations} iterations.")
     print(f"          Top {max_categories} categories will be identified.\n")
 
@@ -1339,9 +1352,10 @@ def explore_common_categories(
         system_content = "You are a helpful assistant that extracts categories from survey responses."
 
     def make_prompt(responses_blob: str) -> str:
+        focus_text = f" Focus specifically on {focus}." if focus else ""
         return (
             f'Identify {categories_per_chunk} {specificity} categories of responses to the question "{survey_question}" '
-            f"in the following list of responses. Responses are separated by semicolons. "
+            f"in the following list of responses.{focus_text} Responses are separated by semicolons. "
             f"Responses are within triple backticks: ```{responses_blob}``` "
             f"Number your categories from 1 through {categories_per_chunk} and provide concise labels only (no descriptions)."
         )

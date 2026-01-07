@@ -19,7 +19,8 @@ def extract(
     filename=None,
     model_source="auto",
     iterations=3,
-    random_state=None
+    random_state=None,
+    focus=None,
 ):
     """
     Unified category extraction function for text, image, and PDF inputs.
@@ -58,6 +59,9 @@ def extract(
             "mistral", "huggingface", "xai".
         iterations (int): Number of passes over the data.
         random_state (int): Random seed for reproducibility.
+        focus (str): Optional focus instruction for category extraction (e.g.,
+            "decisions to move", "emotional responses"). When provided, the model
+            will prioritize extracting categories related to this focus.
 
     Returns:
         dict with keys:
@@ -111,7 +115,8 @@ def extract(
             filename=filename,
             model_source=model_source,
             iterations=iterations,
-            random_state=random_state
+            random_state=random_state,
+            focus=focus,
         )
 
     elif input_type == "image":
@@ -281,7 +286,7 @@ def classify(
             survey_input=input_data,
             categories=categories,
             api_key=api_key,
-            user_model=user_model,
+            model=user_model,
             survey_question=description,
             example1=example1,
             example2=example2,
@@ -302,7 +307,7 @@ def classify(
             research_question=research_question,
             filename=filename,
             save_directory=save_directory,
-            model_source=model_source
+            provider=model_source
         )
 
     elif input_type == "image":
