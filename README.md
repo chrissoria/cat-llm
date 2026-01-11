@@ -35,6 +35,7 @@ With leading models like GPT-5, Gemini, and Qwen 3, CatLLM achieves **98% accura
 - [API Reference](#api-reference)
   - [classify()](#classify) - Unified function for text, image, and PDF (auto-detects input type)
   - [extract()](#extract) - Unified function for category extraction
+  - [summarize()](#summarize) - Unified function for text and PDF summarization
   - [image_score_drawing()](#image_score_drawing)
   - [image_features()](#image_features)
   - [cerad_drawn_score()](#cerad_drawn_score)
@@ -232,6 +233,81 @@ results = cat.extract(
 
 print(results['top_categories'])
 # ['Employment opportunity', 'Family reasons', 'Cost of living', ...]
+```
+
+---
+
+### `summarize()`
+
+Unified summarization function for text and PDF inputs. Generates concise summaries of survey responses, documents, or any text data. **Input type is auto-detected** from your data.
+
+Supports both **single-model** and **multi-model ensemble** summarization. In multi-model mode, summaries from all models are synthesized into a consensus summary.
+
+**Parameters:**
+- `input_data`: The data to summarize. Can be:
+  - Text: list of strings, pandas Series, or single string
+  - PDF: directory path, single PDF path, or list of PDF paths
+- `api_key` (str): API key for the LLM service (single-model mode)
+- `description` (str): Description of what the content contains (provides context)
+- `instructions` (str): Specific summarization instructions (e.g., "bullet points")
+- `max_length` (int): Maximum summary length in words
+- `focus` (str): What to focus on (e.g., "main arguments", "emotional content")
+- `user_model` (str, default="gpt-4o"): Model to use
+- `model_source` (str, default="auto"): Provider - "auto", "openai", "anthropic", "google", etc.
+- `mode` (str, default="image"): PDF processing mode:
+  - "image": Render pages as images (best for visual documents)
+  - "text": Extract text only (faster, good for text-heavy PDFs)
+  - "both": Send both image and extracted text (most comprehensive)
+- `filename` (str): Output CSV filename
+- `save_directory` (str): Directory to save results
+- `models` (list): For multi-model mode, list of `(model, provider, api_key)` tuples
+
+**Returns:**
+- `pandas.DataFrame`: Results with summary columns:
+  - `survey_input`: Original text or page label (for PDFs)
+  - `summary`: Generated summary (or consensus for multi-model)
+  - `processing_status`: "success", "error", "skipped"
+  - `pdf_path`: Path to source PDF (PDF mode only)
+  - `page_index`: Page number, 0-indexed (PDF mode only)
+
+**Examples:**
+
+```python
+import catllm as cat
+
+# Single model text summarization
+results = cat.summarize(
+    input_data=df['responses'],
+    description="Customer feedback",
+    api_key=api_key
+)
+
+# PDF summarization (auto-detected from file paths)
+results = cat.summarize(
+    input_data="/path/to/pdfs/",
+    description="Research papers",
+    mode="image",
+    api_key=api_key
+)
+
+# PDF summarization with specific files and focus
+results = cat.summarize(
+    input_data=["doc1.pdf", "doc2.pdf"],
+    description="Financial reports",
+    mode="both",
+    focus="key metrics and trends",
+    max_length=100,
+    api_key=api_key
+)
+
+# Multi-model with synthesis
+results = cat.summarize(
+    input_data=df['responses'],
+    models=[
+        ("gpt-4o", "openai", "sk-..."),
+        ("claude-sonnet-4-5-20250929", "anthropic", "sk-ant-..."),
+    ],
+)
 ```
 
 ---
