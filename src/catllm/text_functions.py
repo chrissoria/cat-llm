@@ -7,6 +7,29 @@ Perplexity, HuggingFace, and Ollama) without requiring provider-specific SDKs.
 """
 
 import json
+import warnings
+
+# Exported names (excludes deprecated multi_class)
+__all__ = [
+    "UnifiedLLMClient",
+    "detect_provider",
+    "set_ollama_endpoint",
+    "check_ollama_running",
+    "list_ollama_models",
+    "check_ollama_model",
+    "check_system_resources",
+    "get_ollama_model_size_estimate",
+    "pull_ollama_model",
+    "build_json_schema",
+    "extract_json",
+    "validate_classification_json",
+    "ollama_two_step_classify",
+    "explore_corpus",
+    "explore_common_categories",
+    # Internal utilities used by other modules
+    "_detect_model_source",
+    "_get_stepback_insight",
+]
 import time
 import requests
 import pandas as pd
@@ -1587,7 +1610,17 @@ def multi_class(
             chain_of_verification=True,
             survey_question="Why did you move?",
         )
+
+    .. deprecated::
+        Use :func:`catllm.classify` instead. This function will be removed in a future version.
     """
+    warnings.warn(
+        "multi_class() is deprecated and will be removed in a future version. "
+        "Use catllm.classify() instead, which supports single and multi-model classification.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
     # Detect provider
     provider = detect_provider(model, provider)
 

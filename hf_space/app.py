@@ -259,78 +259,77 @@ print(result["counts_df"])
 '''
 
 
-def generate_classify_code(input_type, description, categories, model, model_source, mode=None):
+def generate_classify_code(input_type, description, categories, model, model_source, mode=None, classify_mode="Single Model", models_list=None):
     """Generate Python code for classification."""
     categories_str = ",\n    ".join([f'"{cat}"' for cat in categories])
 
+    # Determine input data placeholder based on type
     if input_type == "text":
-        return f'''import catllm
-import pandas as pd
+        input_placeholder = 'df["your_column"].tolist()'
+        load_data = '''import pandas as pd
 
 # Load your data
 df = pd.read_csv("your_data.csv")
-
-# Define categories
-categories = [
-    {categories_str}
-]
-
-# Classify the text data
-result = catllm.classify(
-    input_data=df["{description}"].tolist(),
-    categories=categories,
-    api_key="YOUR_API_KEY",
-    input_type="text",
-    description="{description}",
-    user_model="{model}",
-    model_source="{model_source}"
-)
-
-# View results
-print(result)
-result.to_csv("classified_results.csv", index=False)
 '''
     elif input_type == "pdf":
-        mode_line = f',\n    mode="{mode}"' if mode else ''
-        return f'''import catllm
+        input_placeholder = '"path/to/your/pdfs/"'
+        load_data = ''
+    else:  # image
+        input_placeholder = '"path/to/your/images/"'
+        load_data = ''
 
+    # Generate code based on classification mode
+    if classify_mode == "Single Model":
+        # Single model mode
+        mode_param = f',\n    mode="{mode}"' if mode and input_type == "pdf" else ''
+        return f'''import catllm
+{load_data}
 # Define categories
 categories = [
     {categories_str}
 ]
 
-# Classify PDF documents
+# Classify data (input type is auto-detected)
 result = catllm.classify(
-    input_data="path/to/your/pdfs/",
+    input_data={input_placeholder},
     categories=categories,
     api_key="YOUR_API_KEY",
-    input_type="pdf",
-    description="{description}"{mode_line},
-    user_model="{model}",
-    model_source="{model_source}"
+    description="{description}",
+    user_model="{model}"{mode_param}
 )
 
 # View results
 print(result)
 result.to_csv("classified_results.csv", index=False)
 '''
-    else:  # image
-        return f'''import catllm
+    else:
+        # Multi-model mode (Comparison or Ensemble)
+        if models_list:
+            models_str = ",\n        ".join([f'("{m}", "auto", "YOUR_API_KEY")' for m in models_list])
+        else:
+            models_str = '("gpt-4o", "auto", "YOUR_API_KEY"),\n        ("claude-sonnet-4-5-20250929", "auto", "YOUR_API_KEY")'
 
+        mode_param = f',\n    mode="{mode}"' if mode and input_type == "pdf" else ''
+        consensus_param = ',\n    consensus_threshold=0.5' if classify_mode == "Ensemble" else ''
+
+        return f'''import catllm
+{load_data}
 # Define categories
 categories = [
     {categories_str}
 ]
 
-# Classify images
+# Define models for {"ensemble voting" if classify_mode == "Ensemble" else "comparison"}
+models = [
+        {models_str}
+]
+
+# Classify with multiple models
 result = catllm.classify(
-    input_data="path/to/your/images/",
+    input_data={input_placeholder},
     categories=categories,
-    api_key="YOUR_API_KEY",
-    input_type="image",
-    description="{description}",
-    user_model="{model}",
-    model_source="{model_source}"
+    models=models,
+    description="{description}"{mode_param}{consensus_param}
 )
 
 # View results
@@ -547,18 +546,15 @@ def run_classify_data(input_type, input_data, description, categories,
         start_time = time.time()
 
         classify_kwargs = {
-            'input_data': input_data,
+            'survey_input': input_data,
             'categories': categories,
-            'api_key': actual_api_key,
-            'input_type': input_type,
-            'description': description,
-            'user_model': model,
-            'model_source': model_source
+            'models': [(model, model_source, actual_api_key)],
+            'input_description': description,
         }
         if mode:
-            classify_kwargs['mode'] = mode
+            classify_kwargs['pdf_mode'] = mode
 
-        result = catllm.classify(**classify_kwargs)
+        result = catllm.classify_ensemble(**classify_kwargs)
 
         processing_time = time.time() - start_time
         num_items = len(result)
@@ -609,30 +605,126 @@ def run_classify_data(input_type, input_data, description, categories,
         return None, None, None, None, f"Error: {str(e)}"
 
 
-def create_distribution_chart(result_df, categories):
-    """Create a bar chart showing category distribution."""
-    fig, ax = plt.subplots(figsize=(10, max(4, len(categories) * 0.8)))
+def sanitize_model_name(model: str) -> str:
+    """Convert model name to column-safe suffix (matches catllm logic)."""
+    import re
+    sanitized = re.sub(r'[^a-zA-Z0-9]', '_', model)
+    sanitized = re.sub(r'_+', '_', sanitized)
+    sanitized = sanitized.strip('_').lower()
+    return sanitized[:40]
 
-    dist_data = []
+
+def create_distribution_chart(result_df, categories, classify_mode="Single Model", models_list=None):
+    """Create a bar chart showing category distribution.
+
+    Args:
+        result_df: DataFrame with classification results
+        categories: List of category names
+        classify_mode: "Single Model", "Model Comparison", or "Ensemble"
+        models_list: List of model names (for multi-model modes)
+    """
+    import numpy as np
+
     total_rows = len(result_df)
-    for i, cat in enumerate(categories, 1):
-        col_name = f"category_{i}"
-        if col_name in result_df.columns:
-            count = int(result_df[col_name].sum())
-            pct = (count / total_rows) * 100 if total_rows > 0 else 0
-            dist_data.append({"Category": cat, "Percentage": round(pct, 1)})
+    if total_rows == 0:
+        fig, ax = plt.subplots(figsize=(10, 4))
+        ax.text(0.5, 0.5, 'No data to display', ha='center', va='center', fontsize=14)
+        ax.axis('off')
+        return fig
 
-    categories_list = [d["Category"] for d in dist_data][::-1]
-    percentages = [d["Percentage"] for d in dist_data][::-1]
+    # Define colors for different models
+    model_colors = ['#2563eb', '#dc2626', '#16a34a', '#ca8a04', '#9333ea', '#0891b2', '#be185d', '#65a30d']
 
-    bars = ax.barh(categories_list, percentages, color='#2563eb')
-    ax.set_xlim(0, 100)
-    ax.set_xlabel('Percentage (%)', fontsize=11)
-    ax.set_title('Category Distribution (%)', fontsize=14, fontweight='bold')
+    if classify_mode == "Single Model":
+        # Single model: use category_1, category_2, etc.
+        fig, ax = plt.subplots(figsize=(10, max(4, len(categories) * 0.8)))
 
-    for bar, pct in zip(bars, percentages):
-        ax.text(bar.get_width() + 1, bar.get_y() + bar.get_height()/2,
-               f'{pct:.1f}%', va='center', fontsize=10)
+        dist_data = []
+        for i, cat in enumerate(categories, 1):
+            col_name = f"category_{i}"
+            if col_name in result_df.columns:
+                count = int(result_df[col_name].sum())
+                pct = (count / total_rows) * 100
+                dist_data.append({"Category": cat, "Percentage": round(pct, 1)})
+
+        categories_list = [d["Category"] for d in dist_data][::-1]
+        percentages = [d["Percentage"] for d in dist_data][::-1]
+
+        bars = ax.barh(categories_list, percentages, color='#2563eb')
+        ax.set_xlim(0, 100)
+        ax.set_xlabel('Percentage (%)', fontsize=11)
+        ax.set_title('Category Distribution (%)', fontsize=14, fontweight='bold')
+
+        for bar, pct in zip(bars, percentages):
+            ax.text(bar.get_width() + 1, bar.get_y() + bar.get_height()/2,
+                   f'{pct:.1f}%', va='center', fontsize=10)
+
+    elif classify_mode == "Ensemble":
+        # Ensemble: use category_1_consensus, category_2_consensus, etc.
+        fig, ax = plt.subplots(figsize=(10, max(4, len(categories) * 0.8)))
+
+        dist_data = []
+        for i, cat in enumerate(categories, 1):
+            col_name = f"category_{i}_consensus"
+            if col_name in result_df.columns:
+                count = int(result_df[col_name].sum())
+                pct = (count / total_rows) * 100
+                dist_data.append({"Category": cat, "Percentage": round(pct, 1)})
+
+        categories_list = [d["Category"] for d in dist_data][::-1]
+        percentages = [d["Percentage"] for d in dist_data][::-1]
+
+        bars = ax.barh(categories_list, percentages, color='#16a34a')
+        ax.set_xlim(0, 100)
+        ax.set_xlabel('Percentage (%)', fontsize=11)
+        ax.set_title('Ensemble Consensus Distribution (%)', fontsize=14, fontweight='bold')
+
+        for bar, pct in zip(bars, percentages):
+            ax.text(bar.get_width() + 1, bar.get_y() + bar.get_height()/2,
+                   f'{pct:.1f}%', va='center', fontsize=10)
+
+    else:  # Model Comparison
+        # Model Comparison: grouped bars for each model
+        if not models_list:
+            models_list = []
+
+        sanitized_names = [sanitize_model_name(m) for m in models_list]
+        n_models = len(sanitized_names)
+        n_categories = len(categories)
+
+        fig, ax = plt.subplots(figsize=(12, max(5, n_categories * 1.2)))
+
+        # Gather data for each model
+        bar_height = 0.8 / n_models
+        y_positions = np.arange(n_categories)
+
+        for model_idx, (model_name, sanitized) in enumerate(zip(models_list, sanitized_names)):
+            model_pcts = []
+            for i in range(1, n_categories + 1):
+                col_name = f"category_{i}_{sanitized}"
+                if col_name in result_df.columns:
+                    count = int(result_df[col_name].sum())
+                    pct = (count / total_rows) * 100
+                else:
+                    pct = 0
+                model_pcts.append(pct)
+
+            # Reverse for horizontal bar chart
+            model_pcts = model_pcts[::-1]
+            offset = (model_idx - n_models / 2 + 0.5) * bar_height
+            color = model_colors[model_idx % len(model_colors)]
+
+            # Use shorter display name
+            display_name = model_name.split('/')[-1].split(':')[0][:20]
+            bars = ax.barh(y_positions + offset, model_pcts, bar_height * 0.9,
+                          label=display_name, color=color, alpha=0.85)
+
+        ax.set_yticks(y_positions)
+        ax.set_yticklabels(categories[::-1])
+        ax.set_xlim(0, 100)
+        ax.set_xlabel('Percentage (%)', fontsize=11)
+        ax.set_title('Category Distribution by Model (%)', fontsize=14, fontweight='bold')
+        ax.legend(loc='lower right', fontsize=9)
 
     plt.tight_layout()
     return fig
@@ -860,6 +952,19 @@ with col_input:
             help="How many categories should be identified in your data"
         )
 
+        specificity = st.selectbox(
+            "How specific should categories be?",
+            options=["Broad", "Moderate", "Narrow"],
+            index=0,
+            help="Broad = general themes, Moderate = balanced detail, Narrow = highly specific categories"
+        )
+
+        focus = st.text_input(
+            "What should categories be focused around? (optional)",
+            placeholder="e.g., 'decisions to move', 'emotional responses', 'financial factors'",
+            help="Guide the model to prioritize extracting categories related to this focus"
+        )
+
         # Model selection for extraction
         st.markdown("### Model Selection")
         model_tier = st.radio(
@@ -872,7 +977,6 @@ with col_input:
             model_display = st.selectbox("Model", options=FREE_MODEL_DISPLAY_NAMES, key="extract_model")
             model = FREE_MODELS_MAP[model_display]  # Convert to actual model name
             api_key = ""
-            st.info("**Free tier** - no API key required!")
         else:
             model = st.selectbox("Model", options=PAID_MODEL_CHOICES, key="extract_model_paid")
             api_key = st.text_input("API Key", type="password", key="extract_api_key")
@@ -923,10 +1027,13 @@ with col_input:
                             'description': description,
                             'user_model': model,
                             'model_source': model_source,
-                            'max_categories': int(max_categories)
+                            'max_categories': int(max_categories),
+                            'specificity': specificity.lower()
                         }
                         if mode:
                             extract_kwargs['mode'] = mode
+                        if focus and focus.strip():
+                            extract_kwargs['focus'] = focus.strip()
 
                         try:
                             extract_result = catllm.extract(**extract_kwargs)
@@ -986,26 +1093,71 @@ with col_input:
                 st.rerun()
 
         st.markdown("### Model Selection")
+
+        # Classification mode selector
+        classify_mode = st.radio(
+            "Classification Mode",
+            options=["Single Model", "Model Comparison", "Ensemble"],
+            horizontal=True,
+            key="classify_mode",
+            help="Single: one model. Comparison: see results from multiple models side-by-side. Ensemble: multiple models vote for consensus."
+        )
+
         model_tier = st.radio(
             "Model Tier",
             options=["Free Models", "Bring Your Own Key"],
             key="classify_model_tier"
         )
 
+        # Multi-model mode uses multiselect
+        is_multi_model = classify_mode in ["Model Comparison", "Ensemble"]
+
         if model_tier == "Free Models":
-            model_display = st.selectbox("Model", options=FREE_MODEL_DISPLAY_NAMES, key="classify_model")
-            model = FREE_MODELS_MAP[model_display]  # Convert to actual model name
+            if is_multi_model:
+                model_displays = st.multiselect(
+                    "Models (select 2+)",
+                    options=FREE_MODEL_DISPLAY_NAMES,
+                    default=[FREE_MODEL_DISPLAY_NAMES[0], FREE_MODEL_DISPLAY_NAMES[1]] if len(FREE_MODEL_DISPLAY_NAMES) >= 2 else FREE_MODEL_DISPLAY_NAMES[:1],
+                    key="classify_models_multi"
+                )
+                models_list = [FREE_MODELS_MAP[d] for d in model_displays]
+            else:
+                model_display = st.selectbox("Model", options=FREE_MODEL_DISPLAY_NAMES, key="classify_model")
+                model = FREE_MODELS_MAP[model_display]  # Convert to actual model name
+                models_list = [model]
             api_key = ""
-            st.info("**Free tier** - no API key required!")
         else:
-            model = st.selectbox("Model", options=PAID_MODEL_CHOICES, key="classify_model_paid")
+            if is_multi_model:
+                models_list = st.multiselect(
+                    "Models (select 2+)",
+                    options=PAID_MODEL_CHOICES,
+                    default=[PAID_MODEL_CHOICES[0], PAID_MODEL_CHOICES[1]] if len(PAID_MODEL_CHOICES) >= 2 else PAID_MODEL_CHOICES[:1],
+                    key="classify_models_multi_paid"
+                )
+            else:
+                model = st.selectbox("Model", options=PAID_MODEL_CHOICES, key="classify_model_paid")
+                models_list = [model]
             api_key = st.text_input("API Key", type="password", key="classify_api_key")
+
+        # Ensemble-specific options
+        if classify_mode == "Ensemble":
+            consensus_threshold = st.slider(
+                "Consensus Threshold",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.5,
+                step=0.1,
+                key="consensus_threshold",
+                help="Minimum agreement ratio needed for consensus (0.5 = majority vote)"
+            )
 
         if st.button("Categorize Data", type="primary", use_container_width=True):
             if input_data is None:
                 st.error("Please upload data first")
             elif not categories_entered:
                 st.error("Please enter at least one category")
+            elif is_multi_model and len(models_list) < 2:
+                st.error("Please select at least 2 models for comparison/ensemble mode")
             else:
                 # Set up progress tracking
                 mode = None
@@ -1017,11 +1169,20 @@ with col_input:
                     }
                     mode = mode_mapping.get(pdf_mode, "image")
 
-                actual_api_key, provider = get_api_key(model, model_tier, api_key)
-                if not actual_api_key:
-                    st.error(f"{provider} API key not configured")
+                # Build models tuples list: [(model, source, api_key), ...]
+                models_tuples = []
+                api_key_error = None
+                for m in models_list:
+                    actual_key, provider = get_api_key(m, model_tier, api_key)
+                    if not actual_key:
+                        api_key_error = f"{provider} API key not configured for {m}"
+                        break
+                    m_source = get_model_source(m)
+                    models_tuples.append((m, m_source, actual_key))
+
+                if api_key_error:
+                    st.error(api_key_error)
                 else:
-                    model_source = get_model_source(model)
                     items_list = input_data if isinstance(input_data, list) else [input_data]
 
                     # Progress UI
@@ -1047,17 +1208,20 @@ with col_input:
                             status_text.text(f"Processing page {current_idx+1} of {total_pages} ({page_label}) ({progress*100:.0f}%){eta_str}")
 
                         try:
-                            result_df = catllm.classify(
-                                input_data=items_list,
-                                categories=categories_entered,
-                                api_key=actual_api_key,
-                                input_type="pdf",
-                                description=description,
-                                user_model=model,
-                                model_source=model_source,
-                                mode=mode,
-                                progress_callback=pdf_progress_callback
-                            )
+                            # Build kwargs for classify_ensemble
+                            classify_kwargs = {
+                                "survey_input": items_list,
+                                "categories": categories_entered,
+                                "models": models_tuples,
+                                "input_description": description,
+                                "pdf_mode": mode,
+                                "progress_callback": pdf_progress_callback,
+                            }
+                            # Add consensus_threshold for ensemble mode
+                            if classify_mode == "Ensemble":
+                                classify_kwargs["consensus_threshold"] = consensus_threshold
+
+                            result_df = catllm.classify_ensemble(**classify_kwargs)
 
                             processing_time = time.time() - start_time
                             total_items = len(result_df)
@@ -1086,46 +1250,48 @@ with col_input:
                             all_results = []
 
                     else:
-                        # Non-PDF processing (text, images) - item by item
-                        all_results = []
+                        # Non-PDF processing (text, images) - process all at once
                         total_items = len(items_list)
 
-                        for i, item in enumerate(items_list):
-                            progress = i / total_items if total_items > 0 else 0
+                        # Progress callback for item-by-item updates
+                        def item_progress_callback(current_idx, total, item_label):
+                            progress = current_idx / total if total > 0 else 0
                             progress_bar.progress(min(progress, 1.0))
 
                             elapsed = time.time() - start_time
-                            if i > 0:
-                                avg_time = elapsed / i
-                                eta_seconds = avg_time * (total_items - i)
+                            if current_idx > 0:
+                                avg_time = elapsed / current_idx
+                                eta_seconds = avg_time * (total - current_idx)
                                 eta_str = f" | ETA: {eta_seconds:.0f}s" if eta_seconds < 60 else f" | ETA: {eta_seconds/60:.1f}m"
                             else:
                                 eta_str = ""
 
-                            status_text.text(f"Processing item {i+1} of {total_items} ({progress*100:.0f}%){eta_str}")
+                            status_text.text(f"Processing item {current_idx+1} of {total} ({progress*100:.0f}%){eta_str}")
 
-                            try:
-                                item_result = catllm.classify(
-                                    input_data=[item],
-                                    categories=categories_entered,
-                                    api_key=actual_api_key,
-                                    input_type=input_type_selected,
-                                    description=description,
-                                    user_model=model,
-                                    model_source=model_source
-                                )
-                                all_results.append(item_result)
+                        try:
+                            # Build kwargs for classify_ensemble
+                            classify_kwargs = {
+                                "survey_input": items_list,
+                                "categories": categories_entered,
+                                "models": models_tuples,
+                                "input_description": description,
+                                "progress_callback": item_progress_callback,
+                            }
+                            # Add consensus_threshold for ensemble mode
+                            if classify_mode == "Ensemble":
+                                classify_kwargs["consensus_threshold"] = consensus_threshold
 
-                                progress = (i + 1) / total_items if total_items > 0 else 1.0
-                                progress_bar.progress(min(progress, 1.0))
+                            result_df = catllm.classify_ensemble(**classify_kwargs)
+                            all_results = [result_df]
 
-                            except Exception as e:
-                                st.warning(f"Error on item {i+1}: {str(e)}")
-                                continue
+                            processing_time = time.time() - start_time
+                            progress_bar.progress(1.0)
+                            status_text.text(f"Completed {total_items} items in {processing_time:.1f}s")
 
-                        processing_time = time.time() - start_time
-                        progress_bar.progress(1.0)
-                        status_text.text(f"Completed {total_items} items in {processing_time:.1f}s")
+                        except Exception as e:
+                            st.error(f"Error: {str(e)}")
+                            all_results = []
+                            processing_time = time.time() - start_time
 
                     if all_results:
                         # Combine results
@@ -1150,13 +1316,21 @@ with col_input:
                             catllm_version = "unknown"
                         python_version = sys.version.split()[0]
 
+                        # For reports: create model string (single or list)
+                        if len(models_list) == 1:
+                            report_model = models_list[0]
+                            report_model_source = models_tuples[0][1]
+                        else:
+                            report_model = ", ".join(models_list)
+                            report_model_source = f"{classify_mode} ({len(models_list)} models)"
+
                         # Generate methodology report
                         pdf_path = generate_methodology_report_pdf(
                             categories=categories_entered,
-                            model=model,
+                            model=report_model,
                             column_name=description,
                             num_rows=len(result_df),
-                            model_source=model_source,
+                            model_source=report_model_source,
                             filename=original_filename,
                             success_rate=success_rate,
                             result_df=result_df,
@@ -1169,7 +1343,11 @@ with col_input:
                         )
 
                         # Generate code
-                        code = generate_classify_code(input_type_selected, description, categories_entered, model, model_source, mode)
+                        code = generate_classify_code(
+                            input_type_selected, description, categories_entered,
+                            report_model, report_model_source, mode,
+                            classify_mode=classify_mode, models_list=models_list
+                        )
 
                         st.session_state.results = {
                             'df': result_df,
@@ -1177,7 +1355,9 @@ with col_input:
                             'pdf_path': pdf_path,
                             'code': code,
                             'status': f"Classified {len(result_df)} items in {processing_time:.1f}s",
-                            'categories': categories_entered
+                            'categories': categories_entered,
+                            'classify_mode': classify_mode,
+                            'models_list': models_list,
                         }
                         st.success(f"Classified {len(result_df)} items in {processing_time:.1f}s")
                         st.rerun()
@@ -1191,7 +1371,12 @@ with col_output:
         results = st.session_state.results
 
         # Distribution chart
-        fig = create_distribution_chart(results['df'], results['categories'])
+        fig = create_distribution_chart(
+            results['df'],
+            results['categories'],
+            classify_mode=results.get('classify_mode', 'Single Model'),
+            models_list=results.get('models_list', [])
+        )
         st.pyplot(fig)
         st.caption("Note: Categories are not mutually exclusive—each item can belong to multiple categories.")
 

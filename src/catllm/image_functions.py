@@ -1,5 +1,16 @@
+import warnings
+
 from .text_functions import _detect_model_source
 from .calls.image_stepback import get_image_stepback_insight
+
+# Exported names (excludes deprecated image_multi_class)
+__all__ = [
+    "_load_image_files",
+    "_encode_image",
+    "image_score_drawing",
+    "image_features",
+    "explore_image_categories",
+]
 from .calls.image_CoVe import (
     image_chain_of_verification_openai,
     image_chain_of_verification_anthropic,
@@ -86,6 +97,19 @@ def image_multi_class(
     save_directory=None,
     model_source="auto"
 ):
+    """
+    Classify images using LLMs.
+
+    .. deprecated::
+        Use :func:`catllm.classify` instead. This function will be removed in a future version.
+    """
+    warnings.warn(
+        "image_multi_class() is deprecated and will be removed in a future version. "
+        "Use catllm.classify() instead, which auto-detects image input.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
     import os
     import json
     import pandas as pd

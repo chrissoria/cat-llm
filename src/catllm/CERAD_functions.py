@@ -13,6 +13,9 @@ Supported shapes:
 - cube: max score 4
 """
 
+# Only export cerad_drawn_score (not the internal import of image_multi_class)
+__all__ = ["cerad_drawn_score"]
+
 from .image_functions import image_multi_class
 
 

@@ -2,6 +2,8 @@
 Unified functions for classification and category extraction.
 """
 
+__all__ = ["extract", "classify", "summarize"]
+
 
 def extract(
     input_data,
@@ -198,33 +200,29 @@ def classify(
     categories_per_chunk=10,
     divisions=10,
     research_question=None,
-    progress_callback=None
+    progress_callback=None,
+    # New multi-model parameters
+    models=None,
+    consensus_threshold=0.5,
 ):
     """
     Unified classification function for text, image, and PDF inputs.
 
-    This function dispatches to the appropriate specialized function based on
-    the `input_type` parameter, providing a single entry point for all
-    classification tasks.
+    Supports single-model and multi-model (ensemble) classification. Input type
+    is auto-detected from the data (text strings, image paths, or PDF paths).
 
     Args:
         input_data: The data to classify. Can be:
             - For text: list of text responses or pandas Series
             - For image: directory path or list of image file paths
             - For pdf: directory path or list of PDF file paths
-        categories (list or "auto"): List of category names for classification,
-            or "auto" to automatically extract categories from the data first.
-        api_key (str): API key for the model provider.
-        input_type (str): Type of input data. Options:
-            - "text" (default): Text classification
-            - "image": Image classification
-            - "pdf": PDF page classification
-        description (str): Description of the input data. Used as:
-            - survey_question for text
-            - image_description for images
-            - pdf_description for PDFs
+        categories (list): List of category names for classification.
+        api_key (str): API key for the model provider (single-model mode).
+        input_type (str): DEPRECATED - input type is now auto-detected.
+            Kept for backward compatibility.
+        description (str): Description of the input data context.
         user_model (str): Model name to use. Default "gpt-4o".
-        mode (str): PDF processing mode (only used when input_type="pdf"):
+        mode (str): PDF processing mode:
             - "image" (default): Render pages as images
             - "text": Extract text only
             - "both": Send both image and extracted text
@@ -240,10 +238,10 @@ def classify(
         save_directory (str): Directory to save results.
         model_source (str): Provider - "auto", "openai", "anthropic", "google",
             "mistral", "perplexity", "huggingface", "xai".
-        max_categories (int): Max categories for auto mode (text only).
-        categories_per_chunk (int): Categories per chunk for auto mode (text only).
-        divisions (int): Number of divisions for auto mode (text only).
-        research_question (str): Research question for auto mode (text only).
+        progress_callback: Optional callback for progress updates.
+        models (list): For multi-model mode, list of (model, provider, api_key) tuples.
+            If provided, overrides user_model/api_key/model_source.
+        consensus_threshold (float): For multi-model mode, agreement threshold (0-1).
 
     Returns:
         pd.DataFrame: Results with classification columns.
@@ -251,7 +249,7 @@ def classify(
     Examples:
         >>> import catllm as cat
         >>>
-        >>> # Text classification (default)
+        >>> # Single model classification
         >>> results = cat.classify(
         ...     input_data=df['responses'],
         ...     categories=["Positive", "Negative", "Neutral"],
@@ -259,117 +257,160 @@ def classify(
         ...     api_key="your-api-key"
         ... )
         >>>
-        >>> # Image classification
+        >>> # Multi-model ensemble
         >>> results = cat.classify(
-        ...     input_data="/path/to/images/",
-        ...     categories=["Has person", "Outdoor scene"],
-        ...     description="Product photos",
-        ...     input_type="image",
+        ...     input_data=df['responses'],
+        ...     categories=["Positive", "Negative"],
+        ...     models=[
+        ...         ("gpt-4o", "openai", "sk-..."),
+        ...         ("claude-sonnet-4-5-20250929", "anthropic", "sk-ant-..."),
+        ...     ],
+        ...     consensus_threshold=0.5,
+        ... )
+    """
+    from .text_functions_ensemble import classify_ensemble
+
+    # Build models list
+    if models is None:
+        # Single model mode - build models list from individual params
+        models = [(user_model, model_source, api_key)]
+
+    # Map mode to pdf_mode
+    pdf_mode = mode if mode in ("image", "text", "both") else "image"
+
+    return classify_ensemble(
+        survey_input=input_data,
+        categories=categories,
+        models=models,
+        input_description=description,
+        pdf_mode=pdf_mode,
+        chain_of_thought=chain_of_thought,
+        step_back_prompt=step_back_prompt,
+        context_prompt=context_prompt,
+        consensus_threshold=consensus_threshold,
+        filename=filename,
+        save_directory=save_directory,
+        progress_callback=progress_callback,
+    )
+
+
+def summarize(
+    input_data,
+    api_key: str = None,
+    description: str = "",
+    instructions: str = "",
+    max_length: int = None,
+    focus: str = None,
+    user_model: str = "gpt-4o",
+    model_source: str = "auto",
+    mode: str = "image",
+    creativity: float = None,
+    chain_of_thought: bool = True,
+    context_prompt: bool = False,
+    step_back_prompt: bool = False,
+    filename: str = None,
+    save_directory: str = None,
+    progress_callback=None,
+    models: list = None,
+):
+    """
+    Summarize text or PDF data using LLMs.
+
+    Supports single-model and multi-model (ensemble) summarization. In multi-model
+    mode, summaries from all models are synthesized into a consensus summary.
+    Input type is auto-detected from the data (text strings or PDF paths).
+
+    Args:
+        input_data: Data to summarize. Can be:
+            - Text: list of strings, pandas Series, or single string
+            - PDF: directory path, single PDF path, or list of PDF paths
+        api_key (str): API key for the model provider (single-model mode)
+        description (str): Description of what the content contains (provides context)
+        instructions (str): Specific summarization instructions (e.g., "bullet points")
+        max_length (int): Maximum summary length in words
+        focus (str): What to focus on (e.g., "main arguments", "emotional content")
+        user_model (str): Model to use (default "gpt-4o")
+        model_source (str): Provider - "auto", "openai", "anthropic", "google", etc.
+        mode (str): PDF processing mode (only used for PDF input):
+            - "image" (default): Render pages as images
+            - "text": Extract text only
+            - "both": Send both image and extracted text
+        creativity (float): Temperature setting (None uses provider default)
+        chain_of_thought (bool): Enable step-by-step reasoning (default True)
+        context_prompt (bool): Add expert context prefix
+        step_back_prompt (bool): Enable step-back prompting
+        filename (str): Output CSV filename
+        save_directory (str): Directory to save results
+        progress_callback: Optional callback for progress updates
+        models (list): For multi-model mode, list of (model, provider, api_key) tuples
+
+    Returns:
+        pd.DataFrame: Results with summary column(s):
+            - survey_input: Original text or page label (for PDFs)
+            - summary: Generated summary (or consensus for multi-model)
+            - summary_<model>: Per-model summaries (multi-model only)
+            - processing_status: "success", "error", "skipped"
+            - failed_models: Comma-separated list (multi-model only)
+            - pdf_path: Path to source PDF (PDF mode only)
+            - page_index: Page number, 0-indexed (PDF mode only)
+
+    Examples:
+        >>> import catllm as cat
+        >>>
+        >>> # Single model text summarization
+        >>> results = cat.summarize(
+        ...     input_data=df['responses'],
+        ...     description="Customer feedback",
         ...     api_key="your-api-key"
         ... )
         >>>
-        >>> # PDF classification
-        >>> results = cat.classify(
+        >>> # PDF summarization (auto-detected)
+        >>> results = cat.summarize(
         ...     input_data="/path/to/pdfs/",
-        ...     categories=["Contains table", "Has chart"],
-        ...     description="Financial reports",
-        ...     input_type="pdf",
-        ...     mode="both",
+        ...     description="Research papers",
+        ...     mode="image",
         ...     api_key="your-api-key"
         ... )
+        >>>
+        >>> # PDF summarization with list of files
+        >>> results = cat.summarize(
+        ...     input_data=["doc1.pdf", "doc2.pdf"],
+        ...     description="Financial reports",
+        ...     mode="both",
+        ...     focus="key metrics",
+        ...     api_key="your-api-key"
+        ... )
+        >>>
+        >>> # Multi-model with synthesis
+        >>> results = cat.summarize(
+        ...     input_data=df['responses'],
+        ...     models=[
+        ...         ("gpt-4o", "openai", "sk-..."),
+        ...         ("claude-sonnet-4-5-20250929", "anthropic", "sk-ant-..."),
+        ...     ],
+        ... )
     """
-    input_type = input_type.lower().rstrip('s')  # Normalize: "texts" -> "text", "images" -> "image", "pdfs" -> "pdf"
+    from .text_functions_ensemble import summarize_ensemble
 
-    if input_type == "text":
-        from .text_functions import multi_class
-        return multi_class(
-            survey_input=input_data,
-            categories=categories,
-            api_key=api_key,
-            model=user_model,
-            survey_question=description,
-            example1=example1,
-            example2=example2,
-            example3=example3,
-            example4=example4,
-            example5=example5,
-            example6=example6,
-            creativity=creativity,
-            safety=safety,
-            chain_of_verification=chain_of_verification,
-            chain_of_thought=chain_of_thought,
-            step_back_prompt=step_back_prompt,
-            context_prompt=context_prompt,
-            thinking_budget=thinking_budget,
-            max_categories=max_categories,
-            categories_per_chunk=categories_per_chunk,
-            divisions=divisions,
-            research_question=research_question,
-            filename=filename,
-            save_directory=save_directory,
-            provider=model_source
-        )
+    # Map mode to pdf_mode
+    pdf_mode = mode if mode in ("image", "text", "both") else "image"
 
-    elif input_type == "image":
-        from .image_functions import image_multi_class
-        return image_multi_class(
-            image_description=description,
-            image_input=input_data,
-            categories=categories,
-            api_key=api_key,
-            user_model=user_model,
-            creativity=creativity,
-            safety=safety,
-            chain_of_verification=chain_of_verification,
-            chain_of_thought=chain_of_thought,
-            step_back_prompt=step_back_prompt,
-            context_prompt=context_prompt,
-            thinking_budget=thinking_budget,
-            example1=example1,
-            example2=example2,
-            example3=example3,
-            example4=example4,
-            example5=example5,
-            example6=example6,
-            filename=filename,
-            save_directory=save_directory,
-            model_source=model_source
-        )
-
-    elif input_type == "pdf":
-        from .pdf_functions import pdf_multi_class
-        return pdf_multi_class(
-            pdf_description=description,
-            pdf_input=input_data,
-            categories=categories,
-            api_key=api_key,
-            user_model=user_model,
-            mode=mode,
-            creativity=creativity,
-            safety=safety,
-            chain_of_verification=chain_of_verification,
-            chain_of_thought=chain_of_thought,
-            step_back_prompt=step_back_prompt,
-            context_prompt=context_prompt,
-            thinking_budget=thinking_budget,
-            example1=example1,
-            example2=example2,
-            example3=example3,
-            example4=example4,
-            example5=example5,
-            example6=example6,
-            filename=filename,
-            save_directory=save_directory,
-            model_source=model_source,
-            progress_callback=progress_callback
-        )
-
-    else:
-        raise ValueError(
-            f"input_type '{input_type}' is not supported. "
-            f"Please use one of: 'text', 'image', or 'pdf'.\n\n"
-            f"Examples:\n"
-            f"  - For survey responses or text data: input_type='text'\n"
-            f"  - For image files (.jpg, .png, etc.): input_type='image'\n"
-            f"  - For PDF documents: input_type='pdf'"
-        )
+    return summarize_ensemble(
+        survey_input=input_data,
+        api_key=api_key,
+        input_description=description,
+        summary_instructions=instructions,
+        max_length=max_length,
+        focus=focus,
+        user_model=user_model,
+        model_source=model_source,
+        pdf_mode=pdf_mode,
+        creativity=creativity,
+        chain_of_thought=chain_of_thought,
+        context_prompt=context_prompt,
+        step_back_prompt=step_back_prompt,
+        filename=filename,
+        save_directory=save_directory,
+        progress_callback=progress_callback,
+        models=models,
+    )

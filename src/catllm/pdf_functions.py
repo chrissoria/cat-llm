@@ -1,5 +1,18 @@
+import warnings
+
 from .text_functions import _detect_model_source
 from .calls.pdf_stepback import get_pdf_stepback_insight
+
+# Exported names (excludes deprecated pdf_multi_class)
+__all__ = [
+    "_load_pdf_files",
+    "_get_pdf_pages",
+    "_extract_page_as_pdf_bytes",
+    "_extract_page_as_image_bytes",
+    "_encode_bytes_to_base64",
+    "_extract_page_text",
+    "explore_pdf_categories",
+]
 from .calls.pdf_CoVe import (
     pdf_chain_of_verification_openai,
     pdf_chain_of_verification_anthropic,
@@ -247,7 +260,17 @@ def pdf_multi_class(
         ...     api_key="your-api-key",
         ...     mode="text"
         ... )
+
+    .. deprecated::
+        Use :func:`catllm.classify` instead. This function will be removed in a future version.
     """
+    warnings.warn(
+        "pdf_multi_class() is deprecated and will be removed in a future version. "
+        "Use catllm.classify() instead, which auto-detects PDF input.",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+
     import os
     import json
     import pandas as pd
