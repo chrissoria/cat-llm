@@ -83,6 +83,55 @@ from .image_functions import (
 
 
 # =============================================================================
+# Consensus Threshold Helper
+# =============================================================================
+
+def _resolve_consensus_threshold(threshold: Union[str, float, int]) -> float:
+    """
+    Convert consensus threshold to a numeric value.
+
+    Accepts both string aliases and numeric values for flexibility:
+    - String values: "majority" (0.5), "two-thirds" (0.67), "unanimous" (1.0)
+    - Numeric values: Any float between 0 and 1
+
+    Args:
+        threshold: Either a string alias or numeric value (0-1)
+
+    Returns:
+        float: The resolved threshold value
+
+    Examples:
+        >>> _resolve_consensus_threshold("majority")
+        0.5
+        >>> _resolve_consensus_threshold("two-thirds")
+        0.67
+        >>> _resolve_consensus_threshold(0.75)
+        0.75
+    """
+    if isinstance(threshold, str):
+        mapping = {
+            "majority": 0.5,
+            "two-thirds": 0.67,
+            "two_thirds": 0.67,
+            "twothirds": 0.67,
+            "unanimous": 1.0,
+        }
+        resolved = mapping.get(threshold.lower().strip())
+        if resolved is None:
+            valid_options = ", ".join(f'"{k}"' for k in ["majority", "two-thirds", "unanimous"])
+            raise ValueError(
+                f"Invalid consensus_threshold string: '{threshold}'. "
+                f"Valid options: {valid_options}, or a numeric value between 0 and 1."
+            )
+        return resolved
+    else:
+        value = float(threshold)
+        if not 0 <= value <= 1:
+            raise ValueError(f"consensus_threshold must be between 0 and 1, got {value}")
+        return value
+
+
+# =============================================================================
 # Test Utilities (for debugging batch retry logic)
 # =============================================================================
 
@@ -297,7 +346,7 @@ def prepare_model_configs(models: list, auto_download: bool = False) -> list:
 def aggregate_results(
     model_results: dict,
     categories: list,
-    consensus_threshold: float,
+    consensus_threshold: Union[str, float],
     fail_strategy: str,
 ) -> dict:
     """
@@ -306,12 +355,18 @@ def aggregate_results(
     Args:
         model_results: Dict mapping model name to (json_str, error)
         categories: List of category names
-        consensus_threshold: Threshold for majority vote (e.g., 0.5 = >50%)
+        consensus_threshold: Threshold for majority vote. Can be:
+            - "majority": 50% agreement (default)
+            - "two-thirds": 67% agreement
+            - "unanimous": 100% agreement
+            - float: Custom threshold between 0 and 1
         fail_strategy: How to handle failures ("partial" or "strict")
 
     Returns:
         Dict with per_model results, consensus, agreement scores, and metadata
     """
+    # Resolve string thresholds to numeric values
+    threshold = _resolve_consensus_threshold(consensus_threshold)
     successful = {}
     failed_models = []
 
@@ -361,7 +416,7 @@ def aggregate_results(
                 votes.append(0)
 
         agreement = sum(votes) / num_successful if num_successful > 0 else 0
-        consensus[key] = "1" if agreement > consensus_threshold else "0"
+        consensus[key] = "1" if agreement >= threshold else "0"
         agreement_scores[key] = round(agreement, 3)
 
     return {
@@ -1561,7 +1616,7 @@ def classify_ensemble(
     thinking_budget: int = 0,
     use_json_schema: bool = True,
     max_workers: int = None,
-    consensus_threshold: float = 0.5,
+    consensus_threshold: Union[str, float] = "majority",
     fail_strategy: str = "partial",
     safety: bool = False,
     max_retries: int = 5,
@@ -1627,7 +1682,11 @@ def classify_ensemble(
 
         # Ensemble parameters:
         max_workers: Maximum parallel workers (default: min(len(models), 8))
-        consensus_threshold: Threshold for majority vote (default 0.5 = >50%)
+        consensus_threshold: Threshold for majority vote. Can be:
+            - "majority": 50% agreement (default)
+            - "two-thirds": 67% agreement
+            - "unanimous": 100% agreement
+            - float: Custom threshold between 0 and 1 (e.g., 0.75 for 75%)
         fail_strategy: How to handle model failures:
             - "partial": Continue with successful models
             - "strict": Fail row if any model fails

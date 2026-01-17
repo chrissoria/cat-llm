@@ -203,7 +203,7 @@ def classify(
     progress_callback=None,
     # New multi-model parameters
     models=None,
-    consensus_threshold=0.5,
+    consensus_threshold="majority",
 ):
     """
     Unified classification function for text, image, and PDF inputs.
@@ -241,7 +241,11 @@ def classify(
         progress_callback: Optional callback for progress updates.
         models (list): For multi-model mode, list of (model, provider, api_key) tuples.
             If provided, overrides user_model/api_key/model_source.
-        consensus_threshold (float): For multi-model mode, agreement threshold (0-1).
+        consensus_threshold: For multi-model mode, agreement threshold. Can be:
+            - "majority": 50% agreement (default)
+            - "two-thirds": 67% agreement
+            - "unanimous": 100% agreement
+            - float: Custom threshold between 0 and 1
 
     Returns:
         pd.DataFrame: Results with classification columns.
@@ -265,7 +269,7 @@ def classify(
         ...         ("gpt-4o", "openai", "sk-..."),
         ...         ("claude-sonnet-4-5-20250929", "anthropic", "sk-ant-..."),
         ...     ],
-        ...     consensus_threshold=0.5,
+        ...     consensus_threshold="majority",  # or "two-thirds", "unanimous", or 0.75
         ... )
     """
     from .text_functions_ensemble import classify_ensemble
