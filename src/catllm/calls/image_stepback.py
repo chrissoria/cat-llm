@@ -1,6 +1,8 @@
 # Image-aware Stepback prompting functions for various LLM providers
 # These functions generate abstract insights about image categorization tasks
 
+import requests
+
 
 def get_image_stepback_insight_openai(
     stepback,
@@ -15,25 +17,42 @@ def get_image_stepback_insight_openai(
 
     The stepback prompt asks for abstract thinking about image categorization
     before analyzing specific images.
+
+    Uses direct HTTP requests instead of OpenAI SDK for lighter dependencies.
     """
-    from openai import OpenAI
+    # Determine the base URL based on model source
+    if model_source == "huggingface":
+        from catllm._providers import _detect_huggingface_endpoint
+        base_url = _detect_huggingface_endpoint(api_key, user_model)
+    elif model_source == "huggingface-together":
+        base_url = "https://router.huggingface.co/together/v1"
+    elif model_source == "perplexity":
+        base_url = "https://api.perplexity.ai"
+    elif model_source == "xai":
+        base_url = "https://api.x.ai/v1"
+    else:
+        base_url = "https://api.openai.com/v1"
 
-    base_url = (
-        "https://api.perplexity.ai" if model_source == "perplexity"
-        else "https://router.huggingface.co/v1" if model_source == "huggingface"
-        else "https://api.x.ai/v1" if model_source == "xai"
-        else None
-    )
+    endpoint = f"{base_url}/chat/completions"
 
-    client = OpenAI(api_key=api_key, base_url=base_url)
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+
+    payload = {
+        "model": user_model,
+        "messages": [{"role": "user", "content": stepback}],
+    }
+
+    if creativity is not None:
+        payload["temperature"] = creativity
 
     try:
-        stepback_response = client.chat.completions.create(
-            model=user_model,
-            messages=[{'role': 'user', 'content': stepback}],
-            **({"temperature": creativity} if creativity is not None else {})
-        )
-        stepback_insight = stepback_response.choices[0].message.content
+        response = requests.post(endpoint, headers=headers, json=payload, timeout=120)
+        response.raise_for_status()
+        result = response.json()
+        stepback_insight = result["choices"][0]["message"]["content"]
 
         return stepback_insight, True
 
@@ -50,21 +69,40 @@ def get_image_stepback_insight_anthropic(
 ):
     """
     Get stepback insight for image categorization from Anthropic Claude.
-    """
-    import anthropic
 
-    client = anthropic.Anthropic(api_key=api_key)
+    Uses direct HTTP requests instead of Anthropic SDK for lighter dependencies.
+    """
+    import requests
+
+    endpoint = "https://api.anthropic.com/v1/messages"
+
+    headers = {
+        "Content-Type": "application/json",
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01"
+    }
+
+    payload = {
+        "model": user_model,
+        "max_tokens": 4096,
+        "messages": [{"role": "user", "content": stepback}],
+    }
+
+    if creativity is not None:
+        payload["temperature"] = creativity
 
     try:
-        stepback_response = client.messages.create(
-            model=user_model,
-            max_tokens=4096,
-            messages=[{'role': 'user', 'content': stepback}],
-            **({"temperature": creativity} if creativity is not None else {})
-        )
-        stepback_insight = stepback_response.content[0].text
+        response = requests.post(endpoint, headers=headers, json=payload, timeout=120)
+        response.raise_for_status()
+        result = response.json()
 
-        return stepback_insight, True
+        # Parse response - Anthropic returns content as a list
+        content = result.get("content", [])
+        if content and content[0].get("type") == "text":
+            stepback_insight = content[0].get("text", "")
+            return stepback_insight, True
+
+        return None, False
 
     except Exception as e:
         return None, False
@@ -119,17 +157,26 @@ def get_image_stepback_insight_mistral(
     """
     Get stepback insight for image categorization from Mistral AI.
     """
-    from mistralai import Mistral
+    import requests
 
-    client = Mistral(api_key=api_key)
+    endpoint = "https://api.mistral.ai/v1/chat/completions"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+
+    payload = {
+        "model": user_model,
+        "messages": [{'role': 'user', 'content': stepback}],
+    }
+    if creativity is not None:
+        payload["temperature"] = creativity
 
     try:
-        stepback_response = client.chat.complete(
-            model=user_model,
-            messages=[{'role': 'user', 'content': stepback}],
-            **({"temperature": creativity} if creativity is not None else {})
-        )
-        stepback_insight = stepback_response.choices[0].message.content
+        response = requests.post(endpoint, headers=headers, json=payload, timeout=120)
+        response.raise_for_status()
+        result = response.json()
+        stepback_insight = result["choices"][0]["message"]["content"]
 
         return stepback_insight, True
 
@@ -143,6 +190,7 @@ def get_image_stepback_insight(model_source, stepback, api_key, user_model, crea
         "openai": get_image_stepback_insight_openai,
         "perplexity": get_image_stepback_insight_openai,
         "huggingface": get_image_stepback_insight_openai,
+        "huggingface-together": get_image_stepback_insight_openai,
         "xai": get_image_stepback_insight_openai,
         "anthropic": get_image_stepback_insight_anthropic,
         "google": get_image_stepback_insight_google,

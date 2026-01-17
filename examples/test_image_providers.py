@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """
-Test script to verify all LLM providers work with the refactored code.
+Test script to verify image functions work with all LLM providers.
 
-Tests the UnifiedLLMClient with each supported provider.
+Tests the explore_image_categories function with each supported provider using image mode.
 """
 
 import sys
@@ -34,7 +34,7 @@ api_keys = {
 }
 
 print("=" * 70)
-print("All Providers Test - UnifiedLLMClient")
+print("Image Functions Test - explore_image_categories")
 print("=" * 70)
 print()
 
@@ -45,11 +45,40 @@ for provider, key in api_keys.items():
     print(f"  {provider}: {status}")
 print()
 
-# Import the client
-from catllm.text_functions import UnifiedLLMClient
+# Test image - use the title page PDF as an image source (or any test image)
+# First, let's check for any test images in the tests directory
+test_image = None
+for ext in ['png', 'jpg', 'jpeg']:
+    potential_path = f"/Users/chrissoria/Documents/Research/cat-llm/tests/test_image.{ext}"
+    if os.path.exists(potential_path):
+        test_image = potential_path
+        break
+
+# If no test image exists, create a simple one or use the title page
+if test_image is None:
+    # Create a simple test image
+    try:
+        from PIL import Image, ImageDraw
+        test_image = "/Users/chrissoria/Documents/Research/cat-llm/tests/test_image.png"
+        img = Image.new('RGB', (200, 200), color='white')
+        draw = ImageDraw.Draw(img)
+        draw.rectangle([20, 20, 180, 180], outline='blue', width=3)
+        draw.text((50, 90), "Test Image", fill='black')
+        img.save(test_image)
+        print(f"Created test image: {test_image}")
+    except ImportError:
+        print("Note: PIL not installed, skipping test image creation")
+        print("Please create a test image at tests/test_image.png")
+        sys.exit(1)
+
+print(f"Test image: {test_image}")
+print()
+
+# Import the function
+from catllm.image_functions import explore_image_categories
 
 # Test configurations for each provider
-# Using small/fast models to minimize cost and time
+# Using small/fast models and image mode to minimize cost and time
 test_configs = [
     {
         "name": "OpenAI",
@@ -72,44 +101,21 @@ test_configs = [
     {
         "name": "Mistral",
         "provider": "mistral",
-        "model": "mistral-small-latest",
+        "model": "pixtral-12b-2409",  # Vision-capable Mistral model
         "api_key": api_keys["mistral"],
     },
     {
         "name": "xAI",
         "provider": "xai",
-        "model": "grok-3-mini-fast",
+        "model": "grok-2-vision-1212",
         "api_key": api_keys["xai"],
     },
     {
-        "name": "Perplexity",
-        "provider": "perplexity",
-        "model": "sonar",
-        "api_key": api_keys["perplexity"],
-    },
-    {
-        "name": "HuggingFace (Qwen - generic endpoint)",
+        "name": "HuggingFace (Qwen2-VL - vision model)",
         "provider": "huggingface",
-        "model": "Qwen/Qwen2.5-72B-Instruct",
+        "model": "Qwen/Qwen2-VL-72B-Instruct",
         "api_key": api_keys["huggingface"],
     },
-    {
-        "name": "HuggingFace (Llama 4 - together endpoint, auto-detect)",
-        "provider": "huggingface",
-        "model": "meta-llama/Llama-4-Scout-17B-16E-Instruct",
-        "api_key": api_keys["huggingface"],
-    },
-    {
-        "name": "HuggingFace-Together (explicit)",
-        "provider": "huggingface-together",
-        "model": "meta-llama/Llama-4-Scout-17B-16E-Instruct",
-        "api_key": api_keys["huggingface"],
-    },
-]
-
-# Simple test message
-test_messages = [
-    {"role": "user", "content": "Reply with exactly one word: hello"}
 ]
 
 results = []
@@ -133,36 +139,40 @@ for i, config in enumerate(test_configs, 1):
         })
         continue
 
-    print(f"  Testing...")
+    # Skip non-vision models
+    if config.get('skip_reason'):
+        print(f"  Result: SKIPPED - {config['skip_reason']}")
+        results.append({
+            "name": config['name'],
+            "provider": config['provider'],
+            "model": config['model'],
+            "success": None,
+            "skipped": True,
+            "error": config['skip_reason'],
+        })
+        continue
+
+    print(f"  Testing (image mode)...")
 
     try:
-        client = UnifiedLLMClient(
-            provider=config['provider'],
+        result = explore_image_categories(
+            image_input=test_image,
             api_key=config['api_key'],
-            model=config['model']
+            image_description="simple test image with shapes and text",
+            max_categories=5,
+            categories_per_chunk=5,
+            divisions=1,
+            user_model=config['model'],
+            creativity=0.3,
+            specificity="broad",
+            mode="image",
+            model_source=config['provider'],
+            iterations=1
         )
 
-        response, error = client.complete(
-            messages=test_messages,
-            creativity=0.1,
-            force_json=False,  # Simple text response
-        )
-
-        if error:
-            print(f"  Result: FAIL - {error}")
-            results.append({
-                "name": config['name'],
-                "provider": config['provider'],
-                "model": config['model'],
-                "success": False,
-                "skipped": False,
-                "error": error,
-            })
-        else:
-            # Truncate response for display
-            display_response = response[:50] + "..." if len(response) > 50 else response
-            display_response = display_response.replace('\n', ' ')
-            print(f"  Response: {display_response}")
+        if result and 'top_categories' in result and result['top_categories']:
+            categories = result['top_categories'][:3]
+            print(f"  Categories found: {categories}")
             print(f"  Result: PASS")
             results.append({
                 "name": config['name'],
@@ -170,18 +180,28 @@ for i, config in enumerate(test_configs, 1):
                 "model": config['model'],
                 "success": True,
                 "skipped": False,
-                "response": response,
+                "categories": categories,
+            })
+        else:
+            print(f"  Result: FAIL - No categories extracted")
+            results.append({
+                "name": config['name'],
+                "provider": config['provider'],
+                "model": config['model'],
+                "success": False,
+                "skipped": False,
+                "error": "No categories extracted",
             })
 
     except Exception as e:
-        print(f"  Result: ERROR - {str(e)}")
+        print(f"  Result: ERROR - {str(e)[:100]}")
         results.append({
             "name": config['name'],
             "provider": config['provider'],
             "model": config['model'],
             "success": False,
             "skipped": False,
-            "error": str(e),
+            "error": str(e)[:200],
         })
 
 # Summary
@@ -205,10 +225,10 @@ if failed > 0:
             print(f"  - {r['name']}: {r.get('error', 'Unknown error')}")
 
 if skipped > 0:
-    print(f"\nSkipped tests (no API key):")
+    print(f"\nSkipped tests:")
     for r in results:
         if r.get('skipped'):
-            print(f"  - {r['name']}")
+            print(f"  - {r['name']}: {r.get('error', 'Unknown reason')}")
 
 print()
 

@@ -94,13 +94,13 @@ def extract_pdf_pages(pdf_paths, pdf_name_map, mode="image"):
 
 # Free models - display name -> actual API model name
 FREE_MODELS_MAP = {
-    "Qwen3 235B": "Qwen/Qwen3-VL-235B-A22B-Instruct:novita",
-    "DeepSeek V3.1": "deepseek-ai/DeepSeek-V3.1:novita",
-    "Llama 3.3 70B": "meta-llama/Llama-3.3-70B-Instruct:groq",
-    "Gemini 2.5 Flash": "gemini-2.5-flash",
     "GPT-4o Mini": "gpt-4o-mini",
-    "Mistral Medium": "mistral-medium-2505",
+    "Gemini 2.5 Flash": "gemini-2.5-flash",
     "Claude 3 Haiku": "claude-3-haiku-20240307",
+    "Llama 3.3 70B": "meta-llama/Llama-3.3-70B-Instruct:groq",
+    "Qwen 2.5": "Qwen/Qwen2.5-72B-Instruct",
+    "DeepSeek R1": "deepseek-ai/DeepSeek-R1:novita",
+    "Mistral Medium": "mistral-medium-2505",
     "Grok 4 Fast": "grok-4-fast-non-reasoning",
 }
 FREE_MODEL_DISPLAY_NAMES = list(FREE_MODELS_MAP.keys())
@@ -108,22 +108,21 @@ FREE_MODEL_CHOICES = list(FREE_MODELS_MAP.values())  # Keep for backward compat
 
 # Paid models (user provides their own API key)
 PAID_MODEL_CHOICES = [
+    "gemini-2.5-flash",
+    "gemini-2.5-pro",
     "gpt-4.1",
     "gpt-4o",
     "gpt-4o-mini",
     "claude-sonnet-4-5-20250929",
     "claude-opus-4-20250514",
     "claude-3-5-haiku-20241022",
-    "gemini-2.5-pro",
-    "gemini-2.5-flash",
     "mistral-large-latest",
 ]
 
 # Models routed through HuggingFace
 HF_ROUTED_MODELS = [
-    "Qwen/Qwen3-VL-235B-A22B-Instruct:novita",
-    "deepseek-ai/DeepSeek-V3.1:novita",
     "meta-llama/Llama-3.3-70B-Instruct:groq",
+    "deepseek-ai/DeepSeek-R1:novita",
 ]
 
 
@@ -259,7 +258,86 @@ print(result["counts_df"])
 '''
 
 
-def generate_classify_code(input_type, description, categories, model, model_source, mode=None, classify_mode="Single Model", models_list=None):
+def generate_full_code(extraction_params, classify_params):
+    """Generate combined extract + classify code when categories were auto-extracted."""
+    ext = extraction_params
+    cls = classify_params
+
+    # Determine input data placeholder
+    if ext['input_type'] == "text":
+        input_placeholder = 'df["your_column"].tolist()'
+        load_data = '''import pandas as pd
+
+# Load your data
+df = pd.read_csv("your_data.csv")
+'''
+    elif ext['input_type'] == "pdf":
+        input_placeholder = '"path/to/your/pdfs/"'
+        load_data = ''
+    else:
+        input_placeholder = '"path/to/your/images/"'
+        load_data = ''
+
+    mode_param = f',\n    mode="{ext["mode"]}"' if ext.get('mode') else ''
+
+    # Build extract code
+    extract_code = f'''# Step 1: Extract categories from your data
+extract_result = catllm.extract(
+    input_data={input_placeholder},
+    api_key="YOUR_API_KEY",
+    description="{ext['description']}",
+    user_model="{ext['model']}",
+    max_categories={ext['max_categories']}{mode_param}
+)
+
+categories = extract_result["top_categories"]
+print(f"Extracted {{len(categories)}} categories: {{categories}}")
+'''
+
+    # Build classify code based on mode
+    if cls['classify_mode'] == "Single Model":
+        classify_mode_param = f',\n    mode="{cls["mode"]}"' if cls.get('mode') and ext['input_type'] == "pdf" else ''
+        classify_code = f'''
+# Step 2: Classify data using extracted categories
+result = catllm.classify(
+    input_data={input_placeholder},
+    categories=categories,
+    api_key="YOUR_API_KEY",
+    description="{cls['description']}",
+    user_model="{cls['model']}"{classify_mode_param}
+)'''
+    else:
+        # Multi-model mode
+        models_str = ",\n        ".join([f'("{m}", "auto", "YOUR_API_KEY")' for m in cls['models_list']])
+        classify_mode_param = f',\n    mode="{cls["mode"]}"' if cls.get('mode') and ext['input_type'] == "pdf" else ''
+        threshold_str = "majority" if cls['consensus_threshold'] == 0.5 else "two-thirds" if cls['consensus_threshold'] == 0.67 else "unanimous"
+        consensus_param = f',\n    consensus_threshold="{threshold_str}"' if cls['classify_mode'] == "Ensemble" else ''
+
+        classify_code = f'''
+# Step 2: Classify data using extracted categories with {"ensemble voting" if cls['classify_mode'] == "Ensemble" else "model comparison"}
+models = [
+        {models_str}
+]
+
+result = catllm.classify(
+    input_data={input_placeholder},
+    categories=categories,
+    models=models,
+    description="{cls['description']}"{classify_mode_param}{consensus_param}
+)'''
+
+    return f'''import catllm
+{load_data}
+{extract_code}
+{classify_code}
+
+# View results
+print(result)
+result.to_csv("classified_results.csv", index=False)
+'''
+
+
+def generate_classify_code(input_type, description, categories, model, model_source, mode=None, classify_mode="Single Model", models_list=None, consensus_threshold=0.5):
     """Generate Python code for classification."""
     categories_str = ",\n    ".join([f'"{cat}"' for cat in categories])
 
@@ -310,7 +388,9 @@ result.to_csv("classified_results.csv", index=False)
             models_str = '("gpt-4o", "auto", "YOUR_API_KEY"),\n        ("claude-sonnet-4-5-20250929", "auto", "YOUR_API_KEY")'
 
         mode_param = f',\n    mode="{mode}"' if mode and input_type == "pdf" else ''
-        consensus_param = ',\n    consensus_threshold=0.5' if classify_mode == "Ensemble" else ''
+        # Map numeric threshold back to string for cleaner code
+        threshold_str = "majority" if consensus_threshold == 0.5 else "two-thirds" if consensus_threshold == 0.67 else "unanimous"
+        consensus_param = f',\n    consensus_threshold="{threshold_str}"' if classify_mode == "Ensemble" else ''
 
         return f'''import catllm
 {load_data}
@@ -342,7 +422,8 @@ def generate_methodology_report_pdf(categories, model, column_name, num_rows, mo
                           result_df=None, processing_time=None, prompt_template=None,
                           data_quality=None, catllm_version=None, python_version=None,
                           task_type="assign", extracted_categories_df=None, max_categories=None,
-                          input_type="text", description=None):
+                          input_type="text", description=None, classify_mode="Single Model",
+                          models_list=None, code=None):
     """Generate a PDF methodology report."""
     from reportlab.lib.pagesizes import letter
     from reportlab.lib import colors
@@ -417,7 +498,8 @@ consistent and reproducible results."""
     summary_data = [
         ["Source File", filename],
         ["Source Column", column_name],
-        ["Model Used", model],
+        ["Classification Mode", classify_mode],
+        ["Model(s) Used", model],
         ["Model Source", model_source],
         ["Rows Classified", str(num_rows)],
         ["Number of Categories", str(len(categories)) if categories else "0"],
@@ -467,6 +549,71 @@ consistent and reproducible results."""
         ('FONTSIZE', (0, 0), (-1, -1), 9),
     ]))
     story.append(version_table)
+
+    # Reproducibility Code section
+    if code:
+        story.append(PageBreak())
+        story.append(Paragraph("Reproducibility Code", title_style))
+        story.append(Paragraph("Use this Python code to reproduce the classification with the CatLLM package:", normal_style))
+        story.append(Spacer(1, 10))
+
+        # Split code into lines and add as code-formatted paragraphs
+        for line in code.strip().split('\n'):
+            # Escape special characters for reportlab
+            escaped_line = line.replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+            if escaped_line.strip():
+                story.append(Paragraph(escaped_line, code_style))
+            else:
+                story.append(Spacer(1, 6))
+
+    # Visualizations section
+    if result_df is not None and categories:
+        from reportlab.platypus import Image
+        import io
+
+        # Distribution chart (new page)
+        story.append(PageBreak())
+        story.append(Paragraph("Category Distribution", title_style))
+        try:
+            fig1 = create_distribution_chart(result_df, categories, classify_mode, models_list)
+            img_buffer1 = io.BytesIO()
+            fig1.savefig(img_buffer1, format='png', dpi=150, bbox_inches='tight')
+            img_buffer1.seek(0)
+            plt.close(fig1)
+
+            # Save to temp file for reportlab
+            img_temp1 = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+            img_temp1.write(img_buffer1.read())
+            img_temp1.close()
+
+            img1 = Image(img_temp1.name, width=450, height=250)
+            story.append(img1)
+            story.append(Spacer(1, 10))
+            story.append(Paragraph("Note: Categories are not mutually exclusive—each item can belong to multiple categories.", normal_style))
+        except Exception as e:
+            story.append(Paragraph(f"Could not generate distribution chart: {str(e)}", normal_style))
+
+        # Classification matrix (new page)
+        story.append(PageBreak())
+        story.append(Paragraph("Classification Matrix", title_style))
+        try:
+            fig2 = create_classification_heatmap(result_df, categories, classify_mode, models_list)
+            img_buffer2 = io.BytesIO()
+            fig2.savefig(img_buffer2, format='png', dpi=150, bbox_inches='tight')
+            img_buffer2.seek(0)
+            plt.close(fig2)
+
+            # Save to temp file for reportlab
+            img_temp2 = tempfile.NamedTemporaryFile(delete=False, suffix='.png')
+            img_temp2.write(img_buffer2.read())
+            img_temp2.close()
+
+            img2 = Image(img_temp2.name, width=450, height=300)
+            story.append(img2)
+            story.append(Spacer(1, 10))
+            story.append(Paragraph("Orange = category present, Black = not present. Each row represents one response.", normal_style))
+        except Exception as e:
+            story.append(Paragraph(f"Could not generate classification matrix: {str(e)}", normal_style))
 
     doc.build(story)
     return pdf_file.name
@@ -614,6 +761,84 @@ def sanitize_model_name(model: str) -> str:
     return sanitized[:40]
 
 
+def create_classification_heatmap(result_df, categories, classify_mode="Single Model", models_list=None):
+    """Create a binary heatmap showing classification for each row.
+
+    Args:
+        result_df: DataFrame with classification results
+        categories: List of category names
+        classify_mode: "Single Model", "Model Comparison", or "Ensemble"
+        models_list: List of model names (for multi-model modes)
+    """
+    import numpy as np
+
+    total_rows = len(result_df)
+    if total_rows == 0:
+        fig, ax = plt.subplots(figsize=(10, 4))
+        ax.text(0.5, 0.5, 'No data to display', ha='center', va='center', fontsize=14)
+        ax.axis('off')
+        return fig
+
+    # Build the binary matrix based on classify_mode
+    if classify_mode == "Ensemble":
+        # Use consensus columns
+        col_names = [f"category_{i}_consensus" for i in range(1, len(categories) + 1)]
+    elif classify_mode == "Model Comparison" and models_list:
+        # Use first model's columns for the heatmap
+        sanitized = sanitize_model_name(models_list[0])
+        col_names = [f"category_{i}_{sanitized}" for i in range(1, len(categories) + 1)]
+    else:
+        # Single model
+        col_names = [f"category_{i}" for i in range(1, len(categories) + 1)]
+
+    # Extract the binary matrix
+    matrix_data = []
+    for col in col_names:
+        if col in result_df.columns:
+            matrix_data.append(result_df[col].astype(int).values)
+        else:
+            matrix_data.append(np.zeros(total_rows, dtype=int))
+
+    matrix = np.array(matrix_data).T  # Rows = responses, Cols = categories
+
+    # Create figure with appropriate sizing
+    fig_height = max(4, min(20, total_rows * 0.15))
+    fig_width = max(8, len(categories) * 0.8)
+    fig, ax = plt.subplots(figsize=(fig_width, fig_height))
+
+    # Create custom colormap: black (0) and orange (1) - CatLLM theme
+    from matplotlib.colors import ListedColormap
+    cmap = ListedColormap(['#1a1a1a', '#E8A33C'])
+
+    # Plot heatmap
+    im = ax.imshow(matrix, aspect='auto', cmap=cmap, vmin=0, vmax=1)
+
+    # Set labels - remove y-axis numbers for cleaner look
+    ax.set_xticks(range(len(categories)))
+    ax.set_xticklabels(categories, rotation=45, ha='right', fontsize=9)
+    ax.set_xlabel('Categories', fontsize=11)
+    ax.set_ylabel(f'Responses (n={total_rows})', fontsize=11)
+    ax.set_yticks([])  # Remove y-axis tick marks
+
+    title = 'Classification Matrix'
+    if classify_mode == "Ensemble":
+        title += ' (Ensemble Consensus)'
+    elif classify_mode == "Model Comparison":
+        title += f' ({models_list[0].split("/")[-1].split(":")[0][:20]})'
+    ax.set_title(title, fontsize=14, fontweight='bold')
+
+    # Add legend
+    from matplotlib.patches import Patch
+    legend_elements = [
+        Patch(facecolor='#1a1a1a', edgecolor='white', label='Not Present'),
+        Patch(facecolor='#E8A33C', edgecolor='white', label='Present')
+    ]
+    ax.legend(handles=legend_elements, loc='upper right', bbox_to_anchor=(1.15, 1))
+
+    plt.tight_layout()
+    return fig
+
+
 def create_distribution_chart(result_df, categories, classify_mode="Single Model", models_list=None):
     """Create a bar chart showing category distribution.
 
@@ -737,6 +962,204 @@ st.set_page_config(
     layout="wide"
 )
 
+# Custom CSS for enhanced styling
+st.markdown("""
+<style>
+/* Import Garamond font and apply globally */
+@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500;600;700&display=swap');
+
+* {
+    font-family: 'EB Garamond', Garamond, Georgia, serif !important;
+    font-size: 17px !important;
+}
+
+/* Main container styling */
+.main .block-container {
+    padding-top: 2rem;
+    padding-bottom: 2rem;
+}
+
+/* Headers with gradient accent */
+h1 {
+    background: linear-gradient(90deg, #E8A33C 0%, #D4872C 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-weight: 700;
+}
+
+/* Card-like sections */
+.stExpander {
+    border: 1px solid #E8D5B5;
+    border-radius: 12px;
+    box-shadow: 0 2px 8px rgba(232, 163, 60, 0.08);
+}
+
+/* File uploader styling */
+.stFileUploader {
+    border-radius: 12px;
+}
+
+.stFileUploader > div > div {
+    border: 2px dashed #E8A33C;
+    border-radius: 12px;
+    background: linear-gradient(135deg, #FEFCF9 0%, #F5EFE6 100%);
+}
+
+/* Button styling */
+.stButton > button {
+    border-radius: 8px;
+    font-weight: 600;
+    transition: all 0.2s ease;
+    border: 2px solid #E8A33C;
+    background: #FEFCF9;
+    color: #D4872C;
+}
+
+/* Tall button for example dataset (matches file uploader height) */
+.tall-button .stButton > button {
+    min-height: 107px;
+    border-radius: 12px;
+}
+
+.stButton > button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(232, 163, 60, 0.3);
+    background: #F5EFE6;
+}
+
+/* Primary button */
+.stButton > button[kind="primary"] {
+    background: linear-gradient(135deg, #E8A33C 0%, #D4872C 100%);
+    border: none;
+    color: white;
+}
+
+/* Success/info messages */
+.stSuccess {
+    background-color: #E8F5E9;
+    border-left: 4px solid #4CAF50;
+    border-radius: 0 8px 8px 0;
+}
+
+.stInfo {
+    background-color: #FFF8E8;
+    border-left: 4px solid #E8A33C;
+    border-radius: 0 8px 8px 0;
+}
+
+/* Radio buttons */
+.stRadio > div {
+    gap: 0.5rem;
+    display: flex;
+    width: 100%;
+}
+
+.stRadio > div > label {
+    background: #F5EFE6;
+    padding: 0.5rem 1rem;
+    border-radius: 20px;
+    border: 1px solid transparent;
+    transition: all 0.2s ease;
+    flex: 1;
+    text-align: center;
+    justify-content: center;
+}
+
+.stRadio > div > label:hover {
+    border-color: #E8A33C;
+}
+
+/* Text inputs */
+.stTextInput > div > div > input {
+    border-radius: 8px;
+    border: 1px solid #E8D5B5;
+}
+
+.stTextInput > div > div > input:focus {
+    border-color: #E8A33C;
+    box-shadow: 0 0 0 2px rgba(232, 163, 60, 0.2);
+}
+
+/* Select boxes */
+.stSelectbox > div > div {
+    border-radius: 8px;
+}
+
+/* Dataframe styling */
+.stDataFrame {
+    border-radius: 12px;
+    overflow: hidden;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+}
+
+/* Progress bar */
+.stProgress > div > div {
+    background: linear-gradient(90deg, #E8A33C 0%, #D4872C 100%);
+    border-radius: 10px;
+}
+
+/* Slider */
+.stSlider > div > div > div {
+    background: #E8A33C;
+}
+
+/* Divider */
+hr {
+    border: none;
+    height: 1px;
+    background: linear-gradient(90deg, transparent, #E8D5B5, transparent);
+    margin: 1.5rem 0;
+}
+
+/* Code blocks */
+.stCodeBlock {
+    border-radius: 12px;
+    border: 1px solid #E8D5B5;
+}
+
+/* Metric cards */
+.stMetric {
+    background: linear-gradient(135deg, #FEFCF9 0%, #F5EFE6 100%);
+    padding: 1rem;
+    border-radius: 12px;
+    border: 1px solid #E8D5B5;
+}
+
+/* Download buttons */
+.stDownloadButton > button {
+    background: #F5EFE6;
+    border: 1px solid #E8A33C;
+    color: #D4872C;
+}
+
+.stDownloadButton > button:hover {
+    background: #E8A33C;
+    color: white;
+}
+
+/* Multiselect */
+.stMultiSelect > div > div {
+    border-radius: 8px;
+}
+
+/* Status indicator */
+.stStatus {
+    border-radius: 12px;
+}
+
+/* Column gaps */
+[data-testid="column"] {
+    padding: 0 0.5rem;
+}
+
+/* Logo and title alignment */
+[data-testid="column"]:first-child img {
+    border-radius: 8px;
+}
+</style>
+""", unsafe_allow_html=True)
+
 # Initialize session state
 if 'categories' not in st.session_state:
     st.session_state.categories = [''] * MAX_CATEGORIES
@@ -756,14 +1179,16 @@ if 'pdf_data' not in st.session_state:
     st.session_state.pdf_data = None
 if 'image_data' not in st.session_state:
     st.session_state.image_data = None
+if 'extraction_params' not in st.session_state:
+    st.session_state.extraction_params = None  # Stores params when categories are auto-extracted
 
-# Logo and title
-col_logo, col_title = st.columns([1, 6])
-with col_logo:
-    st.image("logo.png", width=100)
-with col_title:
-    st.title("CatLLM - Research Data Classifier")
-    st.markdown("Research-grade categorization of survey responses, PDFs, and images using LLMs.")
+# Logo and title - use HTML for better alignment
+st.markdown("""
+<div style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px;">
+    <img src="https://huggingface.co/spaces/CatLLM/survey-classifier/resolve/main/logo.png" width="100" style="border-radius: 8px;">
+    <div style="font-size: 1.6rem; font-weight: 600; color: #444; font-family: 'EB Garamond', Garamond, Georgia, serif;">Research-grade categorization of survey responses, PDFs, and images using AI models.</div>
+</div>
+""", unsafe_allow_html=True)
 
 # About section
 with st.expander("About This App"):
@@ -818,14 +1243,19 @@ with col_input:
     if input_type_choice == "Survey Responses":
         input_type_selected = "text"
 
-        uploaded_file = st.file_uploader(
-            "Upload Data (CSV or Excel)",
-            type=['csv', 'xlsx', 'xls'],
-            key="survey_file"
-        )
-
-        if st.button("Try Example Dataset", key="example_btn"):
-            st.session_state.example_loaded = True
+        upload_col, example_col = st.columns([3, 1])
+        with upload_col:
+            uploaded_file = st.file_uploader(
+                "Upload Data (CSV or Excel)",
+                type=['csv', 'xlsx', 'xls'],
+                key="survey_file"
+            )
+        with example_col:
+            st.markdown("<div style='height: 27px;'></div>", unsafe_allow_html=True)  # Match "Upload Data" label height
+            st.markdown('<div class="tall-button">', unsafe_allow_html=True)
+            if st.button("Try Example Dataset", key="example_btn", use_container_width=True):
+                st.session_state.example_loaded = True
+            st.markdown('</div>', unsafe_allow_html=True)
 
         columns = []
         df = None
@@ -1044,6 +1474,15 @@ with col_input:
                             if categories:
                                 status.update(label=f"Extracted {len(categories)} categories in {processing_time:.1f}s", state="complete", expanded=False)
                                 st.session_state.extracted_categories = categories
+                                # Store extraction params for code generation
+                                st.session_state.extraction_params = {
+                                    'model': model,
+                                    'model_source': model_source,
+                                    'max_categories': int(max_categories),
+                                    'input_type': input_type_selected,
+                                    'description': description,
+                                    'mode': mode,
+                                }
                                 st.session_state.task_mode = "manual"
                                 st.rerun()
                             else:
@@ -1111,13 +1550,15 @@ with col_input:
 
         # Multi-model mode uses multiselect
         is_multi_model = classify_mode in ["Model Comparison", "Ensemble"]
+        min_models = 3 if classify_mode == "Ensemble" else 2
 
         if model_tier == "Free Models":
             if is_multi_model:
+                default_models = FREE_MODEL_DISPLAY_NAMES[:min_models] if len(FREE_MODEL_DISPLAY_NAMES) >= min_models else FREE_MODEL_DISPLAY_NAMES
                 model_displays = st.multiselect(
-                    "Models (select 2+)",
+                    f"Models (select {min_models}+)",
                     options=FREE_MODEL_DISPLAY_NAMES,
-                    default=[FREE_MODEL_DISPLAY_NAMES[0], FREE_MODEL_DISPLAY_NAMES[1]] if len(FREE_MODEL_DISPLAY_NAMES) >= 2 else FREE_MODEL_DISPLAY_NAMES[:1],
+                    default=default_models,
                     key="classify_models_multi"
                 )
                 models_list = [FREE_MODELS_MAP[d] for d in model_displays]
@@ -1128,10 +1569,11 @@ with col_input:
             api_key = ""
         else:
             if is_multi_model:
+                default_models = PAID_MODEL_CHOICES[:min_models] if len(PAID_MODEL_CHOICES) >= min_models else PAID_MODEL_CHOICES
                 models_list = st.multiselect(
-                    "Models (select 2+)",
+                    f"Models (select {min_models}+)",
                     options=PAID_MODEL_CHOICES,
-                    default=[PAID_MODEL_CHOICES[0], PAID_MODEL_CHOICES[1]] if len(PAID_MODEL_CHOICES) >= 2 else PAID_MODEL_CHOICES[:1],
+                    default=default_models,
                     key="classify_models_multi_paid"
                 )
             else:
@@ -1140,24 +1582,31 @@ with col_input:
             api_key = st.text_input("API Key", type="password", key="classify_api_key")
 
         # Ensemble-specific options
+        consensus_threshold = 0.5  # Default
         if classify_mode == "Ensemble":
-            consensus_threshold = st.slider(
-                "Consensus Threshold",
-                min_value=0.0,
-                max_value=1.0,
-                value=0.5,
-                step=0.1,
-                key="consensus_threshold",
-                help="Minimum agreement ratio needed for consensus (0.5 = majority vote)"
+            consensus_options = {
+                "Majority (50%+)": 0.5,
+                "Two-Thirds (67%+)": 0.67,
+                "Unanimous (100%)": 1.0,
+            }
+            consensus_choice = st.radio(
+                "Consensus Rule",
+                options=list(consensus_options.keys()),
+                horizontal=True,
+                key="consensus_choice",
+                help="How many models must agree for a category to be marked present"
             )
+            consensus_threshold = consensus_options[consensus_choice]
 
         if st.button("Categorize Data", type="primary", use_container_width=True):
             if input_data is None:
                 st.error("Please upload data first")
             elif not categories_entered:
                 st.error("Please enter at least one category")
-            elif is_multi_model and len(models_list) < 2:
-                st.error("Please select at least 2 models for comparison/ensemble mode")
+            elif classify_mode == "Model Comparison" and len(models_list) < 2:
+                st.error("Please select at least 2 models for comparison mode")
+            elif classify_mode == "Ensemble" and len(models_list) < 3:
+                st.error("Please select at least 3 models for ensemble mode (needed for majority voting)")
             else:
                 # Set up progress tracking
                 mode = None
@@ -1324,7 +1773,27 @@ with col_input:
                             report_model = ", ".join(models_list)
                             report_model_source = f"{classify_mode} ({len(models_list)} models)"
 
-                        # Generate methodology report
+                        # Generate code first so we can include it in the PDF
+                        # If categories were auto-extracted, include both extract and classify code
+                        if st.session_state.extraction_params:
+                            classify_params = {
+                                'model': report_model,
+                                'description': description,
+                                'mode': mode,
+                                'classify_mode': classify_mode,
+                                'models_list': models_list,
+                                'consensus_threshold': consensus_threshold,
+                            }
+                            code = generate_full_code(st.session_state.extraction_params, classify_params)
+                        else:
+                            code = generate_classify_code(
+                                input_type_selected, description, categories_entered,
+                                report_model, report_model_source, mode,
+                                classify_mode=classify_mode, models_list=models_list,
+                                consensus_threshold=consensus_threshold
+                            )
+
+                        # Generate methodology report with code included
                         pdf_path = generate_methodology_report_pdf(
                             categories=categories_entered,
                             model=report_model,
@@ -1339,14 +1808,10 @@ with col_input:
                             python_version=python_version,
                             task_type="assign",
                             input_type=input_type_selected,
-                            description=description
-                        )
-
-                        # Generate code
-                        code = generate_classify_code(
-                            input_type_selected, description, categories_entered,
-                            report_model, report_model_source, mode,
-                            classify_mode=classify_mode, models_list=models_list
+                            description=description,
+                            classify_mode=classify_mode,
+                            models_list=models_list,
+                            code=code
                         )
 
                         st.session_state.results = {
@@ -1370,15 +1835,32 @@ with col_output:
     if st.session_state.results:
         results = st.session_state.results
 
-        # Distribution chart
-        fig = create_distribution_chart(
-            results['df'],
-            results['categories'],
-            classify_mode=results.get('classify_mode', 'Single Model'),
-            models_list=results.get('models_list', [])
+        # Visualization selector
+        viz_type = st.selectbox(
+            "Visualization",
+            options=["Category Distribution", "Classification Matrix"],
+            key="viz_type",
+            help="Distribution shows category percentages. Matrix shows each response's classifications."
         )
-        st.pyplot(fig)
-        st.caption("Note: Categories are not mutually exclusive—each item can belong to multiple categories.")
+
+        if viz_type == "Category Distribution":
+            fig = create_distribution_chart(
+                results['df'],
+                results['categories'],
+                classify_mode=results.get('classify_mode', 'Single Model'),
+                models_list=results.get('models_list', [])
+            )
+            st.pyplot(fig)
+            st.caption("Note: Categories are not mutually exclusive—each item can belong to multiple categories.")
+        else:
+            fig = create_classification_heatmap(
+                results['df'],
+                results['categories'],
+                classify_mode=results.get('classify_mode', 'Single Model'),
+                models_list=results.get('models_list', [])
+            )
+            st.pyplot(fig)
+            st.caption("Green = category present, Black = not present. Each row is one response.")
 
         # Results dataframe (hide technical columns from display)
         display_df = results['df'].copy()
@@ -1387,11 +1869,11 @@ with col_output:
         st.dataframe(display_df, use_container_width=True)
 
         # Downloads
-        col_dl1, col_dl2 = st.columns(2)
+        col_dl1, col_dl2, col_dl3 = st.columns(3)
         with col_dl1:
             with open(results['csv_path'], 'rb') as f:
                 st.download_button(
-                    "Download Results (CSV)",
+                    "Download CSV",
                     data=f,
                     file_name="classified_results.csv",
                     mime="text/csv"
@@ -1399,11 +1881,45 @@ with col_output:
         with col_dl2:
             with open(results['pdf_path'], 'rb') as f:
                 st.download_button(
-                    "Download Methodology Report (PDF)",
+                    "Download Report",
                     data=f,
                     file_name="methodology_report.pdf",
                     mime="application/pdf"
                 )
+        with col_dl3:
+            # Generate both plots and save to a single PDF
+            import io
+            from matplotlib.backends.backend_pdf import PdfPages
+
+            plot_buffer = io.BytesIO()
+            with PdfPages(plot_buffer) as pdf:
+                # Distribution chart
+                fig1 = create_distribution_chart(
+                    results['df'],
+                    results['categories'],
+                    classify_mode=results.get('classify_mode', 'Single Model'),
+                    models_list=results.get('models_list', [])
+                )
+                pdf.savefig(fig1, bbox_inches='tight')
+                plt.close(fig1)
+
+                # Classification matrix
+                fig2 = create_classification_heatmap(
+                    results['df'],
+                    results['categories'],
+                    classify_mode=results.get('classify_mode', 'Single Model'),
+                    models_list=results.get('models_list', [])
+                )
+                pdf.savefig(fig2, bbox_inches='tight')
+                plt.close(fig2)
+
+            plot_buffer.seek(0)
+            st.download_button(
+                "Download Plots",
+                data=plot_buffer,
+                file_name="classification_plots.pdf",
+                mime="application/pdf"
+            )
 
         # Code
         with st.expander("See the Code"):
@@ -1419,22 +1935,115 @@ with col_reset:
         st.session_state.category_count = INITIAL_CATEGORIES
         st.session_state.task_mode = None
         st.session_state.extracted_categories = None
+        st.session_state.extraction_params = None
         st.session_state.results = None
         if hasattr(st.session_state, 'example_loaded'):
             del st.session_state.example_loaded
         st.rerun()
 
 with col_code:
-    if st.session_state.results:
-        if st.button("See in Code", use_container_width=True):
-            st.session_state.show_code_modal = True
+    if st.button("See in Code", use_container_width=True):
+        st.session_state.show_code_modal = True
 
 # Code modal/dialog
-if st.session_state.get('show_code_modal') and st.session_state.results:
+if st.session_state.get('show_code_modal'):
     st.markdown("---")
     st.markdown("### Reproducibility Code")
     st.markdown("Use this code to reproduce the classification with the CatLLM Python package:")
-    st.code(st.session_state.results['code'], language='python')
+
+    # Use results code if available, otherwise generate from current parameters
+    if st.session_state.results:
+        code_to_show = st.session_state.results['code']
+    else:
+        # Get current categories from session state
+        current_categories = [c for c in st.session_state.categories[:st.session_state.category_count] if c.strip()]
+
+        # Determine current input type and description
+        input_type_map = {"Survey Responses": "text", "PDF Documents": "pdf", "Images": "image"}
+        current_input_type = input_type_map.get(st.session_state.get('input_type_radio', 'Survey Responses'), 'text')
+        current_description = st.session_state.get('survey_column', '') or st.session_state.get('pdf_desc', '') or st.session_state.get('image_desc', '') or 'your_data'
+
+        # Get current classification mode and models
+        current_classify_mode = st.session_state.get('classify_mode', 'Single Model')
+        current_model_tier = st.session_state.get('classify_model_tier', 'Free Models')
+
+        if current_classify_mode in ["Model Comparison", "Ensemble"]:
+            # Multi-model mode
+            if current_model_tier == 'Free Models':
+                model_displays = st.session_state.get('classify_models_multi', [])
+                current_models_list = [FREE_MODELS_MAP.get(d, d) for d in model_displays]
+            else:
+                current_models_list = st.session_state.get('classify_models_multi_paid', [])
+            current_model = ", ".join(current_models_list) if current_models_list else "gpt-4o-mini"
+            current_model_source = f"{current_classify_mode} ({len(current_models_list)} models)"
+        else:
+            # Single model mode
+            if current_model_tier == 'Free Models':
+                model_display = st.session_state.get('classify_model', 'GPT-4o Mini')
+                current_model = FREE_MODELS_MAP.get(model_display, 'gpt-4o-mini')
+            else:
+                current_model = st.session_state.get('classify_model_paid', 'gpt-4o-mini')
+            current_models_list = [current_model]
+            current_model_source = get_model_source(current_model)
+
+        # Get consensus threshold for ensemble mode
+        consensus_options = {"Majority (50%+)": 0.5, "Two-Thirds (67%+)": 0.67, "Unanimous (100%)": 1.0}
+        current_consensus = consensus_options.get(st.session_state.get('consensus_choice', 'Majority (50%+)'), 0.5)
+
+        # Get PDF mode if applicable
+        current_mode = None
+        if current_input_type == "pdf":
+            mode_mapping = {
+                "Image (visual documents)": "image",
+                "Text (text-heavy)": "text",
+                "Both (comprehensive)": "both"
+            }
+            current_mode = mode_mapping.get(st.session_state.get('pdf_mode', 'Image (visual documents)'), 'image')
+
+        if current_categories:
+            # Check if categories were auto-extracted
+            if st.session_state.extraction_params:
+                classify_params = {
+                    'model': current_model,
+                    'description': current_description,
+                    'mode': current_mode,
+                    'classify_mode': current_classify_mode,
+                    'models_list': current_models_list,
+                    'consensus_threshold': current_consensus,
+                }
+                code_to_show = generate_full_code(st.session_state.extraction_params, classify_params)
+            else:
+                code_to_show = generate_classify_code(
+                    current_input_type, current_description, current_categories,
+                    current_model, current_model_source, current_mode,
+                    classify_mode=current_classify_mode, models_list=current_models_list,
+                    consensus_threshold=current_consensus
+                )
+        else:
+            code_to_show = '''import catllm
+
+# Define your categories
+categories = [
+    "Category 1",
+    "Category 2",
+    # Add more categories...
+]
+
+# Classify your data
+result = catllm.classify(
+    input_data=df["your_column"].tolist(),
+    categories=categories,
+    api_key="YOUR_API_KEY",
+    description="your_description",
+    user_model="gpt-4o-mini"
+)
+
+# View results
+print(result)
+result.to_csv("classified_results.csv", index=False)
+'''
+
+    st.code(code_to_show, language='python')
     if st.button("Close"):
         st.session_state.show_code_modal = False
         st.rerun()

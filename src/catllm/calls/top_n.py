@@ -1,5 +1,8 @@
 # Top N category extraction functions for various LLM providers
 
+import requests
+
+
 def get_openai_top_n(
     prompt,
     user_model,
@@ -12,30 +15,55 @@ def get_openai_top_n(
     """
     Get response from OpenAI API with system message.
     Supports OpenAI, Perplexity, Huggingface, and xAI.
+
+    Uses direct HTTP requests instead of OpenAI SDK for lighter dependencies.
     """
-    from openai import OpenAI
+    # Determine the base URL based on model source
+    if model_source == "huggingface":
+        from catllm._providers import _detect_huggingface_endpoint
+        base_url = _detect_huggingface_endpoint(api_key, user_model)
+    elif model_source == "huggingface-together":
+        base_url = "https://router.huggingface.co/together/v1"
+    elif model_source == "perplexity":
+        base_url = "https://api.perplexity.ai"
+    elif model_source == "xai":
+        base_url = "https://api.x.ai/v1"
+    else:
+        base_url = "https://api.openai.com/v1"
 
-    base_url = (
-        "https://api.perplexity.ai" if model_source == "perplexity" 
-        else "https://router.huggingface.co/v1" if model_source == "huggingface"
-        else "https://api.x.ai/v1" if model_source == "xai"
-        else None
-    )
+    endpoint = f"{base_url}/chat/completions"
 
-    client = OpenAI(api_key=api_key, base_url=base_url)
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
 
-    response_obj = client.chat.completions.create(
-        model=user_model,
-        messages=[
-            {'role': 'system', 'content': f"""You are a helpful assistant that extracts categories from survey responses. \
-                                        The specific task is to identify {specificity} categories of responses to a survey question. \
-             The research question is: {research_question}""" if research_question else "You are a helpful assistant."},
-            {'role': 'user', 'content': prompt}
+    # Build system message
+    if research_question:
+        system_content = (
+            f"You are a helpful assistant that extracts categories from survey responses. "
+            f"The specific task is to identify {specificity} categories of responses to a survey question. "
+            f"The research question is: {research_question}"
+        )
+    else:
+        system_content = "You are a helpful assistant."
+
+    payload = {
+        "model": user_model,
+        "messages": [
+            {"role": "system", "content": system_content},
+            {"role": "user", "content": prompt}
         ],
-        **({"temperature": creativity} if creativity is not None else {})
-    )
-    
-    return response_obj.choices[0].message.content
+    }
+
+    if creativity is not None:
+        payload["temperature"] = creativity
+
+    response = requests.post(endpoint, headers=headers, json=payload, timeout=120)
+    response.raise_for_status()
+    result = response.json()
+
+    return result["choices"][0]["message"]["content"]
 
 
 def get_anthropic_top_n(
@@ -49,9 +77,18 @@ def get_anthropic_top_n(
 ):
     """
     Get response from Anthropic API with system prompt.
+
+    Uses direct HTTP requests instead of Anthropic SDK for lighter dependencies.
     """
-    import anthropic
-    client = anthropic.Anthropic(api_key=api_key)
+    import requests
+
+    endpoint = "https://api.anthropic.com/v1/messages"
+
+    headers = {
+        "Content-Type": "application/json",
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01"
+    }
 
     # Build system prompt
     if research_question:
@@ -60,18 +97,27 @@ def get_anthropic_top_n(
                         f"The research question is: {research_question}")
     else:
         system_content = "You are a helpful assistant."
-    
-    response_obj = client.messages.create(
-        model=user_model,
-        max_tokens=4096,
-        system=system_content,
-        messages=[
-            {'role': 'user', 'content': prompt}
-        ],
-        **({"temperature": creativity} if creativity is not None else {})
-    )
-    
-    return response_obj.content[0].text
+
+    payload = {
+        "model": user_model,
+        "max_tokens": 4096,
+        "system": system_content,
+        "messages": [{"role": "user", "content": prompt}],
+    }
+
+    if creativity is not None:
+        payload["temperature"] = creativity
+
+    response = requests.post(endpoint, headers=headers, json=payload, timeout=120)
+    response.raise_for_status()
+    result = response.json()
+
+    # Parse response - Anthropic returns content as a list
+    content = result.get("content", [])
+    if content and content[0].get("type") == "text":
+        return content[0].get("text", "")
+
+    return ""
 
 
 def get_google_top_n(
@@ -137,10 +183,14 @@ def get_mistral_top_n(
     """
     Get response from Mistral AI API.
     """
-    from mistralai import Mistral
-    
-    client = Mistral(api_key=api_key)
-    
+    import requests
+
+    endpoint = "https://api.mistral.ai/v1/chat/completions"
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+
     # Build system prompt
     if research_question:
         system_content = (f"You are a helpful assistant that extracts categories from survey responses. "
@@ -148,15 +198,20 @@ def get_mistral_top_n(
                         f"The research question is: {research_question}")
     else:
         system_content = "You are a helpful assistant."
-    
-    response_obj = client.chat.complete(
-        model=user_model,
-        messages=[
+
+    payload = {
+        "model": user_model,
+        "messages": [
             {'role': 'system', 'content': system_content},
             {'role': 'user', 'content': prompt}
         ],
-        **({"temperature": creativity} if creativity is not None else {})
-    )
-    
-    return response_obj.choices[0].message.content
+    }
+    if creativity is not None:
+        payload["temperature"] = creativity
+
+    response = requests.post(endpoint, headers=headers, json=payload, timeout=120)
+    response.raise_for_status()
+    result = response.json()
+
+    return result["choices"][0]["message"]["content"]
 

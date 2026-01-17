@@ -29,6 +29,7 @@ __all__ = [
     # Internal utilities used by other modules
     "_detect_model_source",
     "_get_stepback_insight",
+    "_detect_huggingface_endpoint",
 ]
 import time
 import requests
@@ -54,6 +55,51 @@ from .calls.top_n import (
     get_google_top_n,
     get_mistral_top_n
 )
+
+
+# =============================================================================
+# HuggingFace Endpoint Auto-Detection
+# =============================================================================
+
+def _detect_huggingface_endpoint(api_key: str, model: str) -> str:
+    """
+    Test which HuggingFace endpoint works for this model.
+    Tries generic router first, then Together.
+
+    Args:
+        api_key: HuggingFace API key
+        model: Model name to test
+
+    Returns:
+        Base URL for the working endpoint (without /chat/completions)
+    """
+    endpoints = [
+        "https://router.huggingface.co/v1/chat/completions",
+        "https://router.huggingface.co/together/v1/chat/completions",
+    ]
+
+    headers = {
+        "Content-Type": "application/json",
+        "Authorization": f"Bearer {api_key}"
+    }
+
+    payload = {
+        "model": model,
+        "messages": [{"role": "user", "content": "hi"}],
+        "max_tokens": 5
+    }
+
+    for endpoint in endpoints:
+        try:
+            response = requests.post(endpoint, headers=headers, json=payload, timeout=30)
+            if response.status_code == 200:
+                # Return the base URL (without /chat/completions)
+                return endpoint.replace("/chat/completions", "")
+        except Exception:
+            continue
+
+    # Default to generic (will fail with informative error)
+    return "https://router.huggingface.co/v1"
 
 
 # =============================================================================
@@ -96,6 +142,11 @@ PROVIDER_CONFIG = {
         "auth_header": "Authorization",
         "auth_prefix": "Bearer ",
     },
+    "huggingface-together": {
+        "endpoint": "https://router.huggingface.co/together/v1/chat/completions",
+        "auth_header": "Authorization",
+        "auth_prefix": "Bearer ",
+    },
     "ollama": {
         "endpoint": "http://localhost:11434/v1/chat/completions",
         "auth_header": None,  # No auth required for local Ollama
@@ -115,6 +166,12 @@ class UnifiedLLMClient:
         self.provider = provider.lower()
         self.api_key = api_key
         self.model = model
+
+        # Auto-detect HuggingFace endpoint
+        if self.provider == "huggingface":
+            detected_url = _detect_huggingface_endpoint(api_key, model)
+            if "together" in detected_url:
+                self.provider = "huggingface-together"
 
         if self.provider not in PROVIDER_CONFIG:
             raise ValueError(f"Unsupported provider: {provider}. "
@@ -183,7 +240,7 @@ class UnifiedLLMClient:
 
         # Structured output
         # Ollama and HuggingFace only support json_object mode, not strict json_schema
-        if json_schema and self.provider not in ["ollama", "huggingface"]:
+        if json_schema and self.provider not in ["ollama", "huggingface", "huggingface-together"]:
             payload["response_format"] = {
                 "type": "json_schema",
                 "json_schema": {
@@ -452,6 +509,7 @@ def _get_stepback_insight(model_source, stepback, api_key, user_model, creativit
         "openai": get_stepback_insight_openai,
         "perplexity": get_stepback_insight_openai,
         "huggingface": get_stepback_insight_openai,
+        "huggingface-together": get_stepback_insight_openai,
         "xai": get_stepback_insight_openai,
         "anthropic": get_stepback_insight_anthropic,
         "google": get_stepback_insight_google,

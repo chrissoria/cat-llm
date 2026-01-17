@@ -92,32 +92,62 @@ def image_chain_of_verification_anthropic(
     step2_prompt,
     step3_prompt,
     step4_prompt,
-    client,
+    client,  # Deprecated, kept for backward compatibility
     user_model,
     creativity,
     remove_numbering,
-    image_content
+    image_content,
+    api_key=None
 ):
     """
     Execute Chain of Verification (CoVe) process for images with Anthropic Claude.
     The image is included in verification steps for accurate assessment.
     Returns the verified reply or initial reply if error occurs.
 
+    Uses direct HTTP requests instead of Anthropic SDK.
+
     Args:
         image_content: The image content in Anthropic format (dict with type: "image")
+        api_key: Anthropic API key for authentication
     """
+    import requests
+
+    if api_key is None:
+        return initial_reply
+
+    endpoint = "https://api.anthropic.com/v1/messages"
+    headers = {
+        "Content-Type": "application/json",
+        "x-api-key": api_key,
+        "anthropic-version": "2023-06-01"
+    }
+
+    def make_anthropic_request(messages, max_tokens=4096):
+        """Helper to make Anthropic API requests."""
+        payload = {
+            "model": user_model,
+            "max_tokens": max_tokens,
+            "messages": messages,
+        }
+        if creativity is not None:
+            payload["temperature"] = creativity
+
+        response = requests.post(endpoint, headers=headers, json=payload, timeout=120)
+        response.raise_for_status()
+        result = response.json()
+
+        content = result.get("content", [])
+        if content and content[0].get("type") == "text":
+            return content[0].get("text", "")
+        return ""
+
     try:
         # STEP 2: Generate verification questions (text only)
         step2_filled = step2_prompt.replace('<<INITIAL_REPLY>>', initial_reply)
 
-        verification_response = client.messages.create(
-            model=user_model,
-            messages=[{'role': 'user', 'content': step2_filled}],
-            max_tokens=4096,
-            **({"temperature": creativity} if creativity is not None else {})
+        verification_questions = make_anthropic_request(
+            [{'role': 'user', 'content': step2_filled}]
         )
-
-        verification_questions = verification_response.content[0].text
 
         # STEP 3: Answer verification questions WITH the image
         questions_list = [
@@ -136,14 +166,9 @@ def image_chain_of_verification_anthropic(
                 image_content
             ]
 
-            answer_response = client.messages.create(
-                model=user_model,
-                messages=[{'role': 'user', 'content': message_content}],
-                max_tokens=4096,
-                **({"temperature": creativity} if creativity is not None else {})
+            answer = make_anthropic_request(
+                [{'role': 'user', 'content': message_content}]
             )
-
-            answer = answer_response.content[0].text
             verification_qa.append(f"Q: {question}\nA: {answer}")
 
         # STEP 4: Final corrected categorization WITH the image
@@ -159,14 +184,9 @@ def image_chain_of_verification_anthropic(
             image_content
         ]
 
-        final_response = client.messages.create(
-            model=user_model,
-            messages=[{'role': 'user', 'content': final_message_content}],
-            max_tokens=4096,
-            **({"temperature": creativity} if creativity is not None else {})
+        verified_reply = make_anthropic_request(
+            [{'role': 'user', 'content': final_message_content}]
         )
-
-        verified_reply = final_response.content[0].text
 
         return verified_reply
 

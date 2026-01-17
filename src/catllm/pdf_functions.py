@@ -21,6 +21,23 @@ from .calls.pdf_CoVe import (
 )
 
 
+def _anthropic_supports_pdf(model_name):
+    """Check if the Anthropic model supports native PDF input.
+
+    PDF support is available for Claude 3.5 Sonnet, Claude 3 Opus, and Claude 3 Sonnet,
+    but NOT for Claude 3 Haiku.
+    """
+    model_lower = model_name.lower()
+    # Haiku models don't support PDF
+    if "haiku" in model_lower:
+        return False
+    # Sonnet, Opus support PDF
+    if any(x in model_lower for x in ["sonnet", "opus"]):
+        return True
+    # Default to False for unknown models to be safe
+    return False
+
+
 def _load_pdf_files(pdf_input):
     """Load PDF files from directory path, single file path, or return list as-is."""
     import os
@@ -495,6 +512,20 @@ Provide the final categorization in the same JSON format:"""
             }
         ]
 
+    def _build_prompt_anthropic_image(encoded_image, base_text):
+        """Build prompt for Anthropic format with image (for Haiku and other non-PDF models)."""
+        return [
+            {"type": "text", "text": base_text},
+            {
+                "type": "image",
+                "source": {
+                    "type": "base64",
+                    "media_type": "image/png",
+                    "data": encoded_image
+                }
+            }
+        ]
+
     def _build_prompt_google_pdf(encoded_pdf, base_text):
         """Build prompt data for Google format with native PDF support."""
         return {
@@ -504,16 +535,31 @@ Provide the final categorization in the same JSON format:"""
         }
 
     def _call_openai_compatible(prompt, step2_prompt, step3_prompt, step4_prompt, pdf_content):
-        """Handle OpenAI-compatible API calls (OpenAI, Perplexity, HuggingFace, xAI)."""
-        from openai import OpenAI, BadRequestError
+        """Handle OpenAI-compatible API calls (OpenAI, Perplexity, HuggingFace, xAI).
 
-        base_url = (
-            "https://api.perplexity.ai" if model_source == "perplexity"
-            else "https://router.huggingface.co/v1" if model_source == "huggingface"
-            else "https://api.x.ai/v1" if model_source == "xai"
-            else None
-        )
-        client = OpenAI(api_key=api_key, base_url=base_url)
+        Uses direct HTTP requests instead of OpenAI SDK for lighter dependencies.
+        """
+        import requests as req
+
+        # Determine the base URL based on model source
+        if model_source == "huggingface":
+            from catllm.text_functions import _detect_huggingface_endpoint
+            base_url = _detect_huggingface_endpoint(api_key, user_model)
+        elif model_source == "huggingface-together":
+            base_url = "https://router.huggingface.co/together/v1"
+        elif model_source == "perplexity":
+            base_url = "https://api.perplexity.ai"
+        elif model_source == "xai":
+            base_url = "https://api.x.ai/v1"
+        else:
+            base_url = "https://api.openai.com/v1"
+
+        endpoint = f"{base_url}/chat/completions"
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
 
         max_retries = 8
         delay = 2
@@ -527,12 +573,17 @@ Provide the final categorization in the same JSON format:"""
                     messages.append({'role': 'assistant', 'content': stepback_insight})
                 messages.append({'role': 'user', 'content': prompt})
 
-                response_obj = client.chat.completions.create(
-                    model=user_model,
-                    messages=messages,
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                reply = response_obj.choices[0].message.content
+                payload = {
+                    "model": user_model,
+                    "messages": messages,
+                }
+                if creativity is not None:
+                    payload["temperature"] = creativity
+
+                response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+                response.raise_for_status()
+                result = response.json()
+                reply = result["choices"][0]["message"]["content"]
 
                 if chain_of_verification:
                     reply = pdf_chain_of_verification_openai(
@@ -540,23 +591,34 @@ Provide the final categorization in the same JSON format:"""
                         step2_prompt=step2_prompt,
                         step3_prompt=step3_prompt,
                         step4_prompt=step4_prompt,
-                        client=client,
+                        client=None,  # Not used anymore - CoVe will use requests
                         user_model=user_model,
                         creativity=creativity,
                         remove_numbering=remove_numbering,
-                        pdf_content=pdf_content
+                        pdf_content=pdf_content,
+                        api_key=api_key,
+                        base_url=base_url
                     )
 
                 return reply, None
 
-            except BadRequestError as e:
-                if "json_validate_failed" in str(e) and attempt < max_retries - 1:
+            except req.exceptions.HTTPError as e:
+                status_code = e.response.status_code if e.response else None
+                if status_code == 400 and attempt < max_retries - 1:
                     wait_time = delay * (2 ** attempt)
-                    print(f"⚠️ JSON validation failed. Attempt {attempt + 1}/{max_retries}")
+                    print(f"⚠️ Bad request. Attempt {attempt + 1}/{max_retries}")
+                    print(f"Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                elif status_code == 404:
+                    raise ValueError(f"❌ Model '{user_model}' on {model_source} not found.") from e
+                elif status_code in [500, 502, 503, 504] and attempt < max_retries - 1:
+                    wait_time = delay * (2 ** attempt)
+                    print(f"Attempt {attempt + 1} failed with error: {e}")
                     print(f"Retrying in {wait_time}s...")
                     time.sleep(wait_time)
                 else:
-                    raise ValueError(f"❌ Model '{user_model}' on {model_source} not found.") from e
+                    print(f"❌ Failed after {max_retries} attempts: {e}")
+                    return """{"1":"e"}""", f"Error processing input: {e}"
 
             except Exception as e:
                 if ("500" in str(e) or "504" in str(e)) and attempt < max_retries - 1:
@@ -571,9 +633,15 @@ Provide the final categorization in the same JSON format:"""
         return """{"1":"e"}""", "Max retries exceeded"
 
     def _call_anthropic(prompt, step2_prompt, step3_prompt, step4_prompt, pdf_content):
-        """Handle Anthropic API calls with native PDF support."""
-        import anthropic
-        client = anthropic.Anthropic(api_key=api_key)
+        """Handle Anthropic API calls with native PDF support using direct HTTP requests."""
+        import requests as req
+
+        endpoint = "https://api.anthropic.com/v1/messages"
+        headers = {
+            "Content-Type": "application/json",
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01"
+        }
 
         try:
             # Build messages with optional stepback
@@ -583,13 +651,23 @@ Provide the final categorization in the same JSON format:"""
                 messages.append({'role': 'assistant', 'content': stepback_insight})
             messages.append({'role': 'user', 'content': prompt})
 
-            response_obj = client.messages.create(
-                model=user_model,
-                max_tokens=1024,
-                messages=messages,
-                **({"temperature": creativity} if creativity is not None else {})
-            )
-            reply = response_obj.content[0].text
+            payload = {
+                "model": user_model,
+                "max_tokens": 1024,
+                "messages": messages,
+            }
+            if creativity is not None:
+                payload["temperature"] = creativity
+
+            response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+            response.raise_for_status()
+            result = response.json()
+
+            content = result.get("content", [])
+            if content and content[0].get("type") == "text":
+                reply = content[0].get("text", "")
+            else:
+                return """{"1":"e"}""", "No text content in response"
 
             if chain_of_verification:
                 reply = pdf_chain_of_verification_anthropic(
@@ -597,17 +675,21 @@ Provide the final categorization in the same JSON format:"""
                     step2_prompt=step2_prompt,
                     step3_prompt=step3_prompt,
                     step4_prompt=step4_prompt,
-                    client=client,
+                    client=None,  # No longer using SDK client
                     user_model=user_model,
                     creativity=creativity,
                     remove_numbering=remove_numbering,
-                    pdf_content=pdf_content
+                    pdf_content=pdf_content,
+                    api_key=api_key  # Pass api_key for HTTP calls
                 )
 
             return reply, None
 
-        except anthropic.NotFoundError as e:
-            raise ValueError(f"❌ Model '{user_model}' on {model_source} not found.") from e
+        except req.exceptions.HTTPError as e:
+            if e.response is not None and e.response.status_code == 404:
+                raise ValueError(f"❌ Model '{user_model}' on {model_source} not found.") from e
+            print(f"An error occurred: {e}")
+            return """{"1":"e"}""", f"Error processing input: {e}"
         except Exception as e:
             print(f"An error occurred: {e}")
             return """{"1":"e"}""", f"Error processing input: {e}"
@@ -701,11 +783,18 @@ Provide the final categorization in the same JSON format:"""
             return """{"1":"e"}""", f"Error processing input: {e}"
 
     def _call_mistral(prompt, step2_prompt, step3_prompt, step4_prompt, pdf_content):
-        """Handle Mistral API calls (PDF converted to image)."""
-        from mistralai import Mistral
-        from mistralai.models import SDKError, MistralError
+        """Handle Mistral API calls (PDF converted to image).
 
-        client = Mistral(api_key=api_key)
+        Uses direct HTTP requests instead of Mistral SDK for lighter dependencies.
+        """
+        import requests as req
+
+        endpoint = "https://api.mistral.ai/v1/chat/completions"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+
         max_retries = 8
         delay = 2
 
@@ -718,12 +807,17 @@ Provide the final categorization in the same JSON format:"""
                     messages.append({'role': 'assistant', 'content': stepback_insight})
                 messages.append({'role': 'user', 'content': prompt})
 
-                response = client.chat.complete(
-                    model=user_model,
-                    messages=messages,
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                reply = response.choices[0].message.content
+                payload = {
+                    "model": user_model,
+                    "messages": messages,
+                }
+                if creativity is not None:
+                    payload["temperature"] = creativity
+
+                response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+                response.raise_for_status()
+                result = response.json()
+                reply = result["choices"][0]["message"]["content"]
 
                 if chain_of_verification:
                     reply = pdf_chain_of_verification_mistral(
@@ -731,37 +825,25 @@ Provide the final categorization in the same JSON format:"""
                         step2_prompt=step2_prompt,
                         step3_prompt=step3_prompt,
                         step4_prompt=step4_prompt,
-                        client=client,
+                        client=None,  # Not used - CoVe will use requests
                         user_model=user_model,
                         creativity=creativity,
                         remove_numbering=remove_numbering,
-                        pdf_content=pdf_content
+                        pdf_content=pdf_content,
+                        api_key=api_key
                     )
 
                 return reply, None
 
-            except SDKError as e:
-                error_str = str(e).lower()
-
-                if "invalid_model" in error_str or "invalid model" in error_str:
+            except req.exceptions.HTTPError as e:
+                status_code = e.response.status_code if e.response else None
+                if status_code == 404:
                     raise ValueError(f"❌ Model '{user_model}' not found.") from e
-                elif "401" in str(e) or "unauthorized" in error_str:
+                elif status_code in [401, 403]:
                     raise ValueError(f"❌ Authentication failed.") from e
-
-                retryable_errors = ["500", "502", "503", "504"]
-                if any(code in str(e) for code in retryable_errors) and attempt < max_retries - 1:
+                elif status_code in [500, 502, 503, 504] and attempt < max_retries - 1:
                     wait_time = delay * (2 ** attempt)
-                    print(f"⚠️ Server error detected. Attempt {attempt + 1}/{max_retries}")
-                    print(f"Retrying in {wait_time}s...")
-                    time.sleep(wait_time)
-                else:
-                    print(f"❌ Failed after {max_retries} attempts: {e}")
-                    return """{"1":"e"}""", f"Error processing input: {e}"
-
-            except MistralError as e:
-                if hasattr(e, 'status_code') and e.status_code in [500, 502, 503, 504] and attempt < max_retries - 1:
-                    wait_time = delay * (2 ** attempt)
-                    print(f"⚠️ Server error {e.status_code}. Attempt {attempt + 1}/{max_retries}")
+                    print(f"⚠️ Server error {status_code}. Attempt {attempt + 1}/{max_retries}")
                     print(f"Retrying in {wait_time}s...")
                     time.sleep(wait_time)
                 else:
@@ -779,16 +861,31 @@ Provide the final categorization in the same JSON format:"""
         return [{"type": "text", "text": base_text}]
 
     def _call_openai_text_only(prompt_text, step2_prompt, step3_prompt, step4_prompt):
-        """Handle OpenAI-compatible API calls with text-only prompt."""
-        from openai import OpenAI, BadRequestError
+        """Handle OpenAI-compatible API calls with text-only prompt.
 
-        base_url = (
-            "https://api.perplexity.ai" if model_source == "perplexity"
-            else "https://router.huggingface.co/v1" if model_source == "huggingface"
-            else "https://api.x.ai/v1" if model_source == "xai"
-            else None
-        )
-        client = OpenAI(api_key=api_key, base_url=base_url)
+        Uses direct HTTP requests instead of OpenAI SDK for lighter dependencies.
+        """
+        import requests as req
+
+        # Determine the base URL based on model source
+        if model_source == "huggingface":
+            from catllm.text_functions import _detect_huggingface_endpoint
+            base_url = _detect_huggingface_endpoint(api_key, user_model)
+        elif model_source == "huggingface-together":
+            base_url = "https://router.huggingface.co/together/v1"
+        elif model_source == "perplexity":
+            base_url = "https://api.perplexity.ai"
+        elif model_source == "xai":
+            base_url = "https://api.x.ai/v1"
+        else:
+            base_url = "https://api.openai.com/v1"
+
+        endpoint = f"{base_url}/chat/completions"
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
 
         max_retries = 8
         delay = 2
@@ -801,22 +898,36 @@ Provide the final categorization in the same JSON format:"""
                     messages.append({'role': 'assistant', 'content': stepback_insight})
                 messages.append({'role': 'user', 'content': prompt_text})
 
-                response_obj = client.chat.completions.create(
-                    model=user_model,
-                    messages=messages,
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                reply = response_obj.choices[0].message.content
+                payload = {
+                    "model": user_model,
+                    "messages": messages,
+                }
+                if creativity is not None:
+                    payload["temperature"] = creativity
+
+                response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+                response.raise_for_status()
+                result = response.json()
+                reply = result["choices"][0]["message"]["content"]
                 return reply, None
 
-            except BadRequestError as e:
-                if "json_validate_failed" in str(e) and attempt < max_retries - 1:
+            except req.exceptions.HTTPError as e:
+                status_code = e.response.status_code if e.response else None
+                if status_code == 400 and attempt < max_retries - 1:
                     wait_time = delay * (2 ** attempt)
-                    print(f"⚠️ JSON validation failed. Attempt {attempt + 1}/{max_retries}")
+                    print(f"⚠️ Bad request. Attempt {attempt + 1}/{max_retries}")
+                    print(f"Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                elif status_code == 404:
+                    raise ValueError(f"❌ Model '{user_model}' on {model_source} not found.") from e
+                elif status_code in [500, 502, 503, 504] and attempt < max_retries - 1:
+                    wait_time = delay * (2 ** attempt)
+                    print(f"Attempt {attempt + 1} failed with error: {e}")
                     print(f"Retrying in {wait_time}s...")
                     time.sleep(wait_time)
                 else:
-                    raise ValueError(f"❌ Model '{user_model}' on {model_source} not found.") from e
+                    print(f"❌ Failed after {max_retries} attempts: {e}")
+                    return """{"1":"e"}""", f"Error processing input: {e}"
 
             except Exception as e:
                 if ("500" in str(e) or "504" in str(e)) and attempt < max_retries - 1:
@@ -831,9 +942,15 @@ Provide the final categorization in the same JSON format:"""
         return """{"1":"e"}""", "Max retries exceeded"
 
     def _call_anthropic_text_only(prompt_text, step2_prompt, step3_prompt, step4_prompt):
-        """Handle Anthropic API calls with text-only prompt."""
-        import anthropic
-        client = anthropic.Anthropic(api_key=api_key)
+        """Handle Anthropic API calls with text-only prompt using direct HTTP requests."""
+        import requests as req
+
+        endpoint = "https://api.anthropic.com/v1/messages"
+        headers = {
+            "Content-Type": "application/json",
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01"
+        }
 
         try:
             messages = []
@@ -842,17 +959,29 @@ Provide the final categorization in the same JSON format:"""
                 messages.append({'role': 'assistant', 'content': stepback_insight})
             messages.append({'role': 'user', 'content': prompt_text})
 
-            response_obj = client.messages.create(
-                model=user_model,
-                max_tokens=1024,
-                messages=messages,
-                **({"temperature": creativity} if creativity is not None else {})
-            )
-            reply = response_obj.content[0].text
-            return reply, None
+            payload = {
+                "model": user_model,
+                "max_tokens": 1024,
+                "messages": messages,
+            }
+            if creativity is not None:
+                payload["temperature"] = creativity
 
-        except anthropic.NotFoundError as e:
-            raise ValueError(f"❌ Model '{user_model}' on {model_source} not found.") from e
+            response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+            response.raise_for_status()
+            result = response.json()
+
+            content = result.get("content", [])
+            if content and content[0].get("type") == "text":
+                reply = content[0].get("text", "")
+                return reply, None
+            return """{"1":"e"}""", "No text content in response"
+
+        except req.exceptions.HTTPError as e:
+            if e.response is not None and e.response.status_code == 404:
+                raise ValueError(f"❌ Model '{user_model}' on {model_source} not found.") from e
+            print(f"An error occurred: {e}")
+            return """{"1":"e"}""", f"Error processing input: {e}"
         except Exception as e:
             print(f"An error occurred: {e}")
             return """{"1":"e"}""", f"Error processing input: {e}"
@@ -923,11 +1052,18 @@ Provide the final categorization in the same JSON format:"""
             return """{"1":"e"}""", f"Error processing input: {e}"
 
     def _call_mistral_text_only(prompt_text, step2_prompt, step3_prompt, step4_prompt):
-        """Handle Mistral API calls with text-only prompt."""
-        from mistralai import Mistral
-        from mistralai.models import SDKError, MistralError
+        """Handle Mistral API calls with text-only prompt.
 
-        client = Mistral(api_key=api_key)
+        Uses direct HTTP requests instead of Mistral SDK for lighter dependencies.
+        """
+        import requests as req
+
+        endpoint = "https://api.mistral.ai/v1/chat/completions"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+
         max_retries = 8
         delay = 2
 
@@ -939,36 +1075,28 @@ Provide the final categorization in the same JSON format:"""
                     messages.append({'role': 'assistant', 'content': stepback_insight})
                 messages.append({'role': 'user', 'content': prompt_text})
 
-                response = client.chat.complete(
-                    model=user_model,
-                    messages=messages,
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                reply = response.choices[0].message.content
+                payload = {
+                    "model": user_model,
+                    "messages": messages,
+                }
+                if creativity is not None:
+                    payload["temperature"] = creativity
+
+                response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+                response.raise_for_status()
+                result = response.json()
+                reply = result["choices"][0]["message"]["content"]
                 return reply, None
 
-            except SDKError as e:
-                error_str = str(e).lower()
-
-                if "invalid_model" in error_str or "invalid model" in error_str:
+            except req.exceptions.HTTPError as e:
+                status_code = e.response.status_code if e.response else None
+                if status_code == 404:
                     raise ValueError(f"❌ Model '{user_model}' not found.") from e
-                elif "401" in str(e) or "unauthorized" in error_str:
+                elif status_code in [401, 403]:
                     raise ValueError(f"❌ Authentication failed.") from e
-
-                retryable_errors = ["500", "502", "503", "504"]
-                if any(code in str(e) for code in retryable_errors) and attempt < max_retries - 1:
+                elif status_code in [500, 502, 503, 504] and attempt < max_retries - 1:
                     wait_time = delay * (2 ** attempt)
-                    print(f"⚠️ Server error detected. Attempt {attempt + 1}/{max_retries}")
-                    print(f"Retrying in {wait_time}s...")
-                    time.sleep(wait_time)
-                else:
-                    print(f"❌ Failed after {max_retries} attempts: {e}")
-                    return """{"1":"e"}""", f"Error processing input: {e}"
-
-            except MistralError as e:
-                if hasattr(e, 'status_code') and e.status_code in [500, 502, 503, 504] and attempt < max_retries - 1:
-                    wait_time = delay * (2 ** attempt)
-                    print(f"⚠️ Server error {e.status_code}. Attempt {attempt + 1}/{max_retries}")
+                    print(f"⚠️ Server error {status_code}. Attempt {attempt + 1}/{max_retries}")
                     print(f"Retrying in {wait_time}s...")
                     time.sleep(wait_time)
                 else:
@@ -1017,20 +1145,38 @@ Provide the final categorization in the same JSON format:"""
         # IMAGE or BOTH MODE: Include image/PDF attachment
         # Handle providers with native PDF support
         if model_source == "anthropic":
-            pdf_bytes, is_valid = _extract_page_as_pdf_bytes(pdf_path, page_index)
-            if not is_valid:
-                return None, "Failed to extract PDF page"
+            # Check if model supports native PDF (Haiku doesn't)
+            if _anthropic_supports_pdf(user_model):
+                pdf_bytes, is_valid = _extract_page_as_pdf_bytes(pdf_path, page_index)
+                if not is_valid:
+                    return None, "Failed to extract PDF page"
 
-            encoded_pdf = _encode_bytes_to_base64(pdf_bytes)
-            prompt = _build_prompt_anthropic_pdf(encoded_pdf, base_prompt_text)
-            pdf_content = {
-                "type": "document",
-                "source": {
-                    "type": "base64",
-                    "media_type": "application/pdf",
-                    "data": encoded_pdf
+                encoded_pdf = _encode_bytes_to_base64(pdf_bytes)
+                prompt = _build_prompt_anthropic_pdf(encoded_pdf, base_prompt_text)
+                pdf_content = {
+                    "type": "document",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "application/pdf",
+                        "data": encoded_pdf
+                    }
                 }
-            }
+            else:
+                # Haiku and other non-PDF models: convert to image
+                image_bytes, is_valid = _extract_page_as_image_bytes(pdf_path, page_index)
+                if not is_valid:
+                    return None, "Failed to render PDF page to image"
+
+                encoded_image = _encode_bytes_to_base64(image_bytes)
+                prompt = _build_prompt_anthropic_image(encoded_image, base_prompt_text)
+                pdf_content = {
+                    "type": "image",
+                    "source": {
+                        "type": "base64",
+                        "media_type": "image/png",
+                        "data": encoded_image
+                    }
+                }
             return _call_anthropic(prompt, step2_prompt, step3_prompt, step4_prompt, pdf_content)
 
         elif model_source == "google":
@@ -1268,24 +1414,35 @@ def explore_pdf_categories(
     # RNG for reproducible sampling
     rng = np.random.default_rng(random_state)
 
-    # Initialize client based on model source
-    if model_source in ["openai", "huggingface", "xai"]:
-        from openai import OpenAI
-        base_url = (
-            "https://router.huggingface.co/v1" if model_source == "huggingface"
-            else "https://api.x.ai/v1" if model_source == "xai"
-            else None
-        )
-        client = OpenAI(api_key=api_key, base_url=base_url)
+    # Initialize client/config based on model source
+    # For OpenAI-compatible APIs (including Mistral), we use requests directly instead of SDK
+    import requests as http_client
+
+    if model_source in ["openai", "huggingface", "huggingface-together", "xai", "perplexity"]:
+        # Determine base URL for OpenAI-compatible APIs
+        if model_source == "huggingface":
+            from catllm.text_functions import _detect_huggingface_endpoint
+            openai_base_url = _detect_huggingface_endpoint(api_key, user_model)
+        elif model_source == "huggingface-together":
+            openai_base_url = "https://router.huggingface.co/together/v1"
+        elif model_source == "xai":
+            openai_base_url = "https://api.x.ai/v1"
+        elif model_source == "perplexity":
+            openai_base_url = "https://api.perplexity.ai"
+        else:
+            openai_base_url = "https://api.openai.com/v1"
+        client = None  # We'll use requests directly
     elif model_source == "anthropic":
-        import anthropic
-        client = anthropic.Anthropic(api_key=api_key)
-    elif model_source == "google":
-        import requests
+        # Using direct HTTP requests instead of Anthropic SDK
         client = None
+        openai_base_url = None
+    elif model_source == "google":
+        client = None
+        openai_base_url = None
     elif model_source == "mistral":
-        from mistralai import Mistral
-        client = Mistral(api_key=api_key)
+        # Mistral API is OpenAI-compatible, use requests directly
+        openai_base_url = "https://api.mistral.ai/v1"
+        client = None
     else:
         raise ValueError(f"Unsupported model_source: {model_source}")
 
@@ -1319,74 +1476,153 @@ def explore_pdf_categories(
         )
 
     def describe_page_with_vision(pdf_path, page_index):
-        """Use vision model to describe a page's content as text."""
-        image_bytes, is_valid = _extract_page_as_image_bytes(pdf_path, page_index)
-        if not is_valid:
-            return None
-        encoded_image = _encode_bytes_to_base64(image_bytes)
+        """Use vision model to describe a page's content as text.
+
+        Uses native PDF support for Anthropic (non-Haiku) and Google, converts to image for others.
+        """
         prompt_text = make_describe_prompt()
 
         try:
-            if model_source in ["openai", "huggingface", "xai"]:
-                messages = [{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt_text},
-                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded_image}"}}
-                    ]
-                }]
-                resp = client.chat.completions.create(
-                    model=user_model,
-                    messages=messages,
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                return resp.choices[0].message.content
+            # Anthropic - use native PDF support if model supports it
+            if model_source == "anthropic" and _anthropic_supports_pdf(user_model):
+                pdf_bytes, is_valid = _extract_page_as_pdf_bytes(pdf_path, page_index)
+                if not is_valid:
+                    return None
+                encoded_pdf = _encode_bytes_to_base64(pdf_bytes)
+                content = [
+                    {"type": "text", "text": prompt_text},
+                    {
+                        "type": "document",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "application/pdf",
+                            "data": encoded_pdf
+                        }
+                    }
+                ]
+                endpoint = "https://api.anthropic.com/v1/messages"
+                headers = {
+                    "Content-Type": "application/json",
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01"
+                }
+                payload = {
+                    "model": user_model,
+                    "max_tokens": 4096,
+                    "messages": [{"role": "user", "content": content}],
+                }
+                if creativity is not None:
+                    payload["temperature"] = creativity
+                resp = http_client.post(endpoint, headers=headers, json=payload, timeout=120)
+                resp.raise_for_status()
+                result = resp.json()
+                resp_content = result.get("content", [])
+                if resp_content and resp_content[0].get("type") == "text":
+                    return resp_content[0].get("text", "")
+                return None
 
+            # Anthropic Haiku - convert to image (doesn't support PDF)
             elif model_source == "anthropic":
+                image_bytes, is_valid = _extract_page_as_image_bytes(pdf_path, page_index)
+                if not is_valid:
+                    return None
+                encoded_image = _encode_bytes_to_base64(image_bytes)
                 content = [
                     {"type": "text", "text": prompt_text},
                     {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": encoded_image}}
                 ]
-                resp = client.messages.create(
-                    model=user_model,
-                    max_tokens=4096,
-                    messages=[{"role": "user", "content": content}],
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                return resp.content[0].text
+                endpoint = "https://api.anthropic.com/v1/messages"
+                headers = {
+                    "Content-Type": "application/json",
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01"
+                }
+                payload = {
+                    "model": user_model,
+                    "max_tokens": 4096,
+                    "messages": [{"role": "user", "content": content}],
+                }
+                if creativity is not None:
+                    payload["temperature"] = creativity
+                resp = http_client.post(endpoint, headers=headers, json=payload, timeout=120)
+                resp.raise_for_status()
+                result = resp.json()
+                resp_content = result.get("content", [])
+                if resp_content and resp_content[0].get("type") == "text":
+                    return resp_content[0].get("text", "")
+                return None
 
+            # Google - use native PDF support
             elif model_source == "google":
+                pdf_bytes, is_valid = _extract_page_as_pdf_bytes(pdf_path, page_index)
+                if not is_valid:
+                    return None
+                encoded_pdf = _encode_bytes_to_base64(pdf_bytes)
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
                 headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
                 parts = [
                     {"text": prompt_text},
-                    {"inline_data": {"mime_type": "image/png", "data": encoded_image}}
+                    {"inline_data": {"mime_type": "application/pdf", "data": encoded_pdf}}
                 ]
                 payload = {
                     "contents": [{"parts": parts}],
                     "generationConfig": {**({"temperature": creativity} if creativity is not None else {})}
                 }
-                response = requests.post(url, headers=headers, json=payload)
+                response = http_client.post(url, headers=headers, json=payload, timeout=120)
                 response.raise_for_status()
                 result = response.json()
                 if "candidates" in result and result["candidates"]:
                     return result["candidates"][0]["content"]["parts"][0]["text"]
                 return None
 
-            elif model_source == "mistral":
-                messages = [{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt_text},
-                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded_image}"}}
-                    ]
-                }]
-                resp = client.chat.complete(
-                    model=user_model,
-                    messages=messages,
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                return resp.choices[0].message.content
+            # Other providers - convert PDF page to image
+            else:
+                image_bytes, is_valid = _extract_page_as_image_bytes(pdf_path, page_index)
+                if not is_valid:
+                    return None
+                encoded_image = _encode_bytes_to_base64(image_bytes)
+
+                if model_source in ["openai", "huggingface", "huggingface-together", "xai", "perplexity"]:
+                    # Use requests directly instead of OpenAI SDK
+                    endpoint = f"{openai_base_url}/chat/completions"
+                    headers = {
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {api_key}"
+                    }
+                    messages = [{
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt_text},
+                            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded_image}"}}
+                        ]
+                    }]
+                    payload = {"model": user_model, "messages": messages}
+                    if creativity is not None:
+                        payload["temperature"] = creativity
+                    resp = http_client.post(endpoint, headers=headers, json=payload, timeout=120)
+                    resp.raise_for_status()
+                    return resp.json()["choices"][0]["message"]["content"]
+
+                elif model_source == "mistral":
+                    # Use requests directly instead of Mistral SDK
+                    endpoint = f"{openai_base_url}/chat/completions"
+                    headers = {
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {api_key}"
+                    }
+                    messages = [{
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt_text},
+                            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded_image}"}}
+                        ]
+                    }]
+                    payload = {"model": user_model, "messages": messages}
+                    if creativity is not None:
+                        payload["temperature"] = creativity
+                    resp = http_client.post(endpoint, headers=headers, json=payload, timeout=120)
+                    resp.raise_for_status()
+                    return resp.json()["choices"][0]["message"]["content"]
 
         except Exception as e:
             print(f"Error describing page {page_index}: {e}")
@@ -1395,22 +1631,44 @@ def explore_pdf_categories(
     def call_model_with_text(prompt_text):
         """Send concatenated text to the model."""
         try:
-            if model_source in ["openai", "huggingface", "xai"]:
-                resp = client.chat.completions.create(
-                    model=user_model,
-                    messages=[{"role": "user", "content": prompt_text}],
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                return resp.choices[0].message.content
+            if model_source in ["openai", "huggingface", "huggingface-together", "xai", "perplexity"]:
+                # Use requests directly instead of OpenAI SDK
+                endpoint = f"{openai_base_url}/chat/completions"
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}"
+                }
+                payload = {
+                    "model": user_model,
+                    "messages": [{"role": "user", "content": prompt_text}]
+                }
+                if creativity is not None:
+                    payload["temperature"] = creativity
+                resp = http_client.post(endpoint, headers=headers, json=payload, timeout=120)
+                resp.raise_for_status()
+                return resp.json()["choices"][0]["message"]["content"]
 
             elif model_source == "anthropic":
-                resp = client.messages.create(
-                    model=user_model,
-                    max_tokens=2048,
-                    messages=[{"role": "user", "content": prompt_text}],
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                return resp.content[0].text
+                endpoint = "https://api.anthropic.com/v1/messages"
+                headers = {
+                    "Content-Type": "application/json",
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01"
+                }
+                payload = {
+                    "model": user_model,
+                    "max_tokens": 2048,
+                    "messages": [{"role": "user", "content": prompt_text}],
+                }
+                if creativity is not None:
+                    payload["temperature"] = creativity
+                resp = http_client.post(endpoint, headers=headers, json=payload, timeout=120)
+                resp.raise_for_status()
+                result = resp.json()
+                resp_content = result.get("content", [])
+                if resp_content and resp_content[0].get("type") == "text":
+                    return resp_content[0].get("text", "")
+                return None
 
             elif model_source == "google":
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
@@ -1419,7 +1677,7 @@ def explore_pdf_categories(
                     "contents": [{"parts": [{"text": prompt_text}]}],
                     "generationConfig": {**({"temperature": creativity} if creativity is not None else {})}
                 }
-                response = requests.post(url, headers=headers, json=payload)
+                response = http_client.post(url, headers=headers, json=payload, timeout=120)
                 response.raise_for_status()
                 result = response.json()
                 if "candidates" in result and result["candidates"]:
@@ -1427,85 +1685,172 @@ def explore_pdf_categories(
                 return None
 
             elif model_source == "mistral":
-                resp = client.chat.complete(
-                    model=user_model,
-                    messages=[{"role": "user", "content": prompt_text}],
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                return resp.choices[0].message.content
+                # Use requests directly instead of Mistral SDK
+                endpoint = f"{openai_base_url}/chat/completions"
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}"
+                }
+                payload = {
+                    "model": user_model,
+                    "messages": [{"role": "user", "content": prompt_text}]
+                }
+                if creativity is not None:
+                    payload["temperature"] = creativity
+                resp = http_client.post(endpoint, headers=headers, json=payload, timeout=120)
+                resp.raise_for_status()
+                return resp.json()["choices"][0]["message"]["content"]
 
         except Exception as e:
             print(f"Error in text mode: {e}")
             return None
 
     def call_model_with_image(pdf_path, page_index, prompt_text):
-        """Send a page image to the model."""
-        image_bytes, is_valid = _extract_page_as_image_bytes(pdf_path, page_index)
-        if not is_valid:
-            return None
-        encoded_image = _encode_bytes_to_base64(image_bytes)
+        """Send a PDF page to the model.
 
+        Uses native PDF support for Anthropic (non-Haiku) and Google, converts to image for others.
+        """
         try:
-            if model_source in ["openai", "huggingface", "xai"]:
-                messages = [{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt_text},
-                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded_image}"}}
-                    ]
-                }]
-                resp = client.chat.completions.create(
-                    model=user_model,
-                    messages=messages,
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                return resp.choices[0].message.content
+            # Anthropic - use native PDF support if model supports it
+            if model_source == "anthropic" and _anthropic_supports_pdf(user_model):
+                pdf_bytes, is_valid = _extract_page_as_pdf_bytes(pdf_path, page_index)
+                if not is_valid:
+                    return None
+                encoded_pdf = _encode_bytes_to_base64(pdf_bytes)
+                content = [
+                    {"type": "text", "text": prompt_text},
+                    {
+                        "type": "document",
+                        "source": {
+                            "type": "base64",
+                            "media_type": "application/pdf",
+                            "data": encoded_pdf
+                        }
+                    }
+                ]
+                endpoint = "https://api.anthropic.com/v1/messages"
+                headers = {
+                    "Content-Type": "application/json",
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01"
+                }
+                payload = {
+                    "model": user_model,
+                    "max_tokens": 2048,
+                    "messages": [{"role": "user", "content": content}],
+                }
+                if creativity is not None:
+                    payload["temperature"] = creativity
+                resp = http_client.post(endpoint, headers=headers, json=payload, timeout=120)
+                resp.raise_for_status()
+                result = resp.json()
+                resp_content = result.get("content", [])
+                if resp_content and resp_content[0].get("type") == "text":
+                    return resp_content[0].get("text", "")
+                return None
 
+            # Anthropic Haiku - convert to image (doesn't support PDF)
             elif model_source == "anthropic":
+                image_bytes, is_valid = _extract_page_as_image_bytes(pdf_path, page_index)
+                if not is_valid:
+                    return None
+                encoded_image = _encode_bytes_to_base64(image_bytes)
                 content = [
                     {"type": "text", "text": prompt_text},
                     {"type": "image", "source": {"type": "base64", "media_type": "image/png", "data": encoded_image}}
                 ]
-                resp = client.messages.create(
-                    model=user_model,
-                    max_tokens=2048,
-                    messages=[{"role": "user", "content": content}],
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                return resp.content[0].text
+                endpoint = "https://api.anthropic.com/v1/messages"
+                headers = {
+                    "Content-Type": "application/json",
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01"
+                }
+                payload = {
+                    "model": user_model,
+                    "max_tokens": 2048,
+                    "messages": [{"role": "user", "content": content}],
+                }
+                if creativity is not None:
+                    payload["temperature"] = creativity
+                resp = http_client.post(endpoint, headers=headers, json=payload, timeout=120)
+                resp.raise_for_status()
+                result = resp.json()
+                resp_content = result.get("content", [])
+                if resp_content and resp_content[0].get("type") == "text":
+                    return resp_content[0].get("text", "")
+                return None
 
+            # Google - use native PDF support
             elif model_source == "google":
+                pdf_bytes, is_valid = _extract_page_as_pdf_bytes(pdf_path, page_index)
+                if not is_valid:
+                    return None
+                encoded_pdf = _encode_bytes_to_base64(pdf_bytes)
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
                 headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
                 parts = [
                     {"text": prompt_text},
-                    {"inline_data": {"mime_type": "image/png", "data": encoded_image}}
+                    {"inline_data": {"mime_type": "application/pdf", "data": encoded_pdf}}
                 ]
                 payload = {
                     "contents": [{"parts": parts}],
                     "generationConfig": {**({"temperature": creativity} if creativity is not None else {})}
                 }
-                response = requests.post(url, headers=headers, json=payload)
+                response = http_client.post(url, headers=headers, json=payload, timeout=120)
                 response.raise_for_status()
                 result = response.json()
                 if "candidates" in result and result["candidates"]:
                     return result["candidates"][0]["content"]["parts"][0]["text"]
                 return None
 
-            elif model_source == "mistral":
-                messages = [{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt_text},
-                        {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded_image}"}}
-                    ]
-                }]
-                resp = client.chat.complete(
-                    model=user_model,
-                    messages=messages,
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                return resp.choices[0].message.content
+            # Other providers - convert PDF page to image
+            else:
+                image_bytes, is_valid = _extract_page_as_image_bytes(pdf_path, page_index)
+                if not is_valid:
+                    return None
+                encoded_image = _encode_bytes_to_base64(image_bytes)
+
+                if model_source in ["openai", "huggingface", "huggingface-together", "xai", "perplexity"]:
+                    # Use requests directly instead of OpenAI SDK
+                    endpoint = f"{openai_base_url}/chat/completions"
+                    headers = {
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {api_key}"
+                    }
+                    messages = [{
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt_text},
+                            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded_image}"}}
+                        ]
+                    }]
+                    payload = {"model": user_model, "messages": messages}
+                    if creativity is not None:
+                        payload["temperature"] = creativity
+                    resp = http_client.post(endpoint, headers=headers, json=payload, timeout=120)
+                    resp.raise_for_status()
+                    return resp.json()["choices"][0]["message"]["content"]
+
+                elif model_source == "mistral":
+                    # Use requests directly instead of Mistral SDK
+                    endpoint = f"{openai_base_url}/chat/completions"
+                    headers = {
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {api_key}"
+                    }
+                    messages = [{
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt_text},
+                            {"type": "image_url", "image_url": {"url": f"data:image/png;base64,{encoded_image}"}}
+                        ]
+                    }]
+                    payload = {"model": user_model, "messages": messages}
+                    if creativity is not None:
+                        payload["temperature"] = creativity
+                    resp = http_client.post(endpoint, headers=headers, json=payload, timeout=120)
+                    resp.raise_for_status()
+                    return resp.json()["choices"][0]["message"]["content"]
 
         except Exception as e:
             print(f"Error processing page {page_index}: {e}")
@@ -1636,21 +1981,44 @@ Output:
 """.strip()
 
     try:
-        if model_source in ["openai", "huggingface", "xai"]:
-            resp2 = client.chat.completions.create(
-                model=user_model,
-                messages=[{"role": "user", "content": second_prompt}],
-                **({"temperature": creativity} if creativity is not None else {})
-            )
-            top_categories_text = resp2.choices[0].message.content
+        if model_source in ["openai", "huggingface", "huggingface-together", "xai", "perplexity"]:
+            # Use requests directly instead of OpenAI SDK
+            endpoint = f"{openai_base_url}/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            }
+            payload = {
+                "model": user_model,
+                "messages": [{"role": "user", "content": second_prompt}]
+            }
+            if creativity is not None:
+                payload["temperature"] = creativity
+            resp2 = http_client.post(endpoint, headers=headers, json=payload, timeout=120)
+            resp2.raise_for_status()
+            top_categories_text = resp2.json()["choices"][0]["message"]["content"]
         elif model_source == "anthropic":
-            resp2 = client.messages.create(
-                model=user_model,
-                max_tokens=2048,
-                messages=[{"role": "user", "content": second_prompt}],
-                **({"temperature": creativity} if creativity is not None else {})
-            )
-            top_categories_text = resp2.content[0].text
+            endpoint = "https://api.anthropic.com/v1/messages"
+            headers = {
+                "Content-Type": "application/json",
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01"
+            }
+            payload = {
+                "model": user_model,
+                "max_tokens": 2048,
+                "messages": [{"role": "user", "content": second_prompt}],
+            }
+            if creativity is not None:
+                payload["temperature"] = creativity
+            resp2 = http_client.post(endpoint, headers=headers, json=payload, timeout=120)
+            resp2.raise_for_status()
+            result = resp2.json()
+            resp_content = result.get("content", [])
+            if resp_content and resp_content[0].get("type") == "text":
+                top_categories_text = resp_content[0].get("text", "")
+            else:
+                top_categories_text = ""
         elif model_source == "google":
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
             headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
@@ -1658,17 +2026,26 @@ Output:
                 "contents": [{"parts": [{"text": second_prompt}]}],
                 "generationConfig": {**({"temperature": creativity} if creativity is not None else {})}
             }
-            response = requests.post(url, headers=headers, json=payload)
+            response = http_client.post(url, headers=headers, json=payload, timeout=120)
             response.raise_for_status()
             res = response.json()
             top_categories_text = res["candidates"][0]["content"]["parts"][0]["text"]
         elif model_source == "mistral":
-            resp2 = client.chat.complete(
-                model=user_model,
-                messages=[{"role": "user", "content": second_prompt}],
-                **({"temperature": creativity} if creativity is not None else {})
-            )
-            top_categories_text = resp2.choices[0].message.content
+            # Use requests directly instead of Mistral SDK
+            endpoint = f"{openai_base_url}/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            }
+            payload = {
+                "model": user_model,
+                "messages": [{"role": "user", "content": second_prompt}]
+            }
+            if creativity is not None:
+                payload["temperature"] = creativity
+            resp2 = http_client.post(endpoint, headers=headers, json=payload, timeout=120)
+            resp2.raise_for_status()
+            top_categories_text = resp2.json()["choices"][0]["message"]["content"]
     except Exception as e:
         print(f"Error in second-pass merge: {e}")
         top_categories_text = ""

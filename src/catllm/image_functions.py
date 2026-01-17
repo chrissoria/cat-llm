@@ -312,15 +312,27 @@ Provide the final categorization in the same JSON format:"""
 
     def _call_openai_compatible(prompt, step2_prompt, step3_prompt, step4_prompt, image_content):
         """Handle OpenAI-compatible API calls (OpenAI, Perplexity, HuggingFace, xAI)."""
-        from openai import OpenAI, BadRequestError
+        import requests as req
 
-        base_url = (
-            "https://api.perplexity.ai" if model_source == "perplexity"
-            else "https://router.huggingface.co/v1" if model_source == "huggingface"
-            else "https://api.x.ai/v1" if model_source == "xai"
-            else None
-        )
-        client = OpenAI(api_key=api_key, base_url=base_url)
+        # Determine the base URL based on model source
+        if model_source == "huggingface":
+            from catllm.text_functions import _detect_huggingface_endpoint
+            base_url = _detect_huggingface_endpoint(api_key, user_model)
+        elif model_source == "huggingface-together":
+            base_url = "https://router.huggingface.co/together/v1"
+        elif model_source == "perplexity":
+            base_url = "https://api.perplexity.ai"
+        elif model_source == "xai":
+            base_url = "https://api.x.ai/v1"
+        else:
+            base_url = "https://api.openai.com/v1"
+
+        endpoint = f"{base_url}/chat/completions"
+
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
 
         max_retries = 8
         delay = 2
@@ -334,12 +346,17 @@ Provide the final categorization in the same JSON format:"""
                     messages.append({'role': 'assistant', 'content': stepback_insight})
                 messages.append({'role': 'user', 'content': prompt})
 
-                response_obj = client.chat.completions.create(
-                    model=user_model,
-                    messages=messages,
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                reply = response_obj.choices[0].message.content
+                payload = {
+                    "model": user_model,
+                    "messages": messages,
+                }
+                if creativity is not None:
+                    payload["temperature"] = creativity
+
+                response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+                response.raise_for_status()
+                result = response.json()
+                reply = result["choices"][0]["message"]["content"]
 
                 if chain_of_verification:
                     reply = image_chain_of_verification_openai(
@@ -347,7 +364,7 @@ Provide the final categorization in the same JSON format:"""
                         step2_prompt=step2_prompt,
                         step3_prompt=step3_prompt,
                         step4_prompt=step4_prompt,
-                        client=client,
+                        client=None,  # Not used anymore, CoVe needs refactoring too
                         user_model=user_model,
                         creativity=creativity,
                         remove_numbering=remove_numbering,
@@ -356,14 +373,25 @@ Provide the final categorization in the same JSON format:"""
 
                 return reply, None
 
-            except BadRequestError as e:
-                if "json_validate_failed" in str(e) and attempt < max_retries - 1:
+            except req.exceptions.HTTPError as e:
+                error_str = str(e).lower()
+                status_code = e.response.status_code if e.response else None
+
+                if status_code == 400 and "json_validate_failed" in error_str and attempt < max_retries - 1:
                     wait_time = delay * (2 ** attempt)
                     print(f"⚠️ JSON validation failed. Attempt {attempt + 1}/{max_retries}")
                     print(f"Retrying in {wait_time}s...")
                     time.sleep(wait_time)
-                else:
+                elif status_code == 404:
                     raise ValueError(f"❌ Model '{user_model}' on {model_source} not found. Please check the model name and try again.") from e
+                elif status_code in [500, 502, 503, 504] and attempt < max_retries - 1:
+                    wait_time = delay * (2 ** attempt)
+                    print(f"Attempt {attempt + 1} failed with error: {e}")
+                    print(f"Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    print(f"❌ Failed after {max_retries} attempts: {e}")
+                    return """{"1":"e"}""", f"Error processing input: {e}"
 
             except Exception as e:
                 if ("500" in str(e) or "504" in str(e)) and attempt < max_retries - 1:
@@ -378,9 +406,15 @@ Provide the final categorization in the same JSON format:"""
         return """{"1":"e"}""", "Max retries exceeded"
 
     def _call_anthropic(prompt, step2_prompt, step3_prompt, step4_prompt, image_content):
-        """Handle Anthropic API calls."""
-        import anthropic
-        client = anthropic.Anthropic(api_key=api_key)
+        """Handle Anthropic API calls using direct HTTP requests."""
+        import requests as req
+
+        endpoint = "https://api.anthropic.com/v1/messages"
+        headers = {
+            "Content-Type": "application/json",
+            "x-api-key": api_key,
+            "anthropic-version": "2023-06-01"
+        }
 
         try:
             # Build messages with optional stepback
@@ -390,13 +424,23 @@ Provide the final categorization in the same JSON format:"""
                 messages.append({'role': 'assistant', 'content': stepback_insight})
             messages.append({'role': 'user', 'content': prompt})
 
-            response_obj = client.messages.create(
-                model=user_model,
-                max_tokens=1024,
-                messages=messages,
-                **({"temperature": creativity} if creativity is not None else {})
-            )
-            reply = response_obj.content[0].text
+            payload = {
+                "model": user_model,
+                "max_tokens": 1024,
+                "messages": messages,
+            }
+            if creativity is not None:
+                payload["temperature"] = creativity
+
+            response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+            response.raise_for_status()
+            result = response.json()
+
+            content = result.get("content", [])
+            if content and content[0].get("type") == "text":
+                reply = content[0].get("text", "")
+            else:
+                return """{"1":"e"}""", "No text content in response"
 
             if chain_of_verification:
                 reply = image_chain_of_verification_anthropic(
@@ -404,17 +448,21 @@ Provide the final categorization in the same JSON format:"""
                     step2_prompt=step2_prompt,
                     step3_prompt=step3_prompt,
                     step4_prompt=step4_prompt,
-                    client=client,
+                    client=None,  # No longer using SDK client
                     user_model=user_model,
                     creativity=creativity,
                     remove_numbering=remove_numbering,
-                    image_content=image_content
+                    image_content=image_content,
+                    api_key=api_key  # Pass api_key for HTTP calls
                 )
 
             return reply, None
 
-        except anthropic.NotFoundError as e:
-            raise ValueError(f"❌ Model '{user_model}' on {model_source} not found. Please check the model name and try again.") from e
+        except req.exceptions.HTTPError as e:
+            if e.response is not None and e.response.status_code == 404:
+                raise ValueError(f"❌ Model '{user_model}' on {model_source} not found. Please check the model name and try again.") from e
+            print(f"An error occurred: {e}")
+            return """{"1":"e"}""", f"Error processing input: {e}"
         except Exception as e:
             print(f"An error occurred: {e}")
             return """{"1":"e"}""", f"Error processing input: {e}"
@@ -508,11 +556,15 @@ Provide the final categorization in the same JSON format:"""
             return """{"1":"e"}""", f"Error processing input: {e}"
 
     def _call_mistral(prompt, step2_prompt, step3_prompt, step4_prompt, image_content):
-        """Handle Mistral API calls."""
-        from mistralai import Mistral
-        from mistralai.models import SDKError, MistralError
+        """Handle Mistral API calls - uses requests directly."""
+        import requests as req
 
-        client = Mistral(api_key=api_key)
+        endpoint = "https://api.mistral.ai/v1/chat/completions"
+        headers = {
+            "Content-Type": "application/json",
+            "Authorization": f"Bearer {api_key}"
+        }
+
         max_retries = 8
         delay = 2
 
@@ -525,12 +577,17 @@ Provide the final categorization in the same JSON format:"""
                     messages.append({'role': 'assistant', 'content': stepback_insight})
                 messages.append({'role': 'user', 'content': prompt})
 
-                response = client.chat.complete(
-                    model=user_model,
-                    messages=messages,
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                reply = response.choices[0].message.content
+                payload = {
+                    "model": user_model,
+                    "messages": messages,
+                }
+                if creativity is not None:
+                    payload["temperature"] = creativity
+
+                response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+                response.raise_for_status()
+                result = response.json()
+                reply = result["choices"][0]["message"]["content"]
 
                 if chain_of_verification:
                     reply = image_chain_of_verification_mistral(
@@ -538,7 +595,7 @@ Provide the final categorization in the same JSON format:"""
                         step2_prompt=step2_prompt,
                         step3_prompt=step3_prompt,
                         step4_prompt=step4_prompt,
-                        client=client,
+                        client=None,  # Not used anymore, CoVe needs refactoring too
                         user_model=user_model,
                         creativity=creativity,
                         remove_numbering=remove_numbering,
@@ -547,28 +604,17 @@ Provide the final categorization in the same JSON format:"""
 
                 return reply, None
 
-            except SDKError as e:
+            except req.exceptions.HTTPError as e:
                 error_str = str(e).lower()
+                status_code = e.response.status_code if e.response else None
 
-                if "invalid_model" in error_str or "invalid model" in error_str:
+                if status_code == 404 or "invalid_model" in error_str or "invalid model" in error_str:
                     raise ValueError(f"❌ Model '{user_model}' not found.") from e
-                elif "401" in str(e) or "unauthorized" in error_str:
+                elif status_code == 401 or "unauthorized" in error_str:
                     raise ValueError(f"❌ Authentication failed. Please check your Mistral API key.") from e
-
-                retryable_errors = ["500", "502", "503", "504"]
-                if any(code in str(e) for code in retryable_errors) and attempt < max_retries - 1:
+                elif status_code in [500, 502, 503, 504] and attempt < max_retries - 1:
                     wait_time = delay * (2 ** attempt)
-                    print(f"⚠️ Server error detected. Attempt {attempt + 1}/{max_retries}")
-                    print(f"Retrying in {wait_time}s...")
-                    time.sleep(wait_time)
-                else:
-                    print(f"❌ Failed after {max_retries} attempts: {e}")
-                    return """{"1":"e"}""", f"Error processing input: {e}"
-
-            except MistralError as e:
-                if hasattr(e, 'status_code') and e.status_code in [500, 502, 503, 504] and attempt < max_retries - 1:
-                    wait_time = delay * (2 ** attempt)
-                    print(f"⚠️ Server error {e.status_code}. Attempt {attempt + 1}/{max_retries}")
+                    print(f"⚠️ Server error {status_code}. Attempt {attempt + 1}/{max_retries}")
                     print(f"Retrying in {wait_time}s...")
                     time.sleep(wait_time)
                 else:
@@ -898,61 +944,97 @@ def image_score_drawing(
 
 
         if model_source == "openai":
-            from openai import OpenAI
-            client = OpenAI(api_key=api_key)
+            import requests as req
+            endpoint = "https://api.openai.com/v1/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            }
+            payload = {
+                "model": user_model,
+                "messages": [{'role': 'user', 'content': prompt}],
+            }
+            if creativity is not None:
+                payload["temperature"] = creativity
             try:
-                response_obj = client.chat.completions.create(
-                    model=user_model,
-                    messages=[{'role': 'user', 'content': prompt}],
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                reply = response_obj.choices[0].message.content
+                response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+                response.raise_for_status()
+                result = response.json()
+                reply = result["choices"][0]["message"]["content"]
                 link1.append(reply)
-            except Exception as e:
-                if "model" in str(e).lower():
+            except req.exceptions.HTTPError as e:
+                if e.response and e.response.status_code == 404:
                     raise ValueError(f"Invalid OpenAI model '{user_model}': {e}")
                 else:
-                    print("An error occurred: {e}")
-                    link1.append("Error processing input: {e}")
+                    print(f"An error occurred: {e}")
+                    link1.append(f"Error processing input: {e}")
+            except Exception as e:
+                print(f"An error occurred: {e}")
+                link1.append(f"Error processing input: {e}")
 
         elif model_source == "anthropic":
-            import anthropic
-            client = anthropic.Anthropic(api_key=api_key)
+            import requests as req
+            endpoint = "https://api.anthropic.com/v1/messages"
+            headers = {
+                "Content-Type": "application/json",
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01"
+            }
+            payload = {
+                "model": user_model,
+                "max_tokens": 1024,
+                "messages": [{"role": "user", "content": prompt}],
+            }
+            if creativity is not None:
+                payload["temperature"] = creativity
             try:
-                message = client.messages.create(
-                    model=user_model,
-                    max_tokens=1024,
-                    messages=[{"role": "user", "content": prompt}],
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                reply = message.content[0].text  # Anthropic returns content as list
-                link1.append(reply)
-            except Exception as e:
-                if "model" in str(e).lower():
-                    raise ValueError(f"Invalid OpenAI model '{user_model}': {e}")
+                response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+                response.raise_for_status()
+                result = response.json()
+                content = result.get("content", [])
+                if content and content[0].get("type") == "text":
+                    reply = content[0].get("text", "")
+                    link1.append(reply)
                 else:
-                    print("An error occurred: {e}")
-                    link1.append("Error processing input: {e}")
+                    link1.append("Error processing input: No text content in response")
+            except req.exceptions.HTTPError as e:
+                if e.response is not None and e.response.status_code == 404:
+                    raise ValueError(f"Invalid Anthropic model '{user_model}': {e}")
+                else:
+                    print(f"An error occurred: {e}")
+                    link1.append(f"Error processing input: {e}")
+            except Exception as e:
+                print(f"An error occurred: {e}")
+                link1.append(f"Error processing input: {e}")
 
         elif model_source == "mistral":
-            from mistralai import Mistral
-            client = Mistral(api_key=api_key)
+            import requests as req
+            endpoint = "https://api.mistral.ai/v1/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            }
+            payload = {
+                "model": user_model,
+                "messages": [{'role': 'user', 'content': prompt}],
+            }
+            if creativity is not None:
+                payload["temperature"] = creativity
             try:
-                response = client.chat.complete(
-                    model=user_model,
-                    messages=[
-                    {'role': 'user', 'content': prompt}
-                ],
-                **({"temperature": creativity} if creativity is not None else {})
-                )
-                reply = response.choices[0].message.content
+                response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+                response.raise_for_status()
+                result = response.json()
+                reply = result["choices"][0]["message"]["content"]
                 link1.append(reply)
-            except Exception as e:
-                if "model" in str(e).lower():
-                    raise ValueError(f"Invalid OpenAI model '{user_model}': {e}")
+            except req.exceptions.HTTPError as e:
+                if e.response and e.response.status_code == 404:
+                    raise ValueError(f"Invalid Mistral model '{user_model}': {e}")
                 else:
-                    print("An error occurred: {e}")
-                    link1.append("Error processing input: {e}")
+                    print(f"An error occurred: {e}")
+                    link1.append(f"Error processing input: {e}")
+            except Exception as e:
+                print(f"An error occurred: {e}")
+                link1.append(f"Error processing input: {e}")
         #if no valid image path is provided
         elif  valid_image == False:
             reply = "invalid image path"
@@ -1173,84 +1255,131 @@ def image_features(
                 }
             ]
         if model_source == "openai":
-            from openai import OpenAI
-            client = OpenAI(api_key=api_key)
+            import requests as req
+            endpoint = "https://api.openai.com/v1/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            }
+            payload = {
+                "model": user_model,
+                "messages": [{'role': 'user', 'content': prompt}],
+            }
+            if creativity is not None:
+                payload["temperature"] = creativity
             try:
-                response_obj = client.chat.completions.create(
-                    model=user_model,
-                    messages=[{'role': 'user', 'content': prompt}],
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                reply = response_obj.choices[0].message.content
+                response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+                response.raise_for_status()
+                result = response.json()
+                reply = result["choices"][0]["message"]["content"]
                 link1.append(reply)
-            except Exception as e:
-                if "model" in str(e).lower():
+            except req.exceptions.HTTPError as e:
+                if e.response and e.response.status_code == 404:
                     raise ValueError(f"Invalid OpenAI model '{user_model}': {e}")
                 else:
-                    print("An error occurred: {e}")
-                    link1.append("Error processing input: {e}")
+                    print(f"An error occurred: {e}")
+                    link1.append(f"Error processing input: {e}")
+            except Exception as e:
+                print(f"An error occurred: {e}")
+                link1.append(f"Error processing input: {e}")
 
         elif model_source == "perplexity":
-            from openai import OpenAI
-            client = OpenAI(api_key=api_key, base_url="https://api.perplexity.ai")
+            import requests as req
+            endpoint = "https://api.perplexity.ai/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            }
+            payload = {
+                "model": user_model,
+                "messages": [{'role': 'user', 'content': prompt}],
+            }
+            if creativity is not None:
+                payload["temperature"] = creativity
             try:
-                response_obj = client.chat.completions.create(
-                    model=user_model,
-                    messages=[{'role': 'user', 'content': prompt}],
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                reply = response_obj.choices[0].message.content
+                response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+                response.raise_for_status()
+                result = response.json()
+                reply = result["choices"][0]["message"]["content"]
                 link1.append(reply)
-            except Exception as e:
-                if "model" in str(e).lower():
-                    raise ValueError(f"Invalid OpenAI model '{user_model}': {e}")
+            except req.exceptions.HTTPError as e:
+                if e.response and e.response.status_code == 404:
+                    raise ValueError(f"Invalid Perplexity model '{user_model}': {e}")
                 else:
-                    print("An error occurred: {e}")
-                    link1.append("Error processing input: {e}")
+                    print(f"An error occurred: {e}")
+                    link1.append(f"Error processing input: {e}")
+            except Exception as e:
+                print(f"An error occurred: {e}")
+                link1.append(f"Error processing input: {e}")
 
         elif model_source == "anthropic":
-            import anthropic
-            client = anthropic.Anthropic(api_key=api_key)
+            import requests as req
+            endpoint = "https://api.anthropic.com/v1/messages"
+            headers = {
+                "Content-Type": "application/json",
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01"
+            }
+            payload = {
+                "model": user_model,
+                "max_tokens": 1024,
+                "messages": [{"role": "user", "content": prompt}],
+            }
+            if creativity is not None:
+                payload["temperature"] = creativity
             try:
-                message = client.messages.create(
-                    model=user_model,
-                    max_tokens=1024,
-                    messages=[{"role": "user", "content": prompt}],
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                reply = message.content[0].text  # Anthropic returns content as list
-                link1.append(reply)
-            except Exception as e:
-                if "model" in str(e).lower():
-                    raise ValueError(f"Invalid OpenAI model '{user_model}': {e}")
+                response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+                response.raise_for_status()
+                result = response.json()
+                content = result.get("content", [])
+                if content and content[0].get("type") == "text":
+                    reply = content[0].get("text", "")
+                    link1.append(reply)
                 else:
-                    print("An error occurred: {e}")
-                    link1.append("Error processing input: {e}")
+                    link1.append("Error processing input: No text content in response")
+            except req.exceptions.HTTPError as e:
+                if e.response is not None and e.response.status_code == 404:
+                    raise ValueError(f"Invalid Anthropic model '{user_model}': {e}")
+                else:
+                    print(f"An error occurred: {e}")
+                    link1.append(f"Error processing input: {e}")
+            except Exception as e:
+                print(f"An error occurred: {e}")
+                link1.append(f"Error processing input: {e}")
 
         elif model_source == "mistral":
-            from mistralai import Mistral
-            client = Mistral(api_key=api_key)
+            import requests as req
+            endpoint = "https://api.mistral.ai/v1/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            }
+            payload = {
+                "model": user_model,
+                "messages": [{'role': 'user', 'content': prompt}],
+            }
+            if creativity is not None:
+                payload["temperature"] = creativity
             try:
-                response = client.chat.complete(
-                    model=user_model,
-                    messages=[
-                    {'role': 'user', 'content': prompt}
-                ],
-                **({"temperature": creativity} if creativity is not None else {})
-                )
-                reply = response.choices[0].message.content
+                response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+                response.raise_for_status()
+                result = response.json()
+                reply = result["choices"][0]["message"]["content"]
                 link1.append(reply)
-            except Exception as e:
-                if "model" in str(e).lower():
-                    raise ValueError(f"Invalid OpenAI model '{user_model}': {e}")
+            except req.exceptions.HTTPError as e:
+                if e.response and e.response.status_code == 404:
+                    raise ValueError(f"Invalid Mistral model '{user_model}': {e}")
                 else:
-                    print("An error occurred: {e}")
-                    link1.append("Error processing input: {e}")
+                    print(f"An error occurred: {e}")
+                    link1.append(f"Error processing input: {e}")
+            except Exception as e:
+                print(f"An error occurred: {e}")
+                link1.append(f"Error processing input: {e}")
 
         elif  valid_image == False:
             print("Skipped NaN input or invalid path")
             reply = None
-            link1.append("Error processing input: {e}")
+            link1.append(f"Error processing input: invalid image")
         else:
             raise ValueError("Unknown source! Choose from OpenAI, Anthropic, Perplexity, or Mistral")
             # in situation that no JSON is found
@@ -1414,26 +1543,23 @@ def explore_image_categories(
     # RNG for reproducible sampling
     rng = np.random.default_rng(random_state)
 
-    # Initialize client based on model source
-    if model_source in ["openai", "huggingface", "xai"]:
-        from openai import OpenAI
-        base_url = (
-            "https://router.huggingface.co/v1" if model_source == "huggingface"
-            else "https://api.x.ai/v1" if model_source == "xai"
-            else None
-        )
-        client = OpenAI(api_key=api_key, base_url=base_url)
-    elif model_source == "anthropic":
-        import anthropic
-        client = anthropic.Anthropic(api_key=api_key)
-    elif model_source == "google":
-        import requests
-        client = None
-    elif model_source == "mistral":
-        from mistralai import Mistral
-        client = Mistral(api_key=api_key)
-    else:
+    # Validate model_source (clients initialized per-call using requests)
+    import requests as req
+    if model_source not in ["openai", "huggingface", "huggingface-together", "xai", "anthropic", "google", "mistral"]:
         raise ValueError(f"Unsupported model_source: {model_source}")
+
+    # Determine base URL for OpenAI-compatible providers
+    if model_source == "huggingface":
+        from catllm.text_functions import _detect_huggingface_endpoint
+        openai_base_url = _detect_huggingface_endpoint(api_key, user_model)
+    elif model_source == "huggingface-together":
+        openai_base_url = "https://router.huggingface.co/together/v1"
+    elif model_source == "xai":
+        openai_base_url = "https://api.x.ai/v1"
+    elif model_source == "openai":
+        openai_base_url = "https://api.openai.com/v1"
+    else:
+        openai_base_url = None  # Not an OpenAI-compatible provider
 
     def make_image_prompt() -> str:
         """Build prompt for image mode - direct category extraction."""
@@ -1471,7 +1597,12 @@ def explore_image_categories(
             return None
 
         try:
-            if model_source in ["openai", "huggingface", "xai"]:
+            if model_source in ["openai", "huggingface", "huggingface-together", "xai"]:
+                endpoint = f"{openai_base_url}/chat/completions"
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}"
+                }
                 messages = [{
                     "role": "user",
                     "content": [
@@ -1479,26 +1610,40 @@ def explore_image_categories(
                         {"type": "image_url", "image_url": {"url": f"data:image/{ext};base64,{encoded}"}}
                     ]
                 }]
-                resp = client.chat.completions.create(
-                    model=user_model,
-                    messages=messages,
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                return resp.choices[0].message.content
+                payload = {"model": user_model, "messages": messages}
+                if creativity is not None:
+                    payload["temperature"] = creativity
+                response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+                response.raise_for_status()
+                result = response.json()
+                return result["choices"][0]["message"]["content"]
 
             elif model_source == "anthropic":
+                endpoint = "https://api.anthropic.com/v1/messages"
+                headers = {
+                    "Content-Type": "application/json",
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01"
+                }
                 media_type = f"image/{ext}" if ext else "image/jpeg"
                 content = [
                     {"type": "text", "text": prompt_text},
                     {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": encoded}}
                 ]
-                resp = client.messages.create(
-                    model=user_model,
-                    max_tokens=2048,
-                    messages=[{"role": "user", "content": content}],
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                return resp.content[0].text
+                payload = {
+                    "model": user_model,
+                    "max_tokens": 2048,
+                    "messages": [{"role": "user", "content": content}],
+                }
+                if creativity is not None:
+                    payload["temperature"] = creativity
+                response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+                response.raise_for_status()
+                result = response.json()
+                resp_content = result.get("content", [])
+                if resp_content and resp_content[0].get("type") == "text":
+                    return resp_content[0].get("text", "")
+                return None
 
             elif model_source == "google":
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
@@ -1512,7 +1657,7 @@ def explore_image_categories(
                     "contents": [{"parts": parts}],
                     "generationConfig": {**({"temperature": creativity} if creativity is not None else {})}
                 }
-                response = requests.post(url, headers=headers, json=payload)
+                response = req.post(url, headers=headers, json=payload, timeout=120)
                 response.raise_for_status()
                 result = response.json()
                 if "candidates" in result and result["candidates"]:
@@ -1520,6 +1665,11 @@ def explore_image_categories(
                 return None
 
             elif model_source == "mistral":
+                endpoint = "https://api.mistral.ai/v1/chat/completions"
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}"
+                }
                 messages = [{
                     "role": "user",
                     "content": [
@@ -1527,12 +1677,13 @@ def explore_image_categories(
                         {"type": "image_url", "image_url": {"url": f"data:image/{ext};base64,{encoded}"}}
                     ]
                 }]
-                resp = client.chat.complete(
-                    model=user_model,
-                    messages=messages,
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                return resp.choices[0].message.content
+                payload = {"model": user_model, "messages": messages}
+                if creativity is not None:
+                    payload["temperature"] = creativity
+                response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+                response.raise_for_status()
+                result = response.json()
+                return result["choices"][0]["message"]["content"]
 
         except Exception as e:
             print(f"Error processing image {img_path}: {e}")
@@ -1546,7 +1697,12 @@ def explore_image_categories(
         prompt_text = make_describe_prompt()
 
         try:
-            if model_source in ["openai", "huggingface", "xai"]:
+            if model_source in ["openai", "huggingface", "huggingface-together", "xai"]:
+                endpoint = f"{openai_base_url}/chat/completions"
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}"
+                }
                 messages = [{
                     "role": "user",
                     "content": [
@@ -1554,26 +1710,40 @@ def explore_image_categories(
                         {"type": "image_url", "image_url": {"url": f"data:image/{ext};base64,{encoded}"}}
                     ]
                 }]
-                resp = client.chat.completions.create(
-                    model=user_model,
-                    messages=messages,
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                return resp.choices[0].message.content
+                payload = {"model": user_model, "messages": messages}
+                if creativity is not None:
+                    payload["temperature"] = creativity
+                response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+                response.raise_for_status()
+                result = response.json()
+                return result["choices"][0]["message"]["content"]
 
             elif model_source == "anthropic":
+                endpoint = "https://api.anthropic.com/v1/messages"
+                headers = {
+                    "Content-Type": "application/json",
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01"
+                }
                 media_type = f"image/{ext}" if ext else "image/jpeg"
                 content = [
                     {"type": "text", "text": prompt_text},
                     {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": encoded}}
                 ]
-                resp = client.messages.create(
-                    model=user_model,
-                    max_tokens=4096,
-                    messages=[{"role": "user", "content": content}],
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                return resp.content[0].text
+                payload = {
+                    "model": user_model,
+                    "max_tokens": 4096,
+                    "messages": [{"role": "user", "content": content}],
+                }
+                if creativity is not None:
+                    payload["temperature"] = creativity
+                response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+                response.raise_for_status()
+                result = response.json()
+                resp_content = result.get("content", [])
+                if resp_content and resp_content[0].get("type") == "text":
+                    return resp_content[0].get("text", "")
+                return None
 
             elif model_source == "google":
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
@@ -1587,7 +1757,7 @@ def explore_image_categories(
                     "contents": [{"parts": parts}],
                     "generationConfig": {**({"temperature": creativity} if creativity is not None else {})}
                 }
-                response = requests.post(url, headers=headers, json=payload)
+                response = req.post(url, headers=headers, json=payload, timeout=120)
                 response.raise_for_status()
                 result = response.json()
                 if "candidates" in result and result["candidates"]:
@@ -1595,6 +1765,11 @@ def explore_image_categories(
                 return None
 
             elif model_source == "mistral":
+                endpoint = "https://api.mistral.ai/v1/chat/completions"
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}"
+                }
                 messages = [{
                     "role": "user",
                     "content": [
@@ -1602,12 +1777,13 @@ def explore_image_categories(
                         {"type": "image_url", "image_url": {"url": f"data:image/{ext};base64,{encoded}"}}
                     ]
                 }]
-                resp = client.chat.complete(
-                    model=user_model,
-                    messages=messages,
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                return resp.choices[0].message.content
+                payload = {"model": user_model, "messages": messages}
+                if creativity is not None:
+                    payload["temperature"] = creativity
+                response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+                response.raise_for_status()
+                result = response.json()
+                return result["choices"][0]["message"]["content"]
 
         except Exception as e:
             print(f"Error describing image {img_path}: {e}")
@@ -1616,22 +1792,41 @@ def explore_image_categories(
     def call_model_with_text(prompt_text):
         """Send text to the model for category extraction."""
         try:
-            if model_source in ["openai", "huggingface", "xai"]:
-                resp = client.chat.completions.create(
-                    model=user_model,
-                    messages=[{"role": "user", "content": prompt_text}],
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                return resp.choices[0].message.content
+            if model_source in ["openai", "huggingface", "huggingface-together", "xai"]:
+                endpoint = f"{openai_base_url}/chat/completions"
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}"
+                }
+                payload = {"model": user_model, "messages": [{"role": "user", "content": prompt_text}]}
+                if creativity is not None:
+                    payload["temperature"] = creativity
+                response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+                response.raise_for_status()
+                result = response.json()
+                return result["choices"][0]["message"]["content"]
 
             elif model_source == "anthropic":
-                resp = client.messages.create(
-                    model=user_model,
-                    max_tokens=2048,
-                    messages=[{"role": "user", "content": prompt_text}],
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                return resp.content[0].text
+                endpoint = "https://api.anthropic.com/v1/messages"
+                headers = {
+                    "Content-Type": "application/json",
+                    "x-api-key": api_key,
+                    "anthropic-version": "2023-06-01"
+                }
+                payload = {
+                    "model": user_model,
+                    "max_tokens": 2048,
+                    "messages": [{"role": "user", "content": prompt_text}],
+                }
+                if creativity is not None:
+                    payload["temperature"] = creativity
+                response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+                response.raise_for_status()
+                result = response.json()
+                resp_content = result.get("content", [])
+                if resp_content and resp_content[0].get("type") == "text":
+                    return resp_content[0].get("text", "")
+                return None
 
             elif model_source == "google":
                 url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
@@ -1640,7 +1835,7 @@ def explore_image_categories(
                     "contents": [{"parts": [{"text": prompt_text}]}],
                     "generationConfig": {**({"temperature": creativity} if creativity is not None else {})}
                 }
-                response = requests.post(url, headers=headers, json=payload)
+                response = req.post(url, headers=headers, json=payload, timeout=120)
                 response.raise_for_status()
                 result = response.json()
                 if "candidates" in result and result["candidates"]:
@@ -1648,12 +1843,18 @@ def explore_image_categories(
                 return None
 
             elif model_source == "mistral":
-                resp = client.chat.complete(
-                    model=user_model,
-                    messages=[{"role": "user", "content": prompt_text}],
-                    **({"temperature": creativity} if creativity is not None else {})
-                )
-                return resp.choices[0].message.content
+                endpoint = "https://api.mistral.ai/v1/chat/completions"
+                headers = {
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {api_key}"
+                }
+                payload = {"model": user_model, "messages": [{"role": "user", "content": prompt_text}]}
+                if creativity is not None:
+                    payload["temperature"] = creativity
+                response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+                response.raise_for_status()
+                result = response.json()
+                return result["choices"][0]["message"]["content"]
 
         except Exception as e:
             print(f"Error in text mode: {e}")
@@ -1761,40 +1962,65 @@ Output:
 """.strip()
 
     try:
-        if model_source in ["openai", "huggingface", "xai"]:
-            resp2 = client.chat.completions.create(
-                model=user_model,
-                messages=[{"role": "user", "content": second_prompt}],
-                **({"temperature": creativity} if creativity is not None else {})
-            )
-            top_categories_text = resp2.choices[0].message.content
+        if model_source in ["openai", "huggingface", "huggingface-together", "xai"]:
+            endpoint = f"{openai_base_url}/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            }
+            payload = {"model": user_model, "messages": [{"role": "user", "content": second_prompt}]}
+            if creativity is not None:
+                payload["temperature"] = creativity
+            response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+            response.raise_for_status()
+            result = response.json()
+            top_categories_text = result["choices"][0]["message"]["content"]
         elif model_source == "anthropic":
-            resp2 = client.messages.create(
-                model=user_model,
-                max_tokens=2048,
-                messages=[{"role": "user", "content": second_prompt}],
-                **({"temperature": creativity} if creativity is not None else {})
-            )
-            top_categories_text = resp2.content[0].text
+            endpoint = "https://api.anthropic.com/v1/messages"
+            headers = {
+                "Content-Type": "application/json",
+                "x-api-key": api_key,
+                "anthropic-version": "2023-06-01"
+            }
+            payload = {
+                "model": user_model,
+                "max_tokens": 2048,
+                "messages": [{"role": "user", "content": second_prompt}],
+            }
+            if creativity is not None:
+                payload["temperature"] = creativity
+            response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+            response.raise_for_status()
+            result = response.json()
+            resp_content = result.get("content", [])
+            if resp_content and resp_content[0].get("type") == "text":
+                top_categories_text = resp_content[0].get("text", "")
+            else:
+                top_categories_text = ""
         elif model_source == "google":
-            import requests
             url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
             headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
             payload = {
                 "contents": [{"parts": [{"text": second_prompt}]}],
                 "generationConfig": {**({"temperature": creativity} if creativity is not None else {})}
             }
-            response = requests.post(url, headers=headers, json=payload)
+            response = req.post(url, headers=headers, json=payload, timeout=120)
             response.raise_for_status()
             res = response.json()
             top_categories_text = res["candidates"][0]["content"]["parts"][0]["text"]
         elif model_source == "mistral":
-            resp2 = client.chat.complete(
-                model=user_model,
-                messages=[{"role": "user", "content": second_prompt}],
-                **({"temperature": creativity} if creativity is not None else {})
-            )
-            top_categories_text = resp2.choices[0].message.content
+            endpoint = "https://api.mistral.ai/v1/chat/completions"
+            headers = {
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {api_key}"
+            }
+            payload = {"model": user_model, "messages": [{"role": "user", "content": second_prompt}]}
+            if creativity is not None:
+                payload["temperature"] = creativity
+            response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+            response.raise_for_status()
+            result = response.json()
+            top_categories_text = result["choices"][0]["message"]["content"]
     except Exception as e:
         print(f"Error in second-pass merge: {e}")
         top_categories_text = ""

@@ -1,11 +1,11 @@
 #!/usr/bin/env python
 """
-Test script for explore_corpus function across all supported models.
+Test script for catllm.extract() function across all supported models.
 
-This script tests the explore_corpus function with the new 'focus' parameter
+This script tests the extract function with the 'focus' parameter
 across all LLM providers supported by CatLLM.
 
-Run with: python examples/test_explore_corpus.py
+Run with: python examples/test_explore_corpus.py --model gemini-2.5-flash --provider google
 """
 
 import sys
@@ -26,7 +26,8 @@ import time
 import json
 from datetime import datetime
 from dotenv import load_dotenv, find_dotenv
-from catllm.text_functions import explore_corpus, detect_provider
+from catllm import extract
+from catllm.text_functions import detect_provider
 import catllm
 
 # Load API keys from .env file
@@ -68,7 +69,7 @@ os.makedirs(output_dir, exist_ok=True)
 TEST_MODELS = [
     ("gpt-4o-mini", "openai"),
     ("claude-3-haiku-20240307", "anthropic"),
-    ("gemini-2.0-flash", "google"),
+    ("gemini-2.5-flash", "google"),
     ("mistral-small-latest", "mistral"),
     ("grok-3-mini-fast", "xai"),
     ("meta-llama/Llama-3.3-70B-Instruct", "huggingface"),
@@ -80,23 +81,13 @@ TEST_MODELS = [
 
 TEST_SURVEY_QUESTION = "Why did you move to your current residence?"
 
-TEST_RESPONSES = [
-    "I got a new job in the city and needed to be closer to work",
-    "My rent was getting too expensive so I had to find somewhere cheaper",
-    "Wanted to be closer to my aging parents who need help",
-    "Got married and we needed a bigger place together",
-    "The neighborhood was getting unsafe so we moved for safety",
-    "Enrolled in graduate school and moved to be near campus",
-    "Divorced and had to find my own place",
-    "Company relocated me to a new office",
-    "Bought my first home after saving for years",
-    "Needed more space after having a baby",
-    "Lost my job and couldn't afford the rent anymore",
-    "Retired and wanted to live somewhere warmer",
-    "Moved in with my partner to save money",
-    "The commute was killing me so I moved closer to work",
-    "Escaped a bad relationship and needed a fresh start",
-]
+# Load test responses from HuggingFace app example data
+_example_data_path = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+    'hf_space', 'example_data.csv'
+)
+_example_df = pd.read_csv(_example_data_path)
+TEST_RESPONSES = _example_df['Response'].tolist()
 
 TEST_FOCUS = "decisions related to moving and relocation"
 
@@ -118,14 +109,14 @@ def get_api_key_for_provider(provider: str) -> str:
     return key_map.get(provider, "")
 
 
-def test_explore_corpus(
+def test_extract(
     model: str,
     provider: str,
     api_key: str,
     use_focus: bool = True,
 ) -> dict:
     """
-    Test explore_corpus with a single model.
+    Test extract with a single model.
 
     Returns:
         dict with 'success', 'time', 'error', 'categories', 'num_categories'
@@ -148,12 +139,13 @@ def test_explore_corpus(
     try:
         start_time = time.time()
 
-        df = explore_corpus(
-            survey_question=TEST_SURVEY_QUESTION,
-            survey_input=TEST_RESPONSES,
+        extraction_result = extract(
+            input_data=TEST_RESPONSES,
             api_key=api_key,
-            model=model,
-            provider=provider,
+            input_type="text",
+            description=TEST_SURVEY_QUESTION,
+            user_model=model,
+            model_source=provider,
             specificity="broad",
             categories_per_chunk=5,
             divisions=2,
@@ -166,12 +158,17 @@ def test_explore_corpus(
         result["time"] = elapsed
 
         # Check if extraction was successful
-        if df is not None and len(df) > 0:
-            result["success"] = True
-            result["categories"] = df['Category'].tolist()
-            result["num_categories"] = len(df)
+        # extract() returns a dict with 'counts_df', 'top_categories', 'raw_top_text'
+        if extraction_result is not None and 'counts_df' in extraction_result:
+            df = extraction_result['counts_df']
+            if df is not None and len(df) > 0:
+                result["success"] = True
+                result["categories"] = df['Category'].tolist()
+                result["num_categories"] = len(df)
+            else:
+                result["error"] = "Empty result DataFrame"
         else:
-            result["error"] = "Empty result DataFrame"
+            result["error"] = "Invalid extraction result"
 
     except Exception as e:
         result["error"] = str(e)
@@ -249,12 +246,12 @@ def save_results(results: list, timestamp: str):
     df = pd.DataFrame(rows)
 
     # Save CSV
-    csv_path = os.path.join(output_dir, f"explore_corpus_test_{timestamp}.csv")
+    csv_path = os.path.join(output_dir, f"extract_test_{timestamp}.csv")
     df.to_csv(csv_path, index=False)
     print(f"\nResults saved to: {csv_path}")
 
     # Save detailed JSON
-    json_path = os.path.join(output_dir, f"explore_corpus_test_{timestamp}.json")
+    json_path = os.path.join(output_dir, f"extract_test_{timestamp}.json")
     with open(json_path, 'w') as f:
         json.dump({
             "timestamp": datetime.now().isoformat(),
@@ -272,7 +269,7 @@ def save_results(results: list, timestamp: str):
 # =============================================================================
 
 def main():
-    parser = argparse.ArgumentParser(description="Test explore_corpus function across all providers")
+    parser = argparse.ArgumentParser(description="Test catllm.extract() function across all providers")
     parser.add_argument("--model", type=str, help="Test a specific model only")
     parser.add_argument("--provider", type=str, help="Test a specific provider only")
     parser.add_argument("--no-focus", action="store_true", help="Test without the focus parameter")
@@ -318,7 +315,7 @@ def main():
     timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
     print(f"\n{'#'*70}")
-    print(f"# CatLLM explore_corpus Test Suite")
+    print(f"# CatLLM extract() Test Suite")
     print(f"# {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"# Testing {len(models_to_test)} model(s)")
     print(f"# Focus modes: {focus_modes}")
@@ -344,7 +341,7 @@ def main():
             focus_str = "with focus" if use_focus else "without focus"
             print(f"\n>>> Testing {model} ({provider}) {focus_str}...")
 
-            result = test_explore_corpus(model, provider, api_key, use_focus=use_focus)
+            result = test_extract(model, provider, api_key, use_focus=use_focus)
             results.append(result)
 
             print_result(result, test_num, total_tests)

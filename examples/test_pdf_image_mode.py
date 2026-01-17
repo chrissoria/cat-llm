@@ -1,8 +1,7 @@
 #!/usr/bin/env python
 """
-Test script to verify all LLM providers work with the refactored code.
-
-Tests the UnifiedLLMClient with each supported provider.
+Test explore_pdf_categories with mode='image' to verify native PDF support for
+Anthropic and Google, and image conversion for other providers.
 """
 
 import sys
@@ -34,7 +33,7 @@ api_keys = {
 }
 
 print("=" * 70)
-print("All Providers Test - UnifiedLLMClient")
+print("PDF Functions Test - explore_pdf_categories (IMAGE MODE)")
 print("=" * 70)
 print()
 
@@ -45,71 +44,66 @@ for provider, key in api_keys.items():
     print(f"  {provider}: {status}")
 print()
 
-# Import the client
-from catllm.text_functions import UnifiedLLMClient
+# Test PDF file
+test_pdf = "/Users/chrissoria/Documents/Research/cat-llm/tests/title_page.pdf"
+print(f"Test PDF: {test_pdf}")
+print()
 
-# Test configurations for each provider
-# Using small/fast models to minimize cost and time
+# Import the function
+from catllm.pdf_functions import explore_pdf_categories
+
+# Vision-capable models for image mode
+# Anthropic and Google will use native PDF, others convert to image
 test_configs = [
     {
-        "name": "OpenAI",
+        "name": "OpenAI (converts to image)",
         "provider": "openai",
         "model": "gpt-4o-mini",
         "api_key": api_keys["openai"],
     },
     {
-        "name": "Anthropic",
+        "name": "Anthropic (converts to image - Haiku)",
         "provider": "anthropic",
         "model": "claude-3-haiku-20240307",
         "api_key": api_keys["anthropic"],
     },
     {
-        "name": "Google",
+        "name": "Google (native PDF)",
         "provider": "google",
         "model": "gemini-2.0-flash",
         "api_key": api_keys["google"],
     },
     {
-        "name": "Mistral",
+        "name": "Mistral (converts to image)",
         "provider": "mistral",
-        "model": "mistral-small-latest",
+        "model": "pixtral-12b-2409",  # Vision model
         "api_key": api_keys["mistral"],
     },
     {
-        "name": "xAI",
+        "name": "xAI (converts to image)",
         "provider": "xai",
-        "model": "grok-3-mini-fast",
+        "model": "grok-2-vision-1212",  # Vision model
         "api_key": api_keys["xai"],
     },
     {
-        "name": "Perplexity",
+        "name": "HuggingFace Qwen2.5-VL (generic router)",
+        "provider": "huggingface",
+        "model": "Qwen/Qwen2.5-VL-72B-Instruct",  # Vision model (note: 2.5, not 2)
+        "api_key": api_keys["huggingface"],
+    },
+    {
+        "name": "HuggingFace Llama 4 (converts to image)",
+        "provider": "huggingface",
+        "model": "meta-llama/Llama-4-Scout-17B-16E-Instruct",  # Vision model
+        "api_key": api_keys["huggingface"],
+    },
+    {
+        "name": "Perplexity (text-only, no vision)",
         "provider": "perplexity",
-        "model": "sonar",
+        "model": "sonar",  # Note: Perplexity doesn't have vision models
         "api_key": api_keys["perplexity"],
+        "skip_reason": "Perplexity API doesn't support vision/image input",
     },
-    {
-        "name": "HuggingFace (Qwen - generic endpoint)",
-        "provider": "huggingface",
-        "model": "Qwen/Qwen2.5-72B-Instruct",
-        "api_key": api_keys["huggingface"],
-    },
-    {
-        "name": "HuggingFace (Llama 4 - together endpoint, auto-detect)",
-        "provider": "huggingface",
-        "model": "meta-llama/Llama-4-Scout-17B-16E-Instruct",
-        "api_key": api_keys["huggingface"],
-    },
-    {
-        "name": "HuggingFace-Together (explicit)",
-        "provider": "huggingface-together",
-        "model": "meta-llama/Llama-4-Scout-17B-16E-Instruct",
-        "api_key": api_keys["huggingface"],
-    },
-]
-
-# Simple test message
-test_messages = [
-    {"role": "user", "content": "Reply with exactly one word: hello"}
 ]
 
 results = []
@@ -133,36 +127,40 @@ for i, config in enumerate(test_configs, 1):
         })
         continue
 
-    print(f"  Testing...")
+    # Skip providers that don't support vision/image input
+    if config.get('skip_reason'):
+        print(f"  Result: SKIPPED - {config['skip_reason']}")
+        results.append({
+            "name": config['name'],
+            "provider": config['provider'],
+            "model": config['model'],
+            "success": None,
+            "skipped": True,
+            "error": config['skip_reason'],
+        })
+        continue
+
+    print(f"  Testing (image mode)...")
 
     try:
-        client = UnifiedLLMClient(
-            provider=config['provider'],
+        result = explore_pdf_categories(
+            pdf_input=test_pdf,
             api_key=config['api_key'],
-            model=config['model']
+            pdf_description="academic paper title page",
+            max_categories=5,
+            categories_per_chunk=5,
+            divisions=1,
+            user_model=config['model'],
+            creativity=0.3,
+            specificity="broad",
+            mode="image",  # KEY: Testing image mode
+            model_source=config['provider'],
+            iterations=1
         )
 
-        response, error = client.complete(
-            messages=test_messages,
-            creativity=0.1,
-            force_json=False,  # Simple text response
-        )
-
-        if error:
-            print(f"  Result: FAIL - {error}")
-            results.append({
-                "name": config['name'],
-                "provider": config['provider'],
-                "model": config['model'],
-                "success": False,
-                "skipped": False,
-                "error": error,
-            })
-        else:
-            # Truncate response for display
-            display_response = response[:50] + "..." if len(response) > 50 else response
-            display_response = display_response.replace('\n', ' ')
-            print(f"  Response: {display_response}")
+        if result and 'top_categories' in result and result['top_categories']:
+            categories = result['top_categories'][:3]
+            print(f"  Categories found: {categories}")
             print(f"  Result: PASS")
             results.append({
                 "name": config['name'],
@@ -170,18 +168,28 @@ for i, config in enumerate(test_configs, 1):
                 "model": config['model'],
                 "success": True,
                 "skipped": False,
-                "response": response,
+                "categories": categories,
+            })
+        else:
+            print(f"  Result: FAIL - No categories extracted")
+            results.append({
+                "name": config['name'],
+                "provider": config['provider'],
+                "model": config['model'],
+                "success": False,
+                "skipped": False,
+                "error": "No categories extracted",
             })
 
     except Exception as e:
-        print(f"  Result: ERROR - {str(e)}")
+        print(f"  Result: ERROR - {str(e)[:100]}")
         results.append({
             "name": config['name'],
             "provider": config['provider'],
             "model": config['model'],
             "success": False,
             "skipped": False,
-            "error": str(e),
+            "error": str(e)[:200],
         })
 
 # Summary

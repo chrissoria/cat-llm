@@ -1,8 +1,8 @@
 #!/usr/bin/env python
 """
-Test script to verify all LLM providers work with the refactored code.
+Test script to verify PDF functions work with all LLM providers.
 
-Tests the UnifiedLLMClient with each supported provider.
+Tests the explore_pdf_categories function with each supported provider using text mode.
 """
 
 import sys
@@ -34,7 +34,7 @@ api_keys = {
 }
 
 print("=" * 70)
-print("All Providers Test - UnifiedLLMClient")
+print("PDF Functions Test - explore_pdf_categories")
 print("=" * 70)
 print()
 
@@ -45,11 +45,16 @@ for provider, key in api_keys.items():
     print(f"  {provider}: {status}")
 print()
 
-# Import the client
-from catllm.text_functions import UnifiedLLMClient
+# Test PDF file
+test_pdf = "/Users/chrissoria/Documents/Research/cat-llm/tests/title_page.pdf"
+print(f"Test PDF: {test_pdf}")
+print()
+
+# Import the function
+from catllm.pdf_functions import explore_pdf_categories
 
 # Test configurations for each provider
-# Using small/fast models to minimize cost and time
+# Using small/fast models and text mode to minimize cost and time
 test_configs = [
     {
         "name": "OpenAI",
@@ -94,7 +99,7 @@ test_configs = [
         "api_key": api_keys["huggingface"],
     },
     {
-        "name": "HuggingFace (Llama 4 - together endpoint, auto-detect)",
+        "name": "HuggingFace (Llama 4 - together endpoint)",
         "provider": "huggingface",
         "model": "meta-llama/Llama-4-Scout-17B-16E-Instruct",
         "api_key": api_keys["huggingface"],
@@ -105,11 +110,6 @@ test_configs = [
         "model": "meta-llama/Llama-4-Scout-17B-16E-Instruct",
         "api_key": api_keys["huggingface"],
     },
-]
-
-# Simple test message
-test_messages = [
-    {"role": "user", "content": "Reply with exactly one word: hello"}
 ]
 
 results = []
@@ -133,36 +133,27 @@ for i, config in enumerate(test_configs, 1):
         })
         continue
 
-    print(f"  Testing...")
+    print(f"  Testing (text mode)...")
 
     try:
-        client = UnifiedLLMClient(
-            provider=config['provider'],
+        result = explore_pdf_categories(
+            pdf_input=test_pdf,
             api_key=config['api_key'],
-            model=config['model']
+            pdf_description="academic paper title page",
+            max_categories=5,
+            categories_per_chunk=5,
+            divisions=1,
+            user_model=config['model'],
+            creativity=0.3,
+            specificity="broad",
+            mode="text",
+            model_source=config['provider'],
+            iterations=1
         )
 
-        response, error = client.complete(
-            messages=test_messages,
-            creativity=0.1,
-            force_json=False,  # Simple text response
-        )
-
-        if error:
-            print(f"  Result: FAIL - {error}")
-            results.append({
-                "name": config['name'],
-                "provider": config['provider'],
-                "model": config['model'],
-                "success": False,
-                "skipped": False,
-                "error": error,
-            })
-        else:
-            # Truncate response for display
-            display_response = response[:50] + "..." if len(response) > 50 else response
-            display_response = display_response.replace('\n', ' ')
-            print(f"  Response: {display_response}")
+        if result and 'top_categories' in result and result['top_categories']:
+            categories = result['top_categories'][:3]
+            print(f"  Categories found: {categories}")
             print(f"  Result: PASS")
             results.append({
                 "name": config['name'],
@@ -170,18 +161,28 @@ for i, config in enumerate(test_configs, 1):
                 "model": config['model'],
                 "success": True,
                 "skipped": False,
-                "response": response,
+                "categories": categories,
+            })
+        else:
+            print(f"  Result: FAIL - No categories extracted")
+            results.append({
+                "name": config['name'],
+                "provider": config['provider'],
+                "model": config['model'],
+                "success": False,
+                "skipped": False,
+                "error": "No categories extracted",
             })
 
     except Exception as e:
-        print(f"  Result: ERROR - {str(e)}")
+        print(f"  Result: ERROR - {str(e)[:100]}")
         results.append({
             "name": config['name'],
             "provider": config['provider'],
             "model": config['model'],
             "success": False,
             "skipped": False,
-            "error": str(e),
+            "error": str(e)[:200],
         })
 
 # Summary
