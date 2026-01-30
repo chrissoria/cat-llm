@@ -1465,7 +1465,8 @@ def explore_image_categories(
     filename=None,
     model_source="auto",
     iterations=3,
-    random_state=None
+    random_state=None,
+    progress_callback=None,
 ):
     """
     Explore and extract common categories from a collection of images.
@@ -1494,6 +1495,8 @@ def explore_image_categories(
         model_source: "auto", "openai", "anthropic", "google", "mistral"
         iterations: Number of passes over the data
         random_state: Random seed for reproducibility
+        progress_callback: Optional callback function for progress updates.
+            Called as progress_callback(current_step, total_steps, step_label).
 
     Returns:
         dict with keys:
@@ -1865,6 +1868,10 @@ def explore_image_categories(
 
     all_items = []
 
+    # Calculate total steps for progress tracking: (iterations * divisions) + 1 for final merge
+    total_steps = (iterations * divisions) + 1
+    current_step = 0
+
     for pass_idx in range(iterations):
         # Sample images for this pass
         image_indices = list(range(n))
@@ -1912,6 +1919,11 @@ def explore_image_categories(
                         if s:
                             items.append(s)
                 all_items.extend(items)
+
+            # Progress callback
+            current_step += 1
+            if progress_callback:
+                progress_callback(current_step, total_steps, f"Pass {pass_idx+1}/{iterations}, chunk {chunk_idx+1}/{len(chunks)}")
 
     # Normalize and count
     def normalize_category(cat):
@@ -2024,6 +2036,10 @@ Output:
     except Exception as e:
         print(f"Error in second-pass merge: {e}")
         top_categories_text = ""
+
+    # Final progress callback for the merge step
+    if progress_callback:
+        progress_callback(total_steps, total_steps, "Merging categories")
 
     # Parse final list
     final = []

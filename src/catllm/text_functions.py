@@ -1341,6 +1341,7 @@ def explore_common_categories(
     iterations: int = 5,
     random_state: int = None,
     focus: str = None,
+    progress_callback: callable = None,
     # Legacy parameter names for backward compatibility
     user_model: str = None,
     model_source: str = None,
@@ -1368,6 +1369,8 @@ def explore_common_categories(
         focus: Optional focus instruction for category extraction (e.g., "decisions to move",
                "emotional responses", "financial considerations"). When provided, the model
                will prioritize extracting categories related to this focus.
+        progress_callback: Optional callback function for progress updates.
+            Called as progress_callback(current_step, total_steps, step_label).
 
     Returns:
         dict with 'counts_df', 'top_categories', and 'raw_top_text'
@@ -1446,6 +1449,10 @@ def explore_common_categories(
 
     all_items = []
 
+    # Calculate total steps for progress tracking: (iterations * divisions) + 1 for final merge
+    total_steps = (iterations * divisions) + 1
+    current_step = 0
+
     for pass_idx in range(iterations):
         random_chunks = []
         for _ in range(divisions):
@@ -1485,6 +1492,11 @@ def explore_common_categories(
                         items.append(s)
 
             all_items.extend(items)
+
+            # Progress callback
+            current_step += 1
+            if progress_callback:
+                progress_callback(current_step, total_steps, f"Pass {pass_idx+1}/{iterations}, chunk {i+1}/{divisions}")
 
     # Normalize and count
     def normalize_category(cat):
@@ -1542,6 +1554,10 @@ Output:
         creativity=creativity,
         force_json=False,  # Text response
     )
+
+    # Final progress callback for the merge step
+    if progress_callback:
+        progress_callback(total_steps, total_steps, "Merging categories")
 
     if error2:
         print(f"Warning: Second pass failed: {error2}")

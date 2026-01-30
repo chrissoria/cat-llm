@@ -55,6 +55,7 @@ def extract(
     iterations=3,
     random_state=None,
     focus=None,
+    progress_callback=None,
 ):
     """
     Unified category extraction function for text, image, and PDF inputs.
@@ -96,6 +97,8 @@ def extract(
         focus (str): Optional focus instruction for category extraction (e.g.,
             "decisions to move", "emotional responses"). When provided, the model
             will prioritize extracting categories related to this focus.
+        progress_callback (callable): Optional callback function for progress updates.
+            Called as progress_callback(current_step, total_steps, step_label).
 
     Returns:
         dict with keys:
@@ -150,6 +153,7 @@ def extract(
             iterations=iterations,
             random_state=random_state,
             focus=focus,
+            progress_callback=progress_callback,
         )
 
     elif input_type == "image":
@@ -168,7 +172,8 @@ def extract(
             filename=filename,
             model_source=model_source,
             iterations=iterations,
-            random_state=random_state
+            random_state=random_state,
+            progress_callback=progress_callback,
         )
 
     elif input_type == "pdf":
@@ -187,7 +192,8 @@ def extract(
             filename=filename,
             model_source=model_source,
             iterations=iterations,
-            random_state=random_state
+            random_state=random_state,
+            progress_callback=progress_callback,
         )
 
     else:

@@ -1184,9 +1184,14 @@ if 'extraction_params' not in st.session_state:
 
 # Logo and title - use HTML for better alignment
 st.markdown("""
-<div style="display: flex; align-items: center; gap: 15px; margin-bottom: 10px;">
+<div style="display: flex; align-items: center; gap: 20px; margin-bottom: 10px;">
     <img src="https://huggingface.co/spaces/CatLLM/survey-classifier/resolve/main/logo.png" width="100" style="border-radius: 8px;">
-    <div style="font-size: 1.6rem; font-weight: 600; color: #444; font-family: 'EB Garamond', Garamond, Georgia, serif;">Research-grade categorization of survey responses, PDFs, and images using AI models.</div>
+    <div>
+        <div style="font-size: 2.2rem; font-weight: 700; color: #333; font-family: 'EB Garamond', Garamond, Georgia, serif; line-height: 1.1;">CatLLM</div>
+        <div style="font-size: 1.1rem; font-weight: 500; color: #E8A33C; font-family: 'EB Garamond', Garamond, Georgia, serif; margin-bottom: 4px;">NLP for Survey Research</div>
+        <div style="font-size: 1rem; font-weight: 400; color: #666; font-family: 'EB Garamond', Garamond, Georgia, serif;">Research-grade categorization of survey responses, PDFs, and images using AI models.</div>
+        <div style="font-size: 0.85rem; font-weight: 400; color: #888; font-family: 'EB Garamond', Garamond, Georgia, serif; margin-top: 4px;">Developed at UC Berkeley</div>
+    </div>
 </div>
 """, unsafe_allow_html=True)
 
@@ -1443,54 +1448,68 @@ with col_input:
                         # Text ~2s per item, but batched
                         est_seconds = max(10, num_items * 0.5)
 
-                    est_time_str = f"{est_seconds:.0f}s" if est_seconds < 60 else f"{est_seconds/60:.1f}m"
+                    # Progress tracking UI
+                    progress_bar = st.progress(0)
+                    status_text = st.empty()
+                    start_time = time.time()
 
-                    # Animated status indicator
-                    with st.status(f"Extracting categories (est. {est_time_str})...", expanded=True) as status:
-                        st.write("Analyzing your data to discover categories...")
-                        start_time = time.time()
+                    # Progress callback for extraction
+                    def extract_progress_callback(current_step, total_steps, step_label):
+                        progress = current_step / total_steps if total_steps > 0 else 0
+                        progress_bar.progress(min(progress, 1.0))
 
-                        extract_kwargs = {
-                            'input_data': input_data,
-                            'api_key': actual_api_key,
-                            'input_type': input_type_selected,
-                            'description': description,
-                            'user_model': model,
-                            'model_source': model_source,
-                            'max_categories': int(max_categories),
-                            'specificity': specificity.lower()
-                        }
-                        if mode:
-                            extract_kwargs['mode'] = mode
-                        if focus and focus.strip():
-                            extract_kwargs['focus'] = focus.strip()
+                        elapsed = time.time() - start_time
+                        if current_step > 0:
+                            avg_time = elapsed / current_step
+                            eta_seconds = avg_time * (total_steps - current_step)
+                            eta_str = f" | ETA: {eta_seconds:.0f}s" if eta_seconds < 60 else f" | ETA: {eta_seconds/60:.1f}m"
+                        else:
+                            eta_str = ""
 
-                        try:
-                            extract_result = catllm.extract(**extract_kwargs)
-                            categories = extract_result.get('top_categories', [])
+                        status_text.text(f"Extracting categories: {step_label} ({progress*100:.0f}%){eta_str}")
 
-                            processing_time = time.time() - start_time
+                    extract_kwargs = {
+                        'input_data': input_data,
+                        'api_key': actual_api_key,
+                        'input_type': input_type_selected,
+                        'description': description,
+                        'user_model': model,
+                        'model_source': model_source,
+                        'max_categories': int(max_categories),
+                        'specificity': specificity.lower(),
+                        'progress_callback': extract_progress_callback,
+                    }
+                    if mode:
+                        extract_kwargs['mode'] = mode
+                    if focus and focus.strip():
+                        extract_kwargs['focus'] = focus.strip()
 
-                            if categories:
-                                status.update(label=f"Extracted {len(categories)} categories in {processing_time:.1f}s", state="complete", expanded=False)
-                                st.session_state.extracted_categories = categories
-                                # Store extraction params for code generation
-                                st.session_state.extraction_params = {
-                                    'model': model,
-                                    'model_source': model_source,
-                                    'max_categories': int(max_categories),
-                                    'input_type': input_type_selected,
-                                    'description': description,
-                                    'mode': mode,
-                                }
-                                st.session_state.task_mode = "manual"
-                                st.rerun()
-                            else:
-                                status.update(label="No categories extracted", state="error")
-                                st.error("No categories were extracted from the data")
-                        except Exception as e:
-                            status.update(label="Extraction failed", state="error")
-                            st.error(f"Error: {str(e)}")
+                    try:
+                        extract_result = catllm.extract(**extract_kwargs)
+                        categories = extract_result.get('top_categories', [])
+
+                        processing_time = time.time() - start_time
+                        progress_bar.progress(1.0)
+                        status_text.text(f"Completed in {processing_time:.1f}s")
+
+                        if categories:
+                            st.success(f"Extracted {len(categories)} categories in {processing_time:.1f}s")
+                            st.session_state.extracted_categories = categories
+                            # Store extraction params for code generation
+                            st.session_state.extraction_params = {
+                                'model': model,
+                                'model_source': model_source,
+                                'max_categories': int(max_categories),
+                                'input_type': input_type_selected,
+                                'description': description,
+                                'mode': mode,
+                            }
+                            st.session_state.task_mode = "manual"
+                            st.rerun()
+                        else:
+                            st.error("No categories were extracted from the data")
+                    except Exception as e:
+                        st.error(f"Error: {str(e)}")
 
     # Category inputs (shown for manual mode or after extraction)
     if st.session_state.task_mode == "manual":
