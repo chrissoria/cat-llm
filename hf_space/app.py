@@ -307,8 +307,17 @@ result = catllm.classify(
     user_model="{cls['model']}"{classify_mode_param}
 )'''
     else:
-        # Multi-model mode
-        models_str = ",\n        ".join([f'("{m}", "auto", "YOUR_API_KEY")' for m in cls['models_list']])
+        # Multi-model mode — include per-model temperatures when set
+        model_temps = cls.get('model_temperatures', {})
+        model_lines = []
+        for m in cls['models_list']:
+            temp = model_temps.get(m) if model_temps else None
+            if temp is not None:
+                model_lines.append(f'("{m}", "auto", "YOUR_API_KEY", {{"creativity": {temp}}})')
+            else:
+                model_lines.append(f'("{m}", "auto", "YOUR_API_KEY")')
+        models_str = ",\n        ".join(model_lines)
+
         classify_mode_param = f',\n    mode="{cls["mode"]}"' if cls.get('mode') and ext['input_type'] == "pdf" else ''
         threshold_str = "majority" if cls['consensus_threshold'] == 0.5 else "two-thirds" if cls['consensus_threshold'] == 0.67 else "unanimous"
         consensus_param = f',\n    consensus_threshold="{threshold_str}"' if cls['classify_mode'] == "Ensemble" else ''
@@ -337,7 +346,9 @@ result.to_csv("classified_results.csv", index=False)
 '''
 
 
-def generate_classify_code(input_type, description, categories, model, model_source, mode=None, classify_mode="Single Model", models_list=None, consensus_threshold=0.5):
+def generate_classify_code(input_type, description, categories, model, model_source, mode=None,
+                           classify_mode="Single Model", models_list=None, consensus_threshold=0.5,
+                           model_temperatures=None):
     """Generate Python code for classification."""
     categories_str = ",\n    ".join([f'"{cat}"' for cat in categories])
 
@@ -382,8 +393,16 @@ result.to_csv("classified_results.csv", index=False)
 '''
     else:
         # Multi-model mode (Comparison or Ensemble)
+        # Build model tuples with per-model temperature when set
         if models_list:
-            models_str = ",\n        ".join([f'("{m}", "auto", "YOUR_API_KEY")' for m in models_list])
+            model_lines = []
+            for m in models_list:
+                temp = model_temperatures.get(m) if model_temperatures else None
+                if temp is not None:
+                    model_lines.append(f'("{m}", "auto", "YOUR_API_KEY", {{"creativity": {temp}}})')
+                else:
+                    model_lines.append(f'("{m}", "auto", "YOUR_API_KEY")')
+            models_str = ",\n        ".join(model_lines)
         else:
             models_str = '("gpt-4o", "auto", "YOUR_API_KEY"),\n        ("claude-sonnet-4-5-20250929", "auto", "YOUR_API_KEY")'
 
@@ -423,7 +442,7 @@ def generate_methodology_report_pdf(categories, model, column_name, num_rows, mo
                           data_quality=None, catllm_version=None, python_version=None,
                           task_type="assign", extracted_categories_df=None, max_categories=None,
                           input_type="text", description=None, classify_mode="Single Model",
-                          models_list=None, code=None):
+                          models_list=None, code=None, consensus_threshold=None):
     """Generate a PDF methodology report."""
     from reportlab.lib.pagesizes import letter
     from reportlab.lib import colors
@@ -465,14 +484,38 @@ consistent and reproducible results."""
 
     if categories:
         story.append(Paragraph("Category Mapping", heading_style))
-        story.append(Paragraph("Each category column contains binary values: 1 = present, 0 = not present", normal_style))
-        story.append(Spacer(1, 8))
 
-        category_data = [["Column Name", "Category Description"]]
-        for i, cat in enumerate(categories, 1):
-            category_data.append([f"category_{i}", cat])
+        if classify_mode in ("Ensemble", "Model Comparison") and result_df is not None:
+            # Multi-model: show per-model columns and consensus columns
+            story.append(Paragraph("Each model produces its own binary columns. "
+                                   "Consensus columns show the majority vote result.", normal_style))
+            story.append(Spacer(1, 8))
 
-        cat_table = Table(category_data, colWidths=[120, 330])
+            # Detect ALL distinct model suffixes directly from the DataFrame
+            # (handles same-model-different-temperature cases correctly)
+            all_suffixes = _find_all_model_suffixes(result_df)
+
+            category_data = [["Column Name", "Category Description"]]
+            for i, cat in enumerate(categories, 1):
+                # Per-model columns (each suffix is a unique model/temperature)
+                for suffix in all_suffixes:
+                    category_data.append([f"category_{i}_{suffix}", f"{cat} ({suffix})"])
+                # Consensus + agreement columns
+                category_data.append([f"category_{i}_consensus", f"{cat} (consensus)"])
+                category_data.append([f"category_{i}_agreement", f"{cat} (agreement score)"])
+
+            cat_table = Table(category_data, colWidths=[200, 250])
+        else:
+            # Single model: simple mapping
+            story.append(Paragraph("Each category column contains binary values: 1 = present, 0 = not present", normal_style))
+            story.append(Spacer(1, 8))
+
+            category_data = [["Column Name", "Category Description"]]
+            for i, cat in enumerate(categories, 1):
+                category_data.append([f"category_{i}", cat])
+
+            cat_table = Table(category_data, colWidths=[120, 330])
+
         cat_table.setStyle(TableStyle([
             ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
             ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
@@ -505,6 +548,12 @@ consistent and reproducible results."""
         ["Number of Categories", str(len(categories)) if categories else "0"],
         ["Success Rate", f"{success_rate:.2f}%"],
     ]
+    # Add consensus threshold for ensemble mode
+    if classify_mode == "Ensemble" and consensus_threshold is not None:
+        threshold_labels = {0.5: "Majority (50%+)", 0.67: "Two-Thirds (67%+)", 1.0: "Unanimous (100%)"}
+        threshold_label = threshold_labels.get(consensus_threshold, f"Custom ({consensus_threshold:.0%})")
+        summary_data.append(["Consensus Threshold", threshold_label])
+
     summary_table = Table(summary_data, colWidths=[150, 300])
     summary_table.setStyle(TableStyle([
         ('BACKGROUND', (0, 0), (0, -1), colors.lightgrey),
@@ -514,6 +563,35 @@ consistent and reproducible results."""
     ]))
     story.append(summary_table)
     story.append(Spacer(1, 15))
+
+    # Agreement scores table for ensemble mode
+    if classify_mode == "Ensemble" and result_df is not None and categories:
+        agreement_cols = [f"category_{i}_agreement" for i in range(1, len(categories) + 1)]
+        has_agreement = all(col in result_df.columns for col in agreement_cols)
+        if has_agreement:
+            story.append(Paragraph("Ensemble Agreement Scores", heading_style))
+            story.append(Paragraph(
+                "Agreement shows what proportion of models agreed on each category. "
+                "Higher scores indicate stronger consensus.", normal_style))
+            story.append(Spacer(1, 8))
+
+            agree_data = [["Category", "Mean Agreement", "Min Agreement"]]
+            for i, cat in enumerate(categories, 1):
+                col = f"category_{i}_agreement"
+                mean_val = result_df[col].mean()
+                min_val = result_df[col].min()
+                agree_data.append([cat, f"{mean_val:.1%}", f"{min_val:.1%}"])
+
+            agree_table = Table(agree_data, colWidths=[200, 125, 125])
+            agree_table.setStyle(TableStyle([
+                ('BACKGROUND', (0, 0), (-1, 0), colors.grey),
+                ('TEXTCOLOR', (0, 0), (-1, 0), colors.whitesmoke),
+                ('GRID', (0, 0), (-1, -1), 1, colors.black),
+                ('PADDING', (0, 0), (-1, -1), 6),
+                ('FONTSIZE', (0, 0), (-1, -1), 9),
+            ]))
+            story.append(agree_table)
+            story.append(Spacer(1, 15))
 
     if processing_time is not None:
         story.append(Paragraph("Processing Time", heading_style))
@@ -761,6 +839,45 @@ def sanitize_model_name(model: str) -> str:
     return sanitized[:40]
 
 
+def _find_model_column_suffix(result_df, model_name):
+    """Find the actual column suffix used for a model in the DataFrame.
+
+    catllm appends a creativity suffix (e.g. _tauto, _t50) to ensemble column
+    names, so we can't just use sanitize_model_name().  This function looks at
+    the real DataFrame columns to discover the full suffix.
+    """
+    sanitized = sanitize_model_name(model_name)
+    prefix = f"category_1_{sanitized}"
+    for col in result_df.columns:
+        if col.startswith(prefix):
+            # Return everything after "category_1_"
+            return col[len("category_1_"):]
+    # Fallback: return just the sanitized name
+    return sanitized
+
+
+def _find_all_model_suffixes(result_df):
+    """Discover all distinct per-model column suffixes from the DataFrame.
+
+    Looks at category_1_* columns (excluding _consensus and _agreement)
+    to find every unique model suffix.  Works even when the same model
+    appears multiple times with different temperature suffixes.
+
+    Returns:
+        List of suffix strings, e.g.
+        ['claude_haiku_4_5_20251001_t0', 'claude_haiku_4_5_20251001_t25', ...]
+    """
+    import re
+    suffixes = []
+    for col in result_df.columns:
+        m = re.match(r'^category_1_(.+)$', col)
+        if m:
+            suffix = m.group(1)
+            if suffix not in ('consensus', 'agreement'):
+                suffixes.append(suffix)
+    return suffixes
+
+
 def create_classification_heatmap(result_df, categories, classify_mode="Single Model", models_list=None):
     """Create a binary heatmap showing classification for each row.
 
@@ -784,9 +901,9 @@ def create_classification_heatmap(result_df, categories, classify_mode="Single M
         # Use consensus columns
         col_names = [f"category_{i}_consensus" for i in range(1, len(categories) + 1)]
     elif classify_mode == "Model Comparison" and models_list:
-        # Use first model's columns for the heatmap
-        sanitized = sanitize_model_name(models_list[0])
-        col_names = [f"category_{i}_{sanitized}" for i in range(1, len(categories) + 1)]
+        # Use first model's columns (detect actual suffix from DataFrame)
+        suffix = _find_model_column_suffix(result_df, models_list[0])
+        col_names = [f"category_{i}_{suffix}" for i in range(1, len(categories) + 1)]
     else:
         # Single model
         col_names = [f"category_{i}" for i in range(1, len(categories) + 1)]
@@ -913,8 +1030,9 @@ def create_distribution_chart(result_df, categories, classify_mode="Single Model
         if not models_list:
             models_list = []
 
-        sanitized_names = [sanitize_model_name(m) for m in models_list]
-        n_models = len(sanitized_names)
+        # Detect actual column suffixes from the DataFrame
+        model_suffixes = [_find_model_column_suffix(result_df, m) for m in models_list]
+        n_models = len(model_suffixes)
         n_categories = len(categories)
 
         fig, ax = plt.subplots(figsize=(12, max(5, n_categories * 1.2)))
@@ -923,10 +1041,10 @@ def create_distribution_chart(result_df, categories, classify_mode="Single Model
         bar_height = 0.8 / n_models
         y_positions = np.arange(n_categories)
 
-        for model_idx, (model_name, sanitized) in enumerate(zip(models_list, sanitized_names)):
+        for model_idx, (model_name, suffix) in enumerate(zip(models_list, model_suffixes)):
             model_pcts = []
             for i in range(1, n_categories + 1):
-                col_name = f"category_{i}_{sanitized}"
+                col_name = f"category_{i}_{suffix}"
                 if col_name in result_df.columns:
                     count = int(result_df[col_name].sum())
                     pct = (count / total_rows) * 100
@@ -968,9 +1086,15 @@ st.markdown("""
 /* Import Garamond font and apply globally */
 @import url('https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500;600;700&display=swap');
 
-* {
+*:not([class*="icon"]):not([data-testid="stIconMaterial"]):not(svg):not(path) {
     font-family: 'EB Garamond', Garamond, Georgia, serif !important;
     font-size: 17px !important;
+}
+
+/* Preserve Streamlit icon fonts */
+[data-testid="stIconMaterial"], .material-icons, .material-symbols-rounded {
+    font-family: 'Material Symbols Rounded', 'Material Icons' !important;
+    font-size: 24px !important;
 }
 
 /* Main container styling */
@@ -1600,6 +1724,23 @@ with col_input:
                 models_list = [model]
             api_key = st.text_input("API Key", type="password", key="classify_api_key")
 
+        # Per-model temperature inputs (shown for multi-model modes)
+        model_temperatures = {}
+        if is_multi_model and models_list:
+            st.markdown("**Model Temperature**")
+            temp_cols = st.columns(len(models_list))
+            for idx, (col, m) in enumerate(zip(temp_cols, models_list)):
+                short_name = m.split('/')[-1].split(':')[0][:20]
+                model_temperatures[m] = col.number_input(
+                    short_name,
+                    min_value=0.0,
+                    max_value=2.0,
+                    value=0.0,
+                    step=0.25,
+                    key=f"temp_{idx}",
+                    help=f"Temperature for {m} (0 = deterministic, higher = more creative)"
+                )
+
         # Ensemble-specific options
         consensus_threshold = 0.5  # Default
         if classify_mode == "Ensemble":
@@ -1637,7 +1778,8 @@ with col_input:
                     }
                     mode = mode_mapping.get(pdf_mode, "image")
 
-                # Build models tuples list: [(model, source, api_key), ...]
+                # Build models tuples list
+                # Uses 4-tuple (model, source, api_key, options) when per-model temperatures are set
                 models_tuples = []
                 api_key_error = None
                 for m in models_list:
@@ -1646,7 +1788,11 @@ with col_input:
                         api_key_error = f"{provider} API key not configured for {m}"
                         break
                     m_source = get_model_source(m)
-                    models_tuples.append((m, m_source, actual_key))
+                    temp = model_temperatures.get(m)
+                    if temp is not None and is_multi_model:
+                        models_tuples.append((m, m_source, actual_key, {"creativity": temp}))
+                    else:
+                        models_tuples.append((m, m_source, actual_key))
 
                 if api_key_error:
                     st.error(api_key_error)
@@ -1802,6 +1948,7 @@ with col_input:
                                 'classify_mode': classify_mode,
                                 'models_list': models_list,
                                 'consensus_threshold': consensus_threshold,
+                                'model_temperatures': model_temperatures,
                             }
                             code = generate_full_code(st.session_state.extraction_params, classify_params)
                         else:
@@ -1809,7 +1956,8 @@ with col_input:
                                 input_type_selected, description, categories_entered,
                                 report_model, report_model_source, mode,
                                 classify_mode=classify_mode, models_list=models_list,
-                                consensus_threshold=consensus_threshold
+                                consensus_threshold=consensus_threshold,
+                                model_temperatures=model_temperatures,
                             )
 
                         # Generate methodology report with code included
@@ -1830,7 +1978,8 @@ with col_input:
                             description=description,
                             classify_mode=classify_mode,
                             models_list=models_list,
-                            code=code
+                            code=code,
+                            consensus_threshold=consensus_threshold if classify_mode == "Ensemble" else None,
                         )
 
                         st.session_state.results = {
@@ -1842,6 +1991,7 @@ with col_input:
                             'categories': categories_entered,
                             'classify_mode': classify_mode,
                             'models_list': models_list,
+                            'model_temperatures': model_temperatures,
                         }
                         st.success(f"Classified {len(result_df)} items in {processing_time:.1f}s")
                         st.rerun()
@@ -2022,6 +2172,7 @@ if st.session_state.get('show_code_modal'):
         if current_categories:
             # Check if categories were auto-extracted
             if st.session_state.extraction_params:
+                current_temperatures = results.get('model_temperatures', {})
                 classify_params = {
                     'model': current_model,
                     'description': current_description,
@@ -2029,14 +2180,17 @@ if st.session_state.get('show_code_modal'):
                     'classify_mode': current_classify_mode,
                     'models_list': current_models_list,
                     'consensus_threshold': current_consensus,
+                    'model_temperatures': current_temperatures,
                 }
                 code_to_show = generate_full_code(st.session_state.extraction_params, classify_params)
             else:
+                current_temperatures = results.get('model_temperatures', {})
                 code_to_show = generate_classify_code(
                     current_input_type, current_description, current_categories,
                     current_model, current_model_source, current_mode,
                     classify_mode=current_classify_mode, models_list=current_models_list,
-                    consensus_threshold=current_consensus
+                    consensus_threshold=current_consensus,
+                    model_temperatures=current_temperatures,
                 )
         else:
             code_to_show = '''import catllm
