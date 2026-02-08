@@ -308,14 +308,19 @@ result = catllm.classify(
 )'''
     else:
         # Multi-model mode — include per-model temperatures when set
-        model_temps = cls.get('model_temperatures', {})
+        ens_runs = cls.get('ensemble_runs')
         model_lines = []
-        for m in cls['models_list']:
-            temp = model_temps.get(m) if model_temps else None
-            if temp is not None:
+        if ens_runs:
+            for m, temp in ens_runs:
                 model_lines.append(f'("{m}", "auto", "YOUR_API_KEY", {{"creativity": {temp}}})')
-            else:
-                model_lines.append(f'("{m}", "auto", "YOUR_API_KEY")')
+        else:
+            model_temps = cls.get('model_temperatures', {})
+            for m in cls['models_list']:
+                temp = model_temps.get(m) if model_temps else None
+                if temp is not None:
+                    model_lines.append(f'("{m}", "auto", "YOUR_API_KEY", {{"creativity": {temp}}})')
+                else:
+                    model_lines.append(f'("{m}", "auto", "YOUR_API_KEY")')
         models_str = ",\n        ".join(model_lines)
 
         classify_mode_param = f',\n    mode="{cls["mode"]}"' if cls.get('mode') and ext['input_type'] == "pdf" else ''
@@ -348,7 +353,7 @@ result.to_csv("classified_results.csv", index=False)
 
 def generate_classify_code(input_type, description, categories, model, model_source, mode=None,
                            classify_mode="Single Model", models_list=None, consensus_threshold=0.5,
-                           model_temperatures=None):
+                           model_temperatures=None, ensemble_runs=None):
     """Generate Python code for classification."""
     categories_str = ",\n    ".join([f'"{cat}"' for cat in categories])
 
@@ -394,7 +399,13 @@ result.to_csv("classified_results.csv", index=False)
     else:
         # Multi-model mode (Comparison or Ensemble)
         # Build model tuples with per-model temperature when set
-        if models_list:
+        if ensemble_runs:
+            # Ensemble with explicit (model, temp) pairs (supports duplicate models)
+            model_lines = []
+            for m, temp in ensemble_runs:
+                model_lines.append(f'("{m}", "auto", "YOUR_API_KEY", {{"creativity": {temp}}})')
+            models_str = ",\n        ".join(model_lines)
+        elif models_list:
             model_lines = []
             for m in models_list:
                 temp = model_temperatures.get(m) if model_temperatures else None
@@ -1339,6 +1350,12 @@ This app is currently in **beta** and **free to use** while CatLLM is under revi
 - Found a bug? Have a feature request? Please open an issue on [GitHub](https://github.com/chrissoria/cat-llm)
 - Reach out directly: [chrissoria@berkeley.edu](mailto:chrissoria@berkeley.edu)
 
+### Acknowledgments
+- **Bashir Ahmed** for his generous fellowship support that makes this free beta possible
+- **Claude Fischer** for his thoughtful feedback and collaboration on research that helped inspire this project
+- **Kevin Collins** from Survey360 for his input
+- **Fendi Tsim** for sharing it widely
+
 ### Links
 - **Website**: [christophersoria.com](https://christophersoria.com)
 - **PyPI**: [pip install cat-llm](https://pypi.org/project/cat-llm/)
@@ -1696,8 +1713,59 @@ with col_input:
         is_multi_model = classify_mode in ["Model Comparison", "Ensemble"]
         min_models = 3 if classify_mode == "Ensemble" else 2
 
-        if model_tier == "Free Models":
-            if is_multi_model:
+        # Track per-run temperatures: list of (model_name, temperature) for ensemble,
+        # or dict {model_name: temperature} for model comparison
+        model_temperatures = {}
+        # ensemble_runs stores list of (model_name, temperature) allowing duplicate models
+        ensemble_runs = []
+
+        if classify_mode == "Ensemble":
+            # Ensemble mode: dynamic rows allowing same model multiple times with different temps
+            if "ensemble_num_runs" not in st.session_state:
+                st.session_state.ensemble_num_runs = 3
+
+            if model_tier == "Free Models":
+                model_options = FREE_MODEL_DISPLAY_NAMES
+                is_free = True
+            else:
+                model_options = PAID_MODEL_CHOICES
+                is_free = False
+
+            st.markdown(f"**Model Runs** (select {min_models}+ runs)")
+            for i in range(st.session_state.ensemble_num_runs):
+                cols = st.columns([3, 1, 0.5])
+                with cols[0]:
+                    default_idx = 0 if i < len(model_options) else i % len(model_options)
+                    selected = st.selectbox(
+                        f"Run {i+1}", options=model_options,
+                        index=default_idx, key=f"ensemble_model_{i}",
+                        label_visibility="collapsed"
+                    )
+                with cols[1]:
+                    temp = st.number_input(
+                        "Temp", min_value=0.0, max_value=2.0, value=round(i * 0.25, 2),
+                        step=0.25, key=f"ensemble_temp_{i}", label_visibility="collapsed"
+                    )
+                with cols[2]:
+                    if st.session_state.ensemble_num_runs > 3:
+                        if st.button("✕", key=f"ensemble_remove_{i}"):
+                            st.session_state.ensemble_num_runs -= 1
+                            st.rerun()
+
+                model_name = FREE_MODELS_MAP[selected] if is_free else selected
+                ensemble_runs.append((model_name, temp))
+
+            if st.button("Add Run", key="add_ensemble_run"):
+                st.session_state.ensemble_num_runs += 1
+                st.rerun()
+
+            models_list = [r[0] for r in ensemble_runs]
+            model_temperatures = {f"{r[0]}__run{i}": r[1] for i, r in enumerate(ensemble_runs)}
+            api_key = "" if model_tier == "Free Models" else st.text_input("API Key", type="password", key="classify_api_key")
+
+        elif is_multi_model:
+            # Model Comparison mode: multiselect (each model unique) + temperature row
+            if model_tier == "Free Models":
                 default_models = FREE_MODEL_DISPLAY_NAMES[:min_models] if len(FREE_MODEL_DISPLAY_NAMES) >= min_models else FREE_MODEL_DISPLAY_NAMES
                 model_displays = st.multiselect(
                     f"Models (select {min_models}+)",
@@ -1706,13 +1774,8 @@ with col_input:
                     key="classify_models_multi"
                 )
                 models_list = [FREE_MODELS_MAP[d] for d in model_displays]
+                api_key = ""
             else:
-                model_display = st.selectbox("Model", options=FREE_MODEL_DISPLAY_NAMES, key="classify_model")
-                model = FREE_MODELS_MAP[model_display]  # Convert to actual model name
-                models_list = [model]
-            api_key = ""
-        else:
-            if is_multi_model:
                 default_models = PAID_MODEL_CHOICES[:min_models] if len(PAID_MODEL_CHOICES) >= min_models else PAID_MODEL_CHOICES
                 models_list = st.multiselect(
                     f"Models (select {min_models}+)",
@@ -1720,27 +1783,33 @@ with col_input:
                     default=default_models,
                     key="classify_models_multi_paid"
                 )
+                api_key = st.text_input("API Key", type="password", key="classify_api_key")
+
+            if models_list:
+                st.markdown("**Model Temperature**")
+                temp_cols = st.columns(len(models_list))
+                for idx, (col, m) in enumerate(zip(temp_cols, models_list)):
+                    short_name = m.split('/')[-1].split(':')[0][:20]
+                    model_temperatures[m] = col.number_input(
+                        short_name,
+                        min_value=0.0,
+                        max_value=2.0,
+                        value=0.0,
+                        step=0.25,
+                        key=f"temp_{idx}",
+                        help=f"Temperature for {m} (0 = deterministic, higher = more creative)"
+                    )
+        else:
+            # Single model mode
+            if model_tier == "Free Models":
+                model_display = st.selectbox("Model", options=FREE_MODEL_DISPLAY_NAMES, key="classify_model")
+                model = FREE_MODELS_MAP[model_display]  # Convert to actual model name
+                models_list = [model]
+                api_key = ""
             else:
                 model = st.selectbox("Model", options=PAID_MODEL_CHOICES, key="classify_model_paid")
                 models_list = [model]
-            api_key = st.text_input("API Key", type="password", key="classify_api_key")
-
-        # Per-model temperature inputs (shown for multi-model modes)
-        model_temperatures = {}
-        if is_multi_model and models_list:
-            st.markdown("**Model Temperature**")
-            temp_cols = st.columns(len(models_list))
-            for idx, (col, m) in enumerate(zip(temp_cols, models_list)):
-                short_name = m.split('/')[-1].split(':')[0][:20]
-                model_temperatures[m] = col.number_input(
-                    short_name,
-                    min_value=0.0,
-                    max_value=2.0,
-                    value=0.0,
-                    step=0.25,
-                    key=f"temp_{idx}",
-                    help=f"Temperature for {m} (0 = deterministic, higher = more creative)"
-                )
+                api_key = st.text_input("API Key", type="password", key="classify_api_key")
 
         # Ensemble-specific options
         consensus_threshold = 0.5  # Default
@@ -1783,17 +1852,27 @@ with col_input:
                 # Uses 4-tuple (model, source, api_key, options) when per-model temperatures are set
                 models_tuples = []
                 api_key_error = None
-                for m in models_list:
-                    actual_key, provider = get_api_key(m, model_tier, api_key)
-                    if not actual_key:
-                        api_key_error = f"{provider} API key not configured for {m}"
-                        break
-                    m_source = get_model_source(m)
-                    temp = model_temperatures.get(m)
-                    if temp is not None and is_multi_model:
+                if ensemble_runs:
+                    # Ensemble mode: use ensemble_runs (model, temp) pairs directly
+                    for m, temp in ensemble_runs:
+                        actual_key, provider = get_api_key(m, model_tier, api_key)
+                        if not actual_key:
+                            api_key_error = f"{provider} API key not configured for {m}"
+                            break
+                        m_source = get_model_source(m)
                         models_tuples.append((m, m_source, actual_key, {"creativity": temp}))
-                    else:
-                        models_tuples.append((m, m_source, actual_key))
+                else:
+                    for m in models_list:
+                        actual_key, provider = get_api_key(m, model_tier, api_key)
+                        if not actual_key:
+                            api_key_error = f"{provider} API key not configured for {m}"
+                            break
+                        m_source = get_model_source(m)
+                        temp = model_temperatures.get(m)
+                        if temp is not None and is_multi_model:
+                            models_tuples.append((m, m_source, actual_key, {"creativity": temp}))
+                        else:
+                            models_tuples.append((m, m_source, actual_key))
 
                 if api_key_error:
                     st.error(api_key_error)
@@ -1950,6 +2029,7 @@ with col_input:
                                 'models_list': models_list,
                                 'consensus_threshold': consensus_threshold,
                                 'model_temperatures': model_temperatures,
+                                'ensemble_runs': ensemble_runs if ensemble_runs else None,
                             }
                             code = generate_full_code(st.session_state.extraction_params, classify_params)
                         else:
@@ -1959,6 +2039,7 @@ with col_input:
                                 classify_mode=classify_mode, models_list=models_list,
                                 consensus_threshold=consensus_threshold,
                                 model_temperatures=model_temperatures,
+                                ensemble_runs=ensemble_runs if ensemble_runs else None,
                             )
 
                         # Generate methodology report with code included
@@ -1993,6 +2074,7 @@ with col_input:
                             'classify_mode': classify_mode,
                             'models_list': models_list,
                             'model_temperatures': model_temperatures,
+                            'ensemble_runs': ensemble_runs if ensemble_runs else None,
                         }
                         st.success(f"Classified {len(result_df)} items in {processing_time:.1f}s")
                         st.rerun()
@@ -2182,6 +2264,7 @@ if st.session_state.get('show_code_modal'):
                     'models_list': current_models_list,
                     'consensus_threshold': current_consensus,
                     'model_temperatures': current_temperatures,
+                    'ensemble_runs': results.get('ensemble_runs'),
                 }
                 code_to_show = generate_full_code(st.session_state.extraction_params, classify_params)
             else:
@@ -2192,6 +2275,7 @@ if st.session_state.get('show_code_modal'):
                     classify_mode=current_classify_mode, models_list=current_models_list,
                     consensus_threshold=current_consensus,
                     model_temperatures=current_temperatures,
+                    ensemble_runs=results.get('ensemble_runs'),
                 )
         else:
             code_to_show = '''import catllm
