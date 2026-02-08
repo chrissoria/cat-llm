@@ -62,7 +62,6 @@ from .text_functions import (
     check_ollama_model,
     pull_ollama_model,
     _get_stepback_insight,
-    explore_common_categories,
 )
 
 # PDF utility imports
@@ -264,12 +263,23 @@ def sanitize_model_name(model: str) -> str:
     return sanitized[:40]  # Truncate to reasonable length
 
 
+def _format_creativity_suffix(creativity) -> str:
+    """Format creativity value as a column suffix, e.g. 0.25 -> '_t25', 1.0 -> '_t100'."""
+    if creativity is None:
+        return "_tauto"
+    # Multiply by 100 and format as integer: 0 -> 0, 0.25 -> 25, 1.0 -> 100
+    return f"_t{int(round(creativity * 100))}"
+
+
 def prepare_model_configs(models: list, auto_download: bool = False) -> list:
     """
     Validate and prepare model configurations.
 
     Args:
-        models: List of tuples (model, provider, api_key)
+        models: List of tuples. Each tuple can be:
+            - (model, provider, api_key) — 3 elements
+            - (model, provider, api_key, options) — 4 elements, where options is a
+              dict with per-model overrides (e.g. {"creativity": 0.5})
         auto_download: If True, automatically download missing Ollama models
 
     Returns:
@@ -283,8 +293,20 @@ def prepare_model_configs(models: list, auto_download: bool = False) -> list:
     configs = []
     has_ollama = False
     ollama_checked = False
+    is_ensemble = len(models) > 1
 
-    for model, provider, api_key in models:
+    for entry in models:
+        if len(entry) == 4:
+            model, provider, api_key, options = entry
+        elif len(entry) == 3:
+            model, provider, api_key = entry
+            options = {}
+        else:
+            raise ValueError(
+                f"Each model entry must be a 3-tuple (model, provider, api_key) "
+                f"or 4-tuple (model, provider, api_key, options), got {len(entry)} elements"
+            )
+
         detected_provider = detect_provider(model, provider)
 
         if detected_provider == "ollama":
@@ -319,12 +341,21 @@ def prepare_model_configs(models: list, auto_download: bool = False) -> list:
                     f"API key required for provider '{detected_provider}' (model: {model})"
                 )
 
+        # Per-model creativity override (None means use global)
+        per_model_creativity = options.get("creativity", None) if options else None
+
+        # Build sanitized column name
+        base_name = sanitize_model_name(model)
+        if is_ensemble:
+            base_name += _format_creativity_suffix(per_model_creativity)
+
         configs.append({
             "model": model,
             "provider": detected_provider,
             "api_key": api_key,
             "use_two_step": (detected_provider == "ollama"),
-            "sanitized_name": sanitize_model_name(model),
+            "sanitized_name": base_name,
+            "creativity": per_model_creativity,
         })
 
     # Check for duplicate sanitized names
@@ -415,9 +446,13 @@ def aggregate_results(
             except (ValueError, TypeError):
                 votes.append(0)
 
-        agreement = sum(votes) / num_successful if num_successful > 0 else 0
-        consensus[key] = "1" if agreement >= threshold else "0"
-        agreement_scores[key] = round(agreement, 3)
+        positive_rate = sum(votes) / num_successful if num_successful > 0 else 0
+        consensus_val = "1" if positive_rate >= threshold else "0"
+        consensus[key] = consensus_val
+        # Agreement = fraction of models that match the consensus decision
+        consensus_int = int(consensus_val)
+        matching = sum(1 for v in votes if v == consensus_int)
+        agreement_scores[key] = round(matching / num_successful, 3) if num_successful > 0 else 0
 
     return {
         "per_model": successful,
@@ -463,7 +498,7 @@ def normalize_model_input(
         return [(model, provider, api_key)]
     elif models is not None:
         # Check if it's a single tuple (not a list of tuples)
-        if isinstance(models, tuple) and len(models) == 3 and isinstance(models[0], str):
+        if isinstance(models, tuple) and len(models) in (3, 4) and isinstance(models[0], str):
             return [models]
         return models
 
@@ -505,12 +540,13 @@ def gather_stepback_insights(
 
     for cfg in model_configs:
         if cfg["provider"] != "ollama":
+            effective_creativity = cfg.get("creativity") if cfg.get("creativity") is not None else creativity
             insight, added = _get_stepback_insight(
                 cfg["provider"],
                 stepback_question,
                 cfg["api_key"],
                 cfg["model"],
-                creativity
+                effective_creativity
             )
             if added:
                 stepback_insights[cfg["model"]] = (stepback_question, insight)
@@ -704,7 +740,20 @@ def run_chain_of_verification(
 
     if err:
         return initial_reply
-    return final_reply
+
+    # Extract and validate JSON from the response (critical for providers
+    # like HuggingFace that use json_object mode instead of strict json_schema)
+    extracted = extract_json(final_reply)
+    try:
+        parsed = json.loads(extracted)
+        # Verify it has at least one valid key
+        if parsed and any(v in ("0", "1") for v in parsed.values()):
+            return extracted
+    except (json.JSONDecodeError, AttributeError):
+        pass
+
+    # Fall back to initial reply if extraction/validation fails
+    return initial_reply
 
 
 # =============================================================================
@@ -1796,27 +1845,35 @@ def classify_ensemble(
 
     # Handle categories="auto" - auto-detect categories from the data
     if categories == "auto":
-        if survey_question == "":
+        from .main import extract
+
+        # Detect input type to choose the right extraction path
+        detected_type = _detect_input_type(survey_input)
+
+        if detected_type == "text" and survey_question == "":
             raise TypeError(
-                "survey_question is required when using categories='auto'. "
+                "survey_question is required when using categories='auto' with text input. "
                 "Please provide the survey question you are analyzing."
             )
 
         # Use first model for category discovery
-        first_model, first_provider, first_api_key = models[0]
+        first_entry = models[0]
+        first_model, first_provider, first_api_key = first_entry[0], first_entry[1], first_entry[2]
         detected_provider = detect_provider(first_model, first_provider)
 
-        print(f"Auto-detecting categories using {first_model}...")
-        auto_result = explore_common_categories(
-            survey_question=survey_question,
-            survey_input=survey_input,
-            research_question=research_question,
+        print(f"Auto-detecting categories using {first_model} (input type: {detected_type})...")
+        auto_result = extract(
+            input_data=survey_input,
             api_key=first_api_key,
-            model_source=detected_provider,
-            user_model=first_model,
+            input_type=detected_type,
+            description=survey_question or input_description,
             max_categories=max_categories,
             categories_per_chunk=categories_per_chunk,
-            divisions=divisions
+            divisions=divisions,
+            user_model=first_model,
+            model_source=detected_provider,
+            research_question=research_question,
+            mode=pdf_mode,
         )
         categories = auto_result["top_categories"]
         print(f"Discovered {len(categories)} categories: {categories}")
@@ -1960,6 +2017,9 @@ Provide your answer in JSON format where the category number is the key and "1" 
         Returns:
             tuple: (model_name, json_result, error)
         """
+        # Resolve per-model creativity override (falls back to global)
+        effective_creativity = cfg["creativity"] if cfg["creativity"] is not None else creativity
+
         # Determine item type and identifier
         if is_image_mode and isinstance(item, tuple) and len(item) == 2:
             # Image mode: item is (image_path, image_label)
@@ -2026,7 +2086,7 @@ Provide your answer in JSON format where the category number is the key and "1" 
                         client=client,
                         messages=messages,
                         json_schema=json_schemas[cfg["model"]],
-                        creativity=creativity,
+                        creativity=effective_creativity,
                         thinking_budget=thinking_budget,
                         max_retries=max_retries,
                     )
@@ -2034,7 +2094,7 @@ Provide your answer in JSON format where the category number is the key and "1" 
                     reply, error = client.complete(
                         messages=messages,
                         json_schema=json_schemas[cfg["model"]],
-                        creativity=creativity,
+                        creativity=effective_creativity,
                         thinking_budget=thinking_budget if cfg["provider"] == "google" else None,
                         max_retries=max_retries,
                     )
@@ -2081,7 +2141,7 @@ Provide your answer in JSON format where the category number is the key and "1" 
                         client=client,
                         messages=messages,
                         json_schema=json_schemas[cfg["model"]],
-                        creativity=creativity,
+                        creativity=effective_creativity,
                         thinking_budget=thinking_budget,
                         max_retries=max_retries,
                     )
@@ -2089,7 +2149,7 @@ Provide your answer in JSON format where the category number is the key and "1" 
                     reply, error = client.complete(
                         messages=messages,
                         json_schema=json_schemas[cfg["model"]],
-                        creativity=creativity,
+                        creativity=effective_creativity,
                         thinking_budget=thinking_budget if cfg["provider"] == "google" else None,
                         max_retries=max_retries,
                     )
@@ -2114,7 +2174,7 @@ Provide your answer in JSON format where the category number is the key and "1" 
                         categories=categories,
                         categories_str=categories_str,
                         survey_question=survey_question,
-                        creativity=creativity,
+                        creativity=effective_creativity,
                         max_retries=max_retries,
                     )
                     # CoVe not supported for Ollama two-step (already has verification)
@@ -2133,7 +2193,7 @@ Provide your answer in JSON format where the category number is the key and "1" 
                     reply, error = client.complete(
                         messages=messages,
                         json_schema=json_schemas[cfg["model"]],
-                        creativity=creativity,
+                        creativity=effective_creativity,
                         thinking_budget=thinking_budget if cfg["provider"] == "google" else None,
                         max_retries=max_retries,
                     )
@@ -2154,7 +2214,7 @@ Provide your answer in JSON format where the category number is the key and "1" 
                                 step3_prompt=step3,
                                 step4_prompt=step4,
                                 json_schema=json_schemas[cfg["model"]],
-                                creativity=creativity,
+                                creativity=effective_creativity,
                                 max_retries=max_retries,
                             )
 
@@ -2591,16 +2651,7 @@ def build_output_dataframes(
         model_cols += [c for c in combined_df.columns if f"_{model_name}" in c]
         output[model_name] = combined_df[model_cols].copy()
 
-    # Save to file if requested
-    if filename:
-        save_path = filename
-        if save_directory:
-            os.makedirs(save_directory, exist_ok=True)
-            save_path = os.path.join(save_directory, filename)
-        combined_df.to_csv(save_path, index=False)
-        print(f"\nCombined results saved to {save_path}")
-
-    # If only one model, return simplified DataFrame (backward compatible with multi_class)
+    # If only one model, simplify before saving (backward compatible with multi_class)
     if len(model_names) == 1:
         model_name = model_names[0]
         simplified_df = combined_df.copy()
@@ -2615,12 +2666,28 @@ def build_output_dataframes(
         rename_map = {}
         for col in simplified_df.columns:
             if col.startswith("category_") and f"_{model_name}" in col:
-                # Extract category number and create simple name
                 new_name = col.replace(f"_{model_name}", "")
                 rename_map[col] = new_name
         simplified_df = simplified_df.rename(columns=rename_map)
 
+        if filename:
+            save_path = filename
+            if save_directory:
+                os.makedirs(save_directory, exist_ok=True)
+                save_path = os.path.join(save_directory, filename)
+            simplified_df.to_csv(save_path, index=False)
+            print(f"\nCombined results saved to {save_path}")
+
         return simplified_df
+
+    # Multi-model: save the full combined DataFrame
+    if filename:
+        save_path = filename
+        if save_directory:
+            os.makedirs(save_directory, exist_ok=True)
+            save_path = os.path.join(save_directory, filename)
+        combined_df.to_csv(save_path, index=False)
+        print(f"\nCombined results saved to {save_path}")
 
     # For multiple models, return the combined DataFrame (contains all model results + consensus)
     return combined_df

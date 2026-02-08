@@ -6,6 +6,7 @@ supporting both single-model and multi-model (ensemble) classification.
 """
 
 import warnings
+from typing import Union, Callable
 
 __all__ = [
     # Main entry point
@@ -38,7 +39,7 @@ from .pdf_functions import pdf_multi_class
 def classify(
     input_data,
     categories,
-    api_key,
+    api_key=None,
     input_type="text",
     description="",
     user_model="gpt-4o",
@@ -64,9 +65,19 @@ def classify(
     divisions=10,
     research_question=None,
     progress_callback=None,
-    # New multi-model parameters
+    # Multi-model parameters
     models=None,
-    consensus_threshold="majority",
+    consensus_threshold: Union[str, float] = "majority",
+    # Parameters previously only on classify_ensemble
+    survey_question: str = "",
+    use_json_schema: bool = True,
+    max_workers: int = None,
+    fail_strategy: str = "partial",
+    max_retries: int = 5,
+    batch_retries: int = 2,
+    retry_delay: float = 1.0,
+    pdf_dpi: int = 150,
+    auto_download: bool = False,
 ):
     """
     Unified classification function for text, image, and PDF inputs.
@@ -104,11 +115,20 @@ def classify(
         progress_callback: Optional callback for progress updates.
         models (list): For multi-model mode, list of (model, provider, api_key) tuples.
             If provided, overrides user_model/api_key/model_source.
-        consensus_threshold: For multi-model mode, agreement threshold. Can be:
+        consensus_threshold (str or float): For multi-model mode, agreement threshold.
             - "majority": 50% agreement (default)
             - "two-thirds": 67% agreement
             - "unanimous": 100% agreement
             - float: Custom threshold between 0 and 1
+        survey_question (str): The survey question (used when categories="auto").
+        use_json_schema (bool): Use JSON schema for structured output. Default True.
+        max_workers (int): Max parallel workers for API calls. None = auto.
+        fail_strategy (str): How to handle failures - "partial" (default) or "strict".
+        max_retries (int): Max retries per API call. Default 5.
+        batch_retries (int): Max retries for batch-level failures. Default 2.
+        retry_delay (float): Delay between retries in seconds. Default 1.0.
+        pdf_dpi (int): DPI for PDF page rendering. Default 150.
+        auto_download (bool): Auto-download Ollama models. Default False.
 
     Returns:
         pd.DataFrame: Results with classification columns.
@@ -148,11 +168,34 @@ def classify(
         categories=categories,
         models=models,
         input_description=description,
+        survey_question=survey_question,
         pdf_mode=pdf_mode,
+        pdf_dpi=pdf_dpi,
+        creativity=creativity,
+        safety=safety,
         chain_of_thought=chain_of_thought,
+        chain_of_verification=chain_of_verification,
         step_back_prompt=step_back_prompt,
         context_prompt=context_prompt,
+        thinking_budget=thinking_budget,
+        use_json_schema=use_json_schema,
+        max_workers=max_workers,
+        fail_strategy=fail_strategy,
+        max_retries=max_retries,
+        batch_retries=batch_retries,
+        retry_delay=retry_delay,
+        auto_download=auto_download,
+        example1=example1,
+        example2=example2,
+        example3=example3,
+        example4=example4,
+        example5=example5,
+        example6=example6,
         consensus_threshold=consensus_threshold,
+        max_categories=max_categories,
+        categories_per_chunk=categories_per_chunk,
+        divisions=divisions,
+        research_question=research_question,
         filename=filename,
         save_directory=save_directory,
         progress_callback=progress_callback,

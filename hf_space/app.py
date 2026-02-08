@@ -693,15 +693,15 @@ def run_classify_data(input_type, input_data, description, categories,
         start_time = time.time()
 
         classify_kwargs = {
-            'survey_input': input_data,
+            'input_data': input_data,
             'categories': categories,
             'models': [(model, model_source, actual_api_key)],
-            'input_description': description,
+            'description': description,
         }
         if mode:
-            classify_kwargs['pdf_mode'] = mode
+            classify_kwargs['mode'] = mode
 
-        result = catllm.classify_ensemble(**classify_kwargs)
+        result = catllm.classify(**classify_kwargs)
 
         processing_time = time.time() - start_time
         num_items = len(result)
@@ -1676,20 +1676,20 @@ with col_input:
                             status_text.text(f"Processing page {current_idx+1} of {total_pages} ({page_label}) ({progress*100:.0f}%){eta_str}")
 
                         try:
-                            # Build kwargs for classify_ensemble
+                            # Build kwargs for classify
                             classify_kwargs = {
-                                "survey_input": items_list,
+                                "input_data": items_list,
                                 "categories": categories_entered,
                                 "models": models_tuples,
-                                "input_description": description,
-                                "pdf_mode": mode,
+                                "description": description,
+                                "mode": mode,
                                 "progress_callback": pdf_progress_callback,
                             }
                             # Add consensus_threshold for ensemble mode
                             if classify_mode == "Ensemble":
                                 classify_kwargs["consensus_threshold"] = consensus_threshold
 
-                            result_df = catllm.classify_ensemble(**classify_kwargs)
+                            result_df = catllm.classify(**classify_kwargs)
 
                             processing_time = time.time() - start_time
                             total_items = len(result_df)
@@ -1737,19 +1737,19 @@ with col_input:
                             status_text.text(f"Processing item {current_idx+1} of {total} ({progress*100:.0f}%){eta_str}")
 
                         try:
-                            # Build kwargs for classify_ensemble
+                            # Build kwargs for classify
                             classify_kwargs = {
-                                "survey_input": items_list,
+                                "input_data": items_list,
                                 "categories": categories_entered,
                                 "models": models_tuples,
-                                "input_description": description,
+                                "description": description,
                                 "progress_callback": item_progress_callback,
                             }
                             # Add consensus_threshold for ensemble mode
                             if classify_mode == "Ensemble":
                                 classify_kwargs["consensus_threshold"] = consensus_threshold
 
-                            result_df = catllm.classify_ensemble(**classify_kwargs)
+                            result_df = catllm.classify(**classify_kwargs)
                             all_results = [result_df]
 
                             processing_time = time.time() - start_time

@@ -9,7 +9,34 @@
 # Claude instructions
 CLAUDE.md
 
-# Test files
+# OS files
+.DS_Store
+**/.DS_Store
+
+# Python cache
+__pycache__/
+**/__pycache__/
+*.pyc
+
+# Build artifacts
+dist/
+
+# Playwright MCP
+.playwright-mcp/
+
+# Test outputs
+test_output/
+examples/tests_output/
+examples/test_output/
+
+# Test data
+examples/test_data/
+
+# Development/test scripts (not needed by end users)
+examples/test_all_providers_classify.py
+examples/test_all_providers_image_classify.py
+examples/test_all_providers_pdf.py
+examples/test_haiku_temp_ensemble.py
 examples/test_multi_class_local.ipynb
 examples/test_multi_class_local.py
 examples/test_web_research_local.ipynb
@@ -18,4 +45,13 @@ examples/test_image_multi_class_local.ipynb
 examples/test_pdf_multi_class_local.ipynb
 examples/test_pdf_multi_class_local.py
 examples/test_classify_local.py
-examples/test_output/
+
+# Diagram generation scripts
+images/generate_classify_diagram.py
+
+# Old/experimental code
+src/catllm/old_code/
+src/catllm/circle_classifier.py
+
+# Test files
+tests/Presentation1.pptx

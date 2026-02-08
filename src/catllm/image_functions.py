@@ -67,6 +67,8 @@ def _encode_image(img_path):
         with open(img_path, "rb") as f:
             encoded = base64.b64encode(f.read()).decode("utf-8")
         ext = Path(img_path).suffix.lstrip(".").lower()
+        if ext == "jpg":
+            ext = "jpeg"
         return encoded, ext, True
     except Exception as e:
         print(f"Error encoding image: {e}")
@@ -1593,204 +1595,218 @@ def explore_image_categories(
             f"Number your categories from 1 through {categories_per_chunk} and provide concise labels only (no descriptions)."
         )
 
-    def call_model_with_image(img_path, prompt_text):
+    def call_model_with_image(img_path, prompt_text, max_retries=6):
         """Send an image to the model and get category extraction."""
         encoded, ext, is_valid = _encode_image(img_path)
         if not is_valid:
             return None
 
-        try:
-            if model_source in ["openai", "huggingface", "huggingface-together", "xai"]:
-                endpoint = f"{openai_base_url}/chat/completions"
-                headers = {
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {api_key}"
-                }
-                messages = [{
-                    "role": "user",
-                    "content": [
+        for attempt in range(max_retries):
+            try:
+                if model_source in ["openai", "huggingface", "huggingface-together", "xai"]:
+                    endpoint = f"{openai_base_url}/chat/completions"
+                    headers = {
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {api_key}"
+                    }
+                    messages = [{
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt_text},
+                            {"type": "image_url", "image_url": {"url": f"data:image/{ext};base64,{encoded}"}}
+                        ]
+                    }]
+                    payload = {"model": user_model, "messages": messages}
+                    if creativity is not None:
+                        payload["temperature"] = creativity
+                    response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+                    response.raise_for_status()
+                    result = response.json()
+                    return result["choices"][0]["message"]["content"]
+
+                elif model_source == "anthropic":
+                    endpoint = "https://api.anthropic.com/v1/messages"
+                    headers = {
+                        "Content-Type": "application/json",
+                        "x-api-key": api_key,
+                        "anthropic-version": "2023-06-01"
+                    }
+                    media_type = f"image/{ext}" if ext else "image/jpeg"
+                    content = [
                         {"type": "text", "text": prompt_text},
-                        {"type": "image_url", "image_url": {"url": f"data:image/{ext};base64,{encoded}"}}
+                        {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": encoded}}
                     ]
-                }]
-                payload = {"model": user_model, "messages": messages}
-                if creativity is not None:
-                    payload["temperature"] = creativity
-                response = req.post(endpoint, headers=headers, json=payload, timeout=120)
-                response.raise_for_status()
-                result = response.json()
-                return result["choices"][0]["message"]["content"]
+                    payload = {
+                        "model": user_model,
+                        "max_tokens": 2048,
+                        "messages": [{"role": "user", "content": content}],
+                    }
+                    if creativity is not None:
+                        payload["temperature"] = creativity
+                    response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+                    response.raise_for_status()
+                    result = response.json()
+                    resp_content = result.get("content", [])
+                    if resp_content and resp_content[0].get("type") == "text":
+                        return resp_content[0].get("text", "")
+                    return None
 
-            elif model_source == "anthropic":
-                endpoint = "https://api.anthropic.com/v1/messages"
-                headers = {
-                    "Content-Type": "application/json",
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01"
-                }
-                media_type = f"image/{ext}" if ext else "image/jpeg"
-                content = [
-                    {"type": "text", "text": prompt_text},
-                    {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": encoded}}
-                ]
-                payload = {
-                    "model": user_model,
-                    "max_tokens": 2048,
-                    "messages": [{"role": "user", "content": content}],
-                }
-                if creativity is not None:
-                    payload["temperature"] = creativity
-                response = req.post(endpoint, headers=headers, json=payload, timeout=120)
-                response.raise_for_status()
-                result = response.json()
-                resp_content = result.get("content", [])
-                if resp_content and resp_content[0].get("type") == "text":
-                    return resp_content[0].get("text", "")
-                return None
-
-            elif model_source == "google":
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
-                headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
-                mime_type = f"image/{ext}" if ext else "image/jpeg"
-                parts = [
-                    {"text": prompt_text},
-                    {"inline_data": {"mime_type": mime_type, "data": encoded}}
-                ]
-                payload = {
-                    "contents": [{"parts": parts}],
-                    "generationConfig": {**({"temperature": creativity} if creativity is not None else {})}
-                }
-                response = req.post(url, headers=headers, json=payload, timeout=120)
-                response.raise_for_status()
-                result = response.json()
-                if "candidates" in result and result["candidates"]:
-                    return result["candidates"][0]["content"]["parts"][0]["text"]
-                return None
-
-            elif model_source == "mistral":
-                endpoint = "https://api.mistral.ai/v1/chat/completions"
-                headers = {
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {api_key}"
-                }
-                messages = [{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt_text},
-                        {"type": "image_url", "image_url": {"url": f"data:image/{ext};base64,{encoded}"}}
+                elif model_source == "google":
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
+                    headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
+                    mime_type = f"image/{ext}" if ext else "image/jpeg"
+                    parts = [
+                        {"text": prompt_text},
+                        {"inline_data": {"mime_type": mime_type, "data": encoded}}
                     ]
-                }]
-                payload = {"model": user_model, "messages": messages}
-                if creativity is not None:
-                    payload["temperature"] = creativity
-                response = req.post(endpoint, headers=headers, json=payload, timeout=120)
-                response.raise_for_status()
-                result = response.json()
-                return result["choices"][0]["message"]["content"]
+                    payload = {
+                        "contents": [{"parts": parts}],
+                        "generationConfig": {**({"temperature": creativity} if creativity is not None else {})}
+                    }
+                    response = req.post(url, headers=headers, json=payload, timeout=120)
+                    response.raise_for_status()
+                    result = response.json()
+                    if "candidates" in result and result["candidates"]:
+                        return result["candidates"][0]["content"]["parts"][0]["text"]
+                    return None
 
-        except Exception as e:
-            print(f"Error processing image {img_path}: {e}")
-            return None
+                elif model_source == "mistral":
+                    endpoint = "https://api.mistral.ai/v1/chat/completions"
+                    headers = {
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {api_key}"
+                    }
+                    messages = [{
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt_text},
+                            {"type": "image_url", "image_url": {"url": f"data:image/{ext};base64,{encoded}"}}
+                        ]
+                    }]
+                    payload = {"model": user_model, "messages": messages}
+                    if creativity is not None:
+                        payload["temperature"] = creativity
+                    response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+                    response.raise_for_status()
+                    result = response.json()
+                    return result["choices"][0]["message"]["content"]
 
-    def describe_image_with_vision(img_path):
+            except Exception as e:
+                delay = 2 ** attempt
+                if attempt < max_retries - 1:
+                    print(f"Error processing image {img_path}: {e}. Retrying in {delay}s... (attempt {attempt + 1}/{max_retries})")
+                    import time as _time
+                    _time.sleep(delay)
+                else:
+                    print(f"Error processing image {img_path}: {e}. All {max_retries} attempts failed.")
+                    return None
+
+    def describe_image_with_vision(img_path, max_retries=6):
         """Use vision model to describe an image's content as text."""
         encoded, ext, is_valid = _encode_image(img_path)
         if not is_valid:
             return None
         prompt_text = make_describe_prompt()
 
-        try:
-            if model_source in ["openai", "huggingface", "huggingface-together", "xai"]:
-                endpoint = f"{openai_base_url}/chat/completions"
-                headers = {
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {api_key}"
-                }
-                messages = [{
-                    "role": "user",
-                    "content": [
+        for attempt in range(max_retries):
+            try:
+                if model_source in ["openai", "huggingface", "huggingface-together", "xai"]:
+                    endpoint = f"{openai_base_url}/chat/completions"
+                    headers = {
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {api_key}"
+                    }
+                    messages = [{
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt_text},
+                            {"type": "image_url", "image_url": {"url": f"data:image/{ext};base64,{encoded}"}}
+                        ]
+                    }]
+                    payload = {"model": user_model, "messages": messages}
+                    if creativity is not None:
+                        payload["temperature"] = creativity
+                    response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+                    response.raise_for_status()
+                    result = response.json()
+                    return result["choices"][0]["message"]["content"]
+
+                elif model_source == "anthropic":
+                    endpoint = "https://api.anthropic.com/v1/messages"
+                    headers = {
+                        "Content-Type": "application/json",
+                        "x-api-key": api_key,
+                        "anthropic-version": "2023-06-01"
+                    }
+                    media_type = f"image/{ext}" if ext else "image/jpeg"
+                    content = [
                         {"type": "text", "text": prompt_text},
-                        {"type": "image_url", "image_url": {"url": f"data:image/{ext};base64,{encoded}"}}
+                        {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": encoded}}
                     ]
-                }]
-                payload = {"model": user_model, "messages": messages}
-                if creativity is not None:
-                    payload["temperature"] = creativity
-                response = req.post(endpoint, headers=headers, json=payload, timeout=120)
-                response.raise_for_status()
-                result = response.json()
-                return result["choices"][0]["message"]["content"]
+                    payload = {
+                        "model": user_model,
+                        "max_tokens": 4096,
+                        "messages": [{"role": "user", "content": content}],
+                    }
+                    if creativity is not None:
+                        payload["temperature"] = creativity
+                    response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+                    response.raise_for_status()
+                    result = response.json()
+                    resp_content = result.get("content", [])
+                    if resp_content and resp_content[0].get("type") == "text":
+                        return resp_content[0].get("text", "")
+                    return None
 
-            elif model_source == "anthropic":
-                endpoint = "https://api.anthropic.com/v1/messages"
-                headers = {
-                    "Content-Type": "application/json",
-                    "x-api-key": api_key,
-                    "anthropic-version": "2023-06-01"
-                }
-                media_type = f"image/{ext}" if ext else "image/jpeg"
-                content = [
-                    {"type": "text", "text": prompt_text},
-                    {"type": "image", "source": {"type": "base64", "media_type": media_type, "data": encoded}}
-                ]
-                payload = {
-                    "model": user_model,
-                    "max_tokens": 4096,
-                    "messages": [{"role": "user", "content": content}],
-                }
-                if creativity is not None:
-                    payload["temperature"] = creativity
-                response = req.post(endpoint, headers=headers, json=payload, timeout=120)
-                response.raise_for_status()
-                result = response.json()
-                resp_content = result.get("content", [])
-                if resp_content and resp_content[0].get("type") == "text":
-                    return resp_content[0].get("text", "")
-                return None
-
-            elif model_source == "google":
-                url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
-                headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
-                mime_type = f"image/{ext}" if ext else "image/jpeg"
-                parts = [
-                    {"text": prompt_text},
-                    {"inline_data": {"mime_type": mime_type, "data": encoded}}
-                ]
-                payload = {
-                    "contents": [{"parts": parts}],
-                    "generationConfig": {**({"temperature": creativity} if creativity is not None else {})}
-                }
-                response = req.post(url, headers=headers, json=payload, timeout=120)
-                response.raise_for_status()
-                result = response.json()
-                if "candidates" in result and result["candidates"]:
-                    return result["candidates"][0]["content"]["parts"][0]["text"]
-                return None
-
-            elif model_source == "mistral":
-                endpoint = "https://api.mistral.ai/v1/chat/completions"
-                headers = {
-                    "Content-Type": "application/json",
-                    "Authorization": f"Bearer {api_key}"
-                }
-                messages = [{
-                    "role": "user",
-                    "content": [
-                        {"type": "text", "text": prompt_text},
-                        {"type": "image_url", "image_url": {"url": f"data:image/{ext};base64,{encoded}"}}
+                elif model_source == "google":
+                    url = f"https://generativelanguage.googleapis.com/v1beta/models/{user_model}:generateContent"
+                    headers = {"x-goog-api-key": api_key, "Content-Type": "application/json"}
+                    mime_type = f"image/{ext}" if ext else "image/jpeg"
+                    parts = [
+                        {"text": prompt_text},
+                        {"inline_data": {"mime_type": mime_type, "data": encoded}}
                     ]
-                }]
-                payload = {"model": user_model, "messages": messages}
-                if creativity is not None:
-                    payload["temperature"] = creativity
-                response = req.post(endpoint, headers=headers, json=payload, timeout=120)
-                response.raise_for_status()
-                result = response.json()
-                return result["choices"][0]["message"]["content"]
+                    payload = {
+                        "contents": [{"parts": parts}],
+                        "generationConfig": {**({"temperature": creativity} if creativity is not None else {})}
+                    }
+                    response = req.post(url, headers=headers, json=payload, timeout=120)
+                    response.raise_for_status()
+                    result = response.json()
+                    if "candidates" in result and result["candidates"]:
+                        return result["candidates"][0]["content"]["parts"][0]["text"]
+                    return None
 
-        except Exception as e:
-            print(f"Error describing image {img_path}: {e}")
-            return None
+                elif model_source == "mistral":
+                    endpoint = "https://api.mistral.ai/v1/chat/completions"
+                    headers = {
+                        "Content-Type": "application/json",
+                        "Authorization": f"Bearer {api_key}"
+                    }
+                    messages = [{
+                        "role": "user",
+                        "content": [
+                            {"type": "text", "text": prompt_text},
+                            {"type": "image_url", "image_url": {"url": f"data:image/{ext};base64,{encoded}"}}
+                        ]
+                    }]
+                    payload = {"model": user_model, "messages": messages}
+                    if creativity is not None:
+                        payload["temperature"] = creativity
+                    response = req.post(endpoint, headers=headers, json=payload, timeout=120)
+                    response.raise_for_status()
+                    result = response.json()
+                    return result["choices"][0]["message"]["content"]
+
+            except Exception as e:
+                delay = 2 ** attempt
+                if attempt < max_retries - 1:
+                    print(f"Error describing image {img_path}: {e}. Retrying in {delay}s... (attempt {attempt + 1}/{max_retries})")
+                    import time as _time
+                    _time.sleep(delay)
+                else:
+                    print(f"Error describing image {img_path}: {e}. All {max_retries} attempts failed.")
+                    return None
 
     def call_model_with_text(prompt_text):
         """Send text to the model for category extraction."""

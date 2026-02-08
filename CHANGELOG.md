@@ -5,7 +5,23 @@ All notable changes to CatLLM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.1.0] - 2025-02-08
+
+### Added
+- **Unified `classify()` API**: Added 9 missing parameters (`survey_question`, `use_json_schema`, `max_workers`, `fail_strategy`, `max_retries`, `batch_retries`, `retry_delay`, `pdf_dpi`, `auto_download`) — `classify()` is now the single entry point for all classification
+- **4-tuple model format**: `(model, provider, api_key, {"creativity": 0.5})` for per-model temperature control in ensembles
+- **Image/PDF auto-category extraction**: `categories="auto"` now works for images and PDFs via routing through `extract()`, not just text
+- **Retry logic for image extraction**: Exponential backoff (6 attempts) for `call_model_with_image()` and `describe_image_with_vision()`
+- `progress_callback` support for real-time progress tracking
+
+### Fixed
+- **Agreement calculation**: Now measures fraction of models agreeing with consensus (was incorrectly measuring fraction voting 1)
+- **MIME type for Anthropic**: Normalized `image/jpg` to `image/jpeg` in `_encode_image()`, fixing 400 errors on Anthropic image API calls
+- Removed dead duplicate `classify()` from `main.py`
+
+### Changed
+- HuggingFace Space app now uses `classify()` instead of `classify_ensemble()` directly
+- All example/test scripts updated to use `classify()` API
 
 ---
 
@@ -276,6 +292,7 @@ Most code will work without changes. Key differences:
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **2.1.0** | **2025-02-08** | **Unified classify() API, image auto-categories, ensemble fixes** |
 | **2.0.0** | **2025-01-17** | **Simplified API, ensemble methods, removed SDK dependencies** |
 | 0.1.15 | 2025-01-10 | Summarization, focus parameter, Streamlit web app |
 | 0.1.14 | 2025-01-02 | Ollama local inference |
@@ -296,7 +313,7 @@ Most code will work without changes. Key differences:
 
 ---
 
-[Unreleased]: https://github.com/chrissoria/cat-llm/compare/v2.0.0...HEAD
+[2.1.0]: https://github.com/chrissoria/cat-llm/compare/v2.0.0...v2.1.0
 [2.0.0]: https://github.com/chrissoria/cat-llm/compare/v0.1.15...v2.0.0
 [0.1.15]: https://github.com/chrissoria/cat-llm/compare/v0.1.14...v0.1.15
 [0.1.14]: https://github.com/chrissoria/cat-llm/compare/v0.1.13...v0.1.14

@@ -1,5 +1,5 @@
 streamlit>=1.32.0
-cat-llm[pdf]>=0.1.15
+cat-llm[pdf]>=2.1.0
 mistralai
 pydantic==2.10.6
 huggingface_hub<0.27.0
