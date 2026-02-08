@@ -5,7 +5,7 @@ All notable changes to CatLLM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.1.0] - 2025-02-08
+## [2.2.0] - 2025-02-08
 
 ### Added
 - **Unified `classify()` API**: Added 9 missing parameters (`survey_question`, `use_json_schema`, `max_workers`, `fail_strategy`, `max_retries`, `batch_retries`, `retry_delay`, `pdf_dpi`, `auto_download`) — `classify()` is now the single entry point for all classification
@@ -292,7 +292,7 @@ Most code will work without changes. Key differences:
 
 | Version | Date | Highlights |
 |---------|------|------------|
-| **2.1.0** | **2025-02-08** | **Unified classify() API, image auto-categories, ensemble fixes** |
+| **2.2.0** | **2025-02-08** | **Unified classify() API, image auto-categories, ensemble fixes** |
 | **2.0.0** | **2025-01-17** | **Simplified API, ensemble methods, removed SDK dependencies** |
 | 0.1.15 | 2025-01-10 | Summarization, focus parameter, Streamlit web app |
 | 0.1.14 | 2025-01-02 | Ollama local inference |
@@ -313,7 +313,7 @@ Most code will work without changes. Key differences:
 
 ---
 
-[2.1.0]: https://github.com/chrissoria/cat-llm/compare/v2.0.0...v2.1.0
+[2.2.0]: https://github.com/chrissoria/cat-llm/compare/v2.0.0...v2.2.0
 [2.0.0]: https://github.com/chrissoria/cat-llm/compare/v0.1.15...v2.0.0
 [0.1.15]: https://github.com/chrissoria/cat-llm/compare/v0.1.14...v0.1.15
 [0.1.14]: https://github.com/chrissoria/cat-llm/compare/v0.1.13...v0.1.14
