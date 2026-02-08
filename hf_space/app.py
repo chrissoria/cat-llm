@@ -1340,6 +1340,7 @@ This app is currently in **beta** and **free to use** while CatLLM is under revi
 - Reach out directly: [chrissoria@berkeley.edu](mailto:chrissoria@berkeley.edu)
 
 ### Links
+- **Website**: [christophersoria.com](https://christophersoria.com)
 - **PyPI**: [pip install cat-llm](https://pypi.org/project/cat-llm/)
 - **GitHub**: [github.com/chrissoria/cat-llm](https://github.com/chrissoria/cat-llm)
 
