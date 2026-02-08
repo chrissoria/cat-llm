@@ -1344,6 +1344,9 @@ with st.expander("About This App"):
 - **Assign Categories**: Classify data into your predefined categories
 - **Extract & Assign**: Let CatLLM discover categories, then classify all your data
 
+### Supported Providers
+OpenAI (GPT-4o, GPT-4o Mini), Anthropic (Claude), Google (Gemini), Mistral, HuggingFace, xAI (Grok), and Perplexity. Use the free tier or bring your own API key.
+
 ### Beta Test - We Want Your Feedback!
 This app is currently in **beta** and **free to use** while CatLLM is under review for publication, made possible by **Bashir Ahmed's generous fellowship support**.
 
