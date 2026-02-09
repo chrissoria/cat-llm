@@ -1,8 +1,0 @@
-survey_input,model_response,json,1,2,3,4,5
-I moved because I got a new job in another city,"{
-  ""1"": 0,
-  ""2"": 0,
-  ""3"": 1,
-  ""4"": 0,
-  ""5"": 0
-}","{""1"":0,""2"":0,""3"":1,""4"":0,""5"":0}",0,0,1,0,0

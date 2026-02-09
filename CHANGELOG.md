@@ -5,6 +5,14 @@ All notable changes to CatLLM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.0] - 2026-02-08
+
+### Added
+- **`explore()` function**: New entry point for raw category extraction — returns every category string from every chunk across every iteration, with duplicates intact. Useful for analyzing category stability and building saturation curves.
+- `return_raw` parameter on `explore_common_categories()` to support raw output mode
+
+---
+
 ## [2.2.0] - 2025-02-08
 
 ### Added
@@ -292,6 +300,7 @@ Most code will work without changes. Key differences:
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **2.3.0** | **2026-02-08** | **`explore()` for raw category extraction and saturation analysis** |
 | **2.2.0** | **2025-02-08** | **Unified classify() API, image auto-categories, ensemble fixes** |
 | **2.0.0** | **2025-01-17** | **Simplified API, ensemble methods, removed SDK dependencies** |
 | 0.1.15 | 2025-01-10 | Summarization, focus parameter, Streamlit web app |
@@ -313,6 +322,7 @@ Most code will work without changes. Key differences:
 
 ---
 
+[2.3.0]: https://github.com/chrissoria/cat-llm/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/chrissoria/cat-llm/compare/v2.0.0...v2.2.0
 [2.0.0]: https://github.com/chrissoria/cat-llm/compare/v0.1.15...v2.0.0
 [0.1.15]: https://github.com/chrissoria/cat-llm/compare/v0.1.14...v0.1.15

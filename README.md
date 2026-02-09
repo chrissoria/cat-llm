@@ -19,6 +19,7 @@ CatLLM is a Python package designed specifically for survey research that uses L
 
 - **Category Assignment**: Classify responses into your predefined categories (multi-label supported)
 - **Category Extraction**: Automatically discover and extract categories from your data when you don't have a predefined scheme
+- **Category Exploration**: Analyze category stability and saturation through repeated raw extraction
 
 With leading models like GPT-5, Gemini, and Qwen 3, CatLLM achieves **98% accuracy compared to human consensus** on classification tasks.
 
@@ -35,6 +36,7 @@ With leading models like GPT-5, Gemini, and Qwen 3, CatLLM achieves **98% accura
 - [API Reference](#api-reference)
   - [classify()](#classify) - Unified function for text, image, and PDF (auto-detects input type)
   - [extract()](#extract) - Unified function for category extraction
+  - [explore()](#explore) - Raw category extraction for saturation analysis
   - [summarize()](#summarize) - Unified function for text and PDF summarization
   - [image_score_drawing()](#image_score_drawing)
   - [image_features()](#image_features)
@@ -233,6 +235,54 @@ results = cat.extract(
 
 print(results['top_categories'])
 # ['Employment opportunity', 'Family reasons', 'Cost of living', ...]
+```
+
+---
+
+### `explore()`
+
+Raw category extraction for frequency and saturation analysis. Unlike `extract()`, which normalizes, deduplicates, and semantically merges categories into a clean final set, `explore()` returns **every category string from every chunk across every iteration** — with duplicates intact.
+
+This is useful for analyzing which categories are robust (consistently discovered across runs) versus which are noise (appearing only once or twice). By increasing iterations, you can build saturation curves showing when category discovery converges.
+
+**Parameters:**
+- `input_data`: List of text responses or pandas Series
+- `api_key` (str): API key for the LLM service
+- `description` (str): The survey question or description of the data
+- `categories_per_chunk` (int, default=10): Categories to extract per chunk
+- `divisions` (int, default=5): Number of chunks to divide data into
+- `user_model` (str, default="gpt-4o"): Model to use
+- `creativity` (float, optional): Temperature setting (0.0-1.0)
+- `specificity` (str, default="broad"): "broad" or "specific" category granularity
+- `research_question` (str, optional): Research context to guide extraction
+- `focus` (str, optional): Focus instruction (e.g., "decisions to relocate")
+- `iterations` (int, default=3): Number of passes over the data
+- `random_state` (int, optional): Random seed for reproducibility
+- `filename` (str, optional): Output CSV filename (one category per row)
+
+**Returns:**
+- `list[str]`: Every category extracted from every chunk across every iteration. Length ≈ `iterations × divisions × categories_per_chunk`.
+
+**Example:**
+
+```python
+import catllm as cat
+
+# Run extraction with many iterations for saturation analysis
+raw_categories = cat.explore(
+    input_data=df['responses'],
+    description="Why did you move?",
+    api_key=api_key,
+    iterations=20,
+    divisions=5,
+    categories_per_chunk=10,
+)
+
+# Count how often each category appears across runs
+from collections import Counter
+counts = Counter(raw_categories)
+for category, freq in counts.most_common(15):
+    print(f"{freq:3d}x  {category}")
 ```
 
 ---

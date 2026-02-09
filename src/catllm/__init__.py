@@ -17,6 +17,7 @@ from .__about__ import (
 
 # Main entry points
 from .extract import extract
+from .explore import explore
 from .classify import classify
 from .summarize import summarize
 
@@ -82,6 +83,7 @@ from .image_functions import (
 __all__ = [
     # Main entry points
     "extract",
+    "explore",
     "classify",
     "summarize",
     # Provider utilities

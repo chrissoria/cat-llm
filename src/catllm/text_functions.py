@@ -1342,6 +1342,7 @@ def explore_common_categories(
     random_state: int = None,
     focus: str = None,
     progress_callback: callable = None,
+    return_raw: bool = False,
     # Legacy parameter names for backward compatibility
     user_model: str = None,
     model_source: str = None,
@@ -1497,6 +1498,10 @@ def explore_common_categories(
             current_step += 1
             if progress_callback:
                 progress_callback(current_step, total_steps, f"Pass {pass_idx+1}/{iterations}, chunk {i+1}/{divisions}")
+
+    # Early return for raw output (used by explore())
+    if return_raw:
+        return all_items
 
     # Normalize and count
     def normalize_category(cat):

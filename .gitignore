@@ -53,5 +53,8 @@ images/generate_classify_diagram.py
 src/catllm/old_code/
 src/catllm/circle_classifier.py
 
-# Test files
-tests/Presentation1.pptx
+# Test files and test directory
+tests/
+
+# Survey summarizer (separate project)
+survey-summarizer
