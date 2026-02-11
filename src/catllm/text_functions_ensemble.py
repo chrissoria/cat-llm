@@ -432,6 +432,7 @@ def aggregate_results(
             "consensus": {},
             "agreement": {},
             "failed_models": failed_models,
+            "missing_keys": {},
             "error": f"Models failed (strict mode): {failed_models}",
         }
 
@@ -440,6 +441,7 @@ def aggregate_results(
             "per_model": {},
             "consensus": {},
             "agreement": {},
+            "missing_keys": {},
             "failed_models": failed_models,
             "error": "All models failed",
         }
@@ -448,11 +450,15 @@ def aggregate_results(
     consensus = {}
     agreement_scores = {}
     num_successful = len(successful)
+    # Track missing keys per model (keys in range but absent from response)
+    missing_keys_count = {}
 
     for i in range(1, len(categories) + 1):
         key = str(i)
         votes = []
         for model_name, parsed in successful.items():
+            if key not in parsed:
+                missing_keys_count[model_name] = missing_keys_count.get(model_name, 0) + 1
             vote = parsed.get(key, "0")
             # Handle both string and int values
             try:
@@ -473,6 +479,7 @@ def aggregate_results(
         "consensus": consensus,
         "agreement": agreement_scores,
         "failed_models": failed_models,
+        "missing_keys": missing_keys_count,
         "error": None,
     }
 
@@ -2524,8 +2531,38 @@ Provide your answer in JSON format where the category number is the key and "1" 
                 print(f"  -> All retries failed. Stopping retry loop (possible server issue).")
                 break
 
+    # Print summary of filled/failed values
+    total_filled = 0
+    filled_by_model = {}
+    total_schema_failures = 0
+    failures_by_model = {}
+    for result in all_results:
+        if result.get("skipped"):
+            continue
+        agg = result["aggregated"]
+        # Count missing keys that were filled with 0
+        for model_name, count in agg.get("missing_keys", {}).items():
+            total_filled += count
+            filled_by_model[model_name] = filled_by_model.get(model_name, 0) + count
+        # Count models that still failed after retries
+        for model_name in agg.get("failed_models", []):
+            total_schema_failures += 1
+            failures_by_model[model_name] = failures_by_model.get(model_name, 0) + 1
+
+    if total_filled > 0 or total_schema_failures > 0:
+        print(f"\n--- Classification Quality Summary ---")
+        if total_filled > 0:
+            print(f"  Missing JSON keys filled with 0: {total_filled} values")
+            for model_name, count in sorted(filled_by_model.items()):
+                print(f"    {model_name}: {count} filled")
+        if total_schema_failures > 0:
+            print(f"  Schema failures (after retries): {total_schema_failures}")
+            for model_name, count in sorted(failures_by_model.items()):
+                print(f"    {model_name}: {count} failed rows")
+        print()
+
     # Build output DataFrames
-    print("\nBuilding output DataFrames...")
+    print("Building output DataFrames...")
     return build_output_dataframes(
         all_results,
         model_configs,
