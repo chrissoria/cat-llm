@@ -106,7 +106,10 @@ def classify(
         chain_of_thought (bool): Enable step-by-step reasoning. Default True.
         step_back_prompt (bool): Enable step-back prompting.
         context_prompt (bool): Add expert context to prompts.
-        thinking_budget (int): Token budget for thinking (Google models).
+        thinking_budget (int): Controls reasoning behavior per provider:
+            Google: token budget for extended thinking (0=off, >0=on).
+            OpenAI: maps to reasoning_effort (0="minimal", >0="high").
+            Anthropic: enables extended thinking (0=off, >0=on, min 1024).
         example1-6 (str): Example categorizations for few-shot learning.
         filename (str): Output filename for CSV.
         save_directory (str): Directory to save results.
