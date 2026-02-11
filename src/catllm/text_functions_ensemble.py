@@ -2095,7 +2095,7 @@ Provide your answer in JSON format where the category number is the key and "1" 
                         messages=messages,
                         json_schema=json_schemas[cfg["model"]],
                         creativity=effective_creativity,
-                        thinking_budget=thinking_budget if cfg["provider"] in ("google", "openai", "anthropic") else None,
+                        thinking_budget=thinking_budget if cfg["provider"] in ("google", "openai", "anthropic", "huggingface", "huggingface-together") else None,
                         max_retries=max_retries,
                     )
 
@@ -2150,7 +2150,7 @@ Provide your answer in JSON format where the category number is the key and "1" 
                         messages=messages,
                         json_schema=json_schemas[cfg["model"]],
                         creativity=effective_creativity,
-                        thinking_budget=thinking_budget if cfg["provider"] in ("google", "openai", "anthropic") else None,
+                        thinking_budget=thinking_budget if cfg["provider"] in ("google", "openai", "anthropic", "huggingface", "huggingface-together") else None,
                         max_retries=max_retries,
                     )
 
@@ -2194,7 +2194,7 @@ Provide your answer in JSON format where the category number is the key and "1" 
                         messages=messages,
                         json_schema=json_schemas[cfg["model"]],
                         creativity=effective_creativity,
-                        thinking_budget=thinking_budget if cfg["provider"] in ("google", "openai", "anthropic") else None,
+                        thinking_budget=thinking_budget if cfg["provider"] in ("google", "openai", "anthropic", "huggingface", "huggingface-together") else None,
                         max_retries=max_retries,
                     )
                     if error:

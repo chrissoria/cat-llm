@@ -5,6 +5,18 @@ All notable changes to CatLLM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.4] - 2026-02-11
+
+### Fixed
+- **HuggingFace thinking support**: Models that reason by default (e.g., Qwen3) can now be controlled via `thinking_budget=0`, which sends `chat_template_kwargs: {"enable_thinking": False}` to disable thinking mode. HuggingFace providers now correctly receive `thinking_budget` through the payload pipeline.
+- **OpenAI reasoning model detection**: Added `gpt-5` to reasoning model prefix list alongside o1/o3/o4. Simplified temperature handling — reasoning models never set temperature (only default=1 is valid).
+
+### Changed
+- **Consolidated duplicate `UnifiedLLMClient`**: Removed ~930 lines of duplicated provider infrastructure from `text_functions.py`. `_providers.py` is now the single source of truth; `text_functions.py` re-exports all names for backward compatibility.
+- **Added `ARCHITECTURE.md`**: Module dependency map and `classify()` call chain showing where each function and prompting strategy originates.
+
+---
+
 ## [2.3.3] - 2026-02-11
 
 ### Fixed

@@ -192,8 +192,11 @@ class UnifiedLLMClient:
             return self._build_google_payload(messages, json_schema, creativity, thinking_budget, force_json)
         elif self.provider == "openai":
             return self._build_openai_payload(messages, json_schema, creativity, force_json, thinking_budget)
+        elif self.provider in ("huggingface", "huggingface-together"):
+            # HuggingFace needs thinking_budget to disable thinking on models that reason by default
+            return self._build_openai_payload(messages, json_schema, creativity, force_json, thinking_budget)
         else:
-            # Other OpenAI-compatible providers (xai, mistral, huggingface, etc.)
+            # Other OpenAI-compatible providers (xai, mistral, etc.)
             return self._build_openai_payload(messages, json_schema, creativity, force_json)
 
     def _build_openai_payload(
@@ -235,22 +238,25 @@ class UnifiedLLMClient:
             payload["response_format"] = {"type": "json_object"}
         # else: no response_format - allow text responses
 
-        # OpenAI reasoning_effort: only supported by reasoning models (o-series)
-        # Regular models (gpt-4o, etc.) don't support this parameter
+        # OpenAI reasoning models (o-series, GPT-5) only accept temperature=1.
+        # Use reasoning_effort to control reasoning depth instead.
         _is_reasoning_model = self.provider == "openai" and any(
-            self.model.startswith(p) for p in ("o1", "o3", "o4")
+            self.model.startswith(p) for p in ("o1", "o3", "o4", "gpt-5")
         )
-        if _is_reasoning_model and thinking_budget is not None:
-            if thinking_budget > 0:
-                payload["reasoning_effort"] = "high"
-                # When reasoning is enabled, temperature must NOT be in payload
-            else:
-                payload["reasoning_effort"] = "minimal"
-                # With minimal reasoning, temperature can still be set
-                if creativity is not None:
-                    payload["temperature"] = creativity
+        if _is_reasoning_model:
+            # Never set temperature for reasoning models (only default=1 is valid)
+            if thinking_budget is not None:
+                if thinking_budget > 0:
+                    payload["reasoning_effort"] = "high"
+                else:
+                    payload["reasoning_effort"] = "minimal"
         elif creativity is not None:
             payload["temperature"] = creativity
+
+        # HuggingFace: disable thinking for models that reason by default (e.g., Qwen3)
+        # when thinking_budget is explicitly set to 0
+        if self.provider in ("huggingface", "huggingface-together") and thinking_budget is not None and thinking_budget == 0:
+            payload["chat_template_kwargs"] = {"enable_thinking": False}
 
         return payload
 
