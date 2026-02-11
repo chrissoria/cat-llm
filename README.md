@@ -58,6 +58,12 @@ For PDF support:
 pip install cat-llm[pdf]
 ```
 
+> **Note:** Web data collection (`build_dataset_from_web`) has been moved to its own package due to its different focus. Install it separately:
+> ```console
+> pip install llm-web-research
+> ```
+> See [llm-web-research](https://github.com/chrissoria/llm-web-research) for details.
+
 -----
 
 ## Quick Start
