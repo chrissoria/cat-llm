@@ -8,7 +8,7 @@ dynamic = ["version"]
 description = 'A tool for categorizing text data and images using LLMs and vision models'
 readme = "README.md"
 requires-python = ">=3.8"
-license = "MIT"
+license = "GPL-3.0-or-later"
 keywords = ["llm","categorizer","survey data", "image classification", "structured output", "text classification"]
 authors = [
   { name = "Chris Soria", email = "chrissoria@berkeley.edu" },

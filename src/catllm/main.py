@@ -12,7 +12,7 @@ def extract(
     description="",
     max_categories=12,
     categories_per_chunk=10,
-    divisions=5,
+    divisions=12,
     user_model="gpt-4o",
     creativity=None,
     specificity="broad",
@@ -20,7 +20,7 @@ def extract(
     mode="text",
     filename=None,
     model_source="auto",
-    iterations=3,
+    iterations=8,
     random_state=None,
     focus=None,
 ):

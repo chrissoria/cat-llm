@@ -5,6 +5,13 @@ All notable changes to CatLLM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.1] - 2026-02-10
+
+### Changed
+- **Extraction defaults updated**: `divisions` changed from 5 to **12** and `iterations` changed from 3 to **8** for `extract()`, `explore()`, and the `main.py` wrapper. These new defaults were determined through empirical analysis: a 6x6 grid search over both parameters (10 repeats per cell, 360 total runs) showed that extraction consistency peaks at 12 divisions and 8 iterations, with no meaningful improvement beyond this point.
+
+---
+
 ## [2.3.0] - 2026-02-08
 
 ### Added
@@ -300,6 +307,7 @@ Most code will work without changes. Key differences:
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **2.3.1** | **2026-02-10** | **Empirically optimized extraction defaults (divisions=12, iterations=8)** |
 | **2.3.0** | **2026-02-08** | **`explore()` for raw category extraction and saturation analysis** |
 | **2.2.0** | **2025-02-08** | **Unified classify() API, image auto-categories, ensemble fixes** |
 | **2.0.0** | **2025-01-17** | **Simplified API, ensemble methods, removed SDK dependencies** |
@@ -322,6 +330,7 @@ Most code will work without changes. Key differences:
 
 ---
 
+[2.3.1]: https://github.com/chrissoria/cat-llm/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/chrissoria/cat-llm/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/chrissoria/cat-llm/compare/v2.0.0...v2.2.0
 [2.0.0]: https://github.com/chrissoria/cat-llm/compare/v0.1.15...v2.0.0

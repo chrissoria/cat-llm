@@ -44,7 +44,7 @@ With leading models like GPT-5, Gemini, and Qwen 3, CatLLM achieves **98% accura
 - [Deprecated Functions](#deprecated-functions)
 - [Related Projects](#related-projects)
 - [Academic Research](#academic-research)
-- [Contact](#contact)
+- [Contributing & Support](#contributing--support)
 - [License](#license)
 
 ## Installation
@@ -199,6 +199,8 @@ The output includes:
 
 Unified category extraction function for text, image, and PDF inputs. Automatically discovers categories in your data when you don't have a predefined scheme.
 
+> **Planned improvement:** Allow specifying a separate, more powerful model for the semantic merge step (e.g., use GPT-4o-mini for bulk extraction, GPT-4o for the final consolidation). This "tiered" approach could improve merge quality without significantly increasing cost.
+
 **Parameters:**
 - `input_data`: The data to explore (text list, image paths, or PDF paths)
 - `api_key` (str): API key for the LLM service
@@ -206,12 +208,15 @@ Unified category extraction function for text, image, and PDF inputs. Automatica
 - `description` (str): Description of the input data
 - `max_categories` (int, default=12): Maximum number of categories to return
 - `categories_per_chunk` (int, default=10): Categories to extract per chunk
-- `divisions` (int, default=5): Number of chunks to divide data into
+- `divisions` (int, default=12): Number of chunks to divide data into
+- `iterations` (int, default=8): Number of extraction passes over the data
 - `user_model` (str, default="gpt-4o"): Model to use
 - `specificity` (str, default="broad"): "broad" or "specific" category granularity
 - `research_question` (str, optional): Research context to guide extraction
 - `focus` (str, optional): Focus instruction for category extraction (e.g., "emotional responses")
 - `filename` (str, optional): Output filename for CSV
+
+> **Default parameter rationale:** The defaults of `divisions=12` and `iterations=8` were determined through empirical analysis. We ran a 6x6 grid search over [1, 4, 8, 12, 16, 20] for both parameters, repeating each combination 10 times and measuring pairwise Jaro-Winkler consistency across runs. Consistency peaked at 12 divisions and 8 iterations, with values beyond this point offering no meaningful improvement.
 
 **Returns:**
 - `dict` with keys:
@@ -250,13 +255,13 @@ This is useful for analyzing which categories are robust (consistently discovere
 - `api_key` (str): API key for the LLM service
 - `description` (str): The survey question or description of the data
 - `categories_per_chunk` (int, default=10): Categories to extract per chunk
-- `divisions` (int, default=5): Number of chunks to divide data into
+- `divisions` (int, default=12): Number of chunks to divide data into
 - `user_model` (str, default="gpt-4o"): Model to use
 - `creativity` (float, optional): Temperature setting (0.0-1.0)
 - `specificity` (str, default="broad"): "broad" or "specific" category granularity
 - `research_question` (str, optional): Research context to guide extraction
 - `focus` (str, optional): Focus instruction (e.g., "decisions to relocate")
-- `iterations` (int, default=3): Number of passes over the data
+- `iterations` (int, default=8): Number of passes over the data
 - `random_state` (int, optional): Random seed for reproducibility
 - `filename` (str, optional): Output CSV filename (one category per row)
 
@@ -512,9 +517,14 @@ If you use this package for research, please cite:
 
 Soria, C. (2025). CatLLM (0.1.0). Zenodo. https://doi.org/10.5281/zenodo.15532317
 
-## Contact
+## Contributing & Support
 
-**Interested in research collaboration?** Email: [ChrisSoria@Berkeley.edu](mailto:ChrisSoria@Berkeley.edu)
+Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
+
+- **Report bugs or request features**: [Open a GitHub Issue](https://github.com/chrissoria/cat-llm/issues)
+- **Ask questions or get help**: [GitHub Discussions](https://github.com/chrissoria/cat-llm/discussions) or [Issues](https://github.com/chrissoria/cat-llm/issues)
+- **Contribute code**: Fork the repo, create a branch, and submit a pull request — see [CONTRIBUTING.md](CONTRIBUTING.md)
+- **Research collaboration**: Email [ChrisSoria@Berkeley.edu](mailto:ChrisSoria@Berkeley.edu)
 
 ## License
 
