@@ -5,6 +5,18 @@ All notable changes to CatLLM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.0] - 2026-02-11
+
+### Fixed
+- **Schema validation in aggregate_results**: Responses with at least one valid category key (0/1 value) are accepted, but invalid keys are now stripped before storing — prevents garbage values like `"yes"` from silently becoming phantom 0 votes in consensus.
+- **Failed model output**: Failed models now produce `None`/NA in output CSVs instead of silent zeros, in both `_save_partial_results()` and `build_output_dataframes()`.
+- **Batch retry detection**: Schema validation applied consistently to detect failures and verify retry success.
+
+### Added
+- **Missing keys tracking**: `aggregate_results()` now returns `missing_keys` counts per model, and a classification quality summary is printed after classification completes.
+
+---
+
 ## [2.3.4] - 2026-02-11
 
 ### Fixed

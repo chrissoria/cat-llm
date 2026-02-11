@@ -410,16 +410,21 @@ def aggregate_results(
         else:
             try:
                 parsed = json.loads(json_str)
-                # Validate: at least one key must be a numbered string within
-                # the category range (e.g. "1"-"6" for 6 categories) with a
-                # valid 0/1 value. Missing keys are filled with 0 downstream
-                # (omitted key = category not present).
+                # Accept if at least one key is a valid numbered category
+                # with a 0/1 value. Models may only return present categories
+                # (e.g. {"3": "1"}) — missing keys default to 0 downstream.
+                # Strip out any keys with invalid values so they also
+                # default to 0 cleanly instead of hitting error paths.
                 valid_count = sum(
                     1 for k, v in parsed.items()
                     if k in expected_keys and str(v).strip() in ("0", "1")
                 )
                 if valid_count > 0:
-                    successful[model_name] = parsed
+                    cleaned = {
+                        k: str(v).strip() for k, v in parsed.items()
+                        if k in expected_keys and str(v).strip() in ("0", "1")
+                    }
+                    successful[model_name] = cleaned
                 else:
                     failed_models.append(model_name)
             except json.JSONDecodeError:
@@ -2462,8 +2467,7 @@ Provide your answer in JSON format where the category number is the key and "1" 
                         # Check JSON parsing AND schema validation
                         try:
                             parsed = json.loads(json_str)
-                            # Validate: at least one numbered key in the
-                            # category range with a valid 0/1 value
+                            # At least one valid numbered key with 0/1 value
                             valid_count = sum(
                                 1 for k, v in parsed.items()
                                 if k in expected_keys and str(v).strip() in ("0", "1")
