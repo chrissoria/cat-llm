@@ -2429,6 +2429,9 @@ Provide your answer in JSON format where the category number is the key and "1" 
 
     # Retry logic for failed (row, model) pairs
     if batch_retries > 0:
+        num_cats = len(categories)
+        expected_keys = {str(i) for i in range(1, num_cats + 1)}
+
         for retry_num in range(1, batch_retries + 1):
             # Find all failed (row_idx, model_config) pairs
             failed_pairs = []
@@ -2443,9 +2446,17 @@ Provide your answer in JSON format where the category number is the key and "1" 
                     if error is not None:
                         failed_pairs.append((row_idx, cfg))
                     else:
-                        # Also check if JSON parsing would fail
+                        # Check JSON parsing AND schema validation
                         try:
                             parsed = json.loads(json_str)
+                            # Validate: must have at least one numbered key in
+                            # the category range with a valid 0/1 value
+                            valid_count = sum(
+                                1 for k, v in parsed.items()
+                                if k in expected_keys and str(v).strip() in ("0", "1")
+                            )
+                            if valid_count == 0:
+                                failed_pairs.append((row_idx, cfg))
                         except (json.JSONDecodeError, TypeError):
                             failed_pairs.append((row_idx, cfg))
 
@@ -2474,10 +2485,15 @@ Provide your answer in JSON format where the category number is the key and "1" 
                     all_results[row_idx]["model_results"][model_name] = (json_result, error)
 
                     if error is None:
-                        # Verify JSON is valid
+                        # Verify JSON is valid and has correct schema
                         try:
-                            json.loads(json_result)
-                            successes_this_round += 1
+                            parsed = json.loads(json_result)
+                            valid_count = sum(
+                                1 for k, v in parsed.items()
+                                if k in expected_keys and str(v).strip() in ("0", "1")
+                            )
+                            if valid_count > 0:
+                                successes_this_round += 1
                         except (json.JSONDecodeError, TypeError):
                             pass
 
