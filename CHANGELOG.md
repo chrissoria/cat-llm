@@ -5,6 +5,16 @@ All notable changes to CatLLM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.3.3] - 2026-02-11
+
+### Fixed
+- **Critical: Thinking support was applied to wrong module** — v2.3.2 fixes were only applied to `_providers.py`, but the classify pipeline imports `UnifiedLLMClient` from `text_functions.py`. All three provider fixes now applied to both modules.
+- **Google thinking support**: Fixed `thinkingConfig` placement in `text_functions.py` — must be inside `generationConfig`, not at the top level. Added minimum budget of 128 tokens.
+- **OpenAI reasoning support**: `reasoning_effort` now only applied to reasoning models (o1, o3, o4-series). Regular models like gpt-4o skip this parameter gracefully.
+- **Anthropic thinking support**: Extended thinking + forced `tool_choice` are incompatible — now uses `tool_choice: "auto"` when thinking is enabled. Also added temperature=1 requirement and minimum budget of 1024 tokens.
+
+---
+
 ## [2.3.2] - 2026-02-10
 
 ### Fixed
@@ -316,6 +326,8 @@ Most code will work without changes. Key differences:
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **2.3.3** | **2026-02-11** | **Fix thinking support in classify pipeline (was applied to wrong module)** |
+| **2.3.2** | **2026-02-10** | **Thinking fixes for Google, OpenAI, Anthropic (in _providers.py only)** |
 | **2.3.1** | **2026-02-10** | **Empirically optimized extraction defaults (divisions=12, iterations=8)** |
 | **2.3.0** | **2026-02-08** | **`explore()` for raw category extraction and saturation analysis** |
 | **2.2.0** | **2025-02-08** | **Unified classify() API, image auto-categories, ensemble fixes** |
@@ -339,6 +351,8 @@ Most code will work without changes. Key differences:
 
 ---
 
+[2.3.3]: https://github.com/chrissoria/cat-llm/compare/v2.3.2...v2.3.3
+[2.3.2]: https://github.com/chrissoria/cat-llm/compare/v2.3.1...v2.3.2
 [2.3.1]: https://github.com/chrissoria/cat-llm/compare/v2.3.0...v2.3.1
 [2.3.0]: https://github.com/chrissoria/cat-llm/compare/v2.2.0...v2.3.0
 [2.2.0]: https://github.com/chrissoria/cat-llm/compare/v2.0.0...v2.2.0

@@ -235,10 +235,12 @@ class UnifiedLLMClient:
             payload["response_format"] = {"type": "json_object"}
         # else: no response_format - allow text responses
 
-        # OpenAI reasoning_effort: translate thinking_budget to reasoning_effort
-        # thinking_budget=0 → reasoning_effort="minimal" (suppress reasoning)
-        # thinking_budget>0 → reasoning_effort="high" (enable reasoning)
-        if self.provider == "openai" and thinking_budget is not None:
+        # OpenAI reasoning_effort: only supported by reasoning models (o-series)
+        # Regular models (gpt-4o, etc.) don't support this parameter
+        _is_reasoning_model = self.provider == "openai" and any(
+            self.model.startswith(p) for p in ("o1", "o3", "o4")
+        )
+        if _is_reasoning_model and thinking_budget is not None:
             if thinking_budget > 0:
                 payload["reasoning_effort"] = "high"
                 # When reasoning is enabled, temperature must NOT be in payload
@@ -302,13 +304,17 @@ class UnifiedLLMClient:
             payload["temperature"] = creativity
 
         # Use tool calling for structured output (most reliable for Anthropic)
+        # When thinking is enabled, forced tool_choice is not allowed — use "auto"
         if json_schema:
             payload["tools"] = [{
                 "name": "return_categories",
                 "description": "Return categorization results",
                 "input_schema": json_schema,
             }]
-            payload["tool_choice"] = {"type": "tool", "name": "return_categories"}
+            if thinking_budget and thinking_budget > 0:
+                payload["tool_choice"] = {"type": "auto"}
+            else:
+                payload["tool_choice"] = {"type": "tool", "name": "return_categories"}
 
         return payload
 

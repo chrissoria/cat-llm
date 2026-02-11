@@ -214,11 +214,13 @@ class UnifiedLLMClient:
         """Build the request payload for the specific provider."""
 
         if self.provider == "anthropic":
-            return self._build_anthropic_payload(messages, json_schema, creativity, max_tokens)
+            return self._build_anthropic_payload(messages, json_schema, creativity, max_tokens, thinking_budget)
         elif self.provider == "google":
             return self._build_google_payload(messages, json_schema, creativity, thinking_budget, force_json)
+        elif self.provider == "openai":
+            return self._build_openai_payload(messages, json_schema, creativity, force_json, thinking_budget)
         else:
-            # OpenAI-compatible providers
+            # Other OpenAI-compatible providers (xai, mistral, huggingface, etc.)
             return self._build_openai_payload(messages, json_schema, creativity, force_json)
 
     def _build_openai_payload(
@@ -227,11 +229,13 @@ class UnifiedLLMClient:
         json_schema: dict = None,
         creativity: float = None,
         force_json: bool = True,
+        thinking_budget: int = None,
     ) -> dict:
         """Build payload for OpenAI-compatible APIs.
 
         Args:
             force_json: If False and no json_schema, don't set response_format (for text responses)
+            thinking_budget: Maps to reasoning_effort (0 → "minimal", >0 → "high")
         """
         payload = {
             "model": self.model,
@@ -257,7 +261,21 @@ class UnifiedLLMClient:
             payload["response_format"] = {"type": "json_object"}
         # else: no response_format - allow text responses
 
-        if creativity is not None:
+        # OpenAI reasoning_effort: only supported by reasoning models (o-series)
+        # Regular models (gpt-4o, etc.) don't support this parameter
+        _is_reasoning_model = self.provider == "openai" and any(
+            self.model.startswith(p) for p in ("o1", "o3", "o4")
+        )
+        if _is_reasoning_model and thinking_budget is not None:
+            if thinking_budget > 0:
+                payload["reasoning_effort"] = "high"
+                # When reasoning is enabled, temperature must NOT be in payload
+            else:
+                payload["reasoning_effort"] = "minimal"
+                # With minimal reasoning, temperature can still be set
+                if creativity is not None:
+                    payload["temperature"] = creativity
+        elif creativity is not None:
             payload["temperature"] = creativity
 
         return payload
@@ -268,6 +286,7 @@ class UnifiedLLMClient:
         json_schema: dict = None,
         creativity: float = None,
         max_tokens: int = 4096,
+        thinking_budget: int = None,
     ) -> dict:
         """Build payload for Anthropic API."""
         # Extract system message if present
@@ -288,17 +307,34 @@ class UnifiedLLMClient:
         if system_content:
             payload["system"] = system_content
 
-        if creativity is not None:
+        # Extended thinking for Anthropic (minimum 1024 tokens)
+        # When thinking is enabled, temperature must be 1 (Anthropic requirement),
+        # so we skip setting temperature from creativity in that case
+        if thinking_budget and thinking_budget > 0:
+            budget = max(thinking_budget, 1024)
+            payload["thinking"] = {
+                "type": "enabled",
+                "budget_tokens": budget,
+            }
+            payload["temperature"] = 1
+            # When thinking is enabled, max_tokens must be larger than budget_tokens
+            if payload["max_tokens"] <= budget:
+                payload["max_tokens"] = budget + 4096
+        elif creativity is not None:
             payload["temperature"] = creativity
 
         # Use tool calling for structured output (most reliable for Anthropic)
+        # When thinking is enabled, forced tool_choice is not allowed — use "auto"
         if json_schema:
             payload["tools"] = [{
                 "name": "return_categories",
                 "description": "Return categorization results",
                 "input_schema": json_schema,
             }]
-            payload["tool_choice"] = {"type": "tool", "name": "return_categories"}
+            if thinking_budget and thinking_budget > 0:
+                payload["tool_choice"] = {"type": "auto"}
+            else:
+                payload["tool_choice"] = {"type": "tool", "name": "return_categories"}
 
         return payload
 
@@ -338,8 +374,11 @@ class UnifiedLLMClient:
             payload["generationConfig"]["temperature"] = creativity
 
         # Add thinking budget for extended thinking (Google-specific)
+        # Must be inside generationConfig, not at top level
+        # Google requires a reasonable minimum budget (enforce 128 tokens minimum)
         if thinking_budget and thinking_budget > 0:
-            payload["thinkingConfig"] = {"thinkingBudget": thinking_budget}
+            budget = max(thinking_budget, 128)
+            payload["generationConfig"]["thinkingConfig"] = {"thinkingBudget": budget}
 
         return payload
 
@@ -394,7 +433,10 @@ class UnifiedLLMClient:
             messages: List of message dicts with 'role' and 'content'
             json_schema: Optional JSON schema for structured output
             creativity: Temperature setting (None for default)
-            thinking_budget: Token budget for Google's extended thinking (0 or None to disable)
+            thinking_budget: Controls reasoning behavior per provider:
+                - Google: Token budget for extended thinking (0 to disable, >0 to enable)
+                - OpenAI: Maps to reasoning_effort (0 → "minimal", >0 → "high")
+                - Anthropic: Enables extended thinking (0 to disable, >0 to enable with min 1024)
             force_json: If True and no json_schema, still request JSON output.
                        Set to False for text-only responses (e.g., CoVe intermediate steps)
             max_retries: Maximum retry attempts
