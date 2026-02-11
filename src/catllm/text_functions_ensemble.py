@@ -410,10 +410,10 @@ def aggregate_results(
         else:
             try:
                 parsed = json.loads(json_str)
-                # Validate: keys must be numbered strings within the category
-                # range (e.g. "1"-"6" for 6 categories) with valid 0/1 values.
-                # If the model returned category names or out-of-range numbers
-                # instead, treat as a failure.
+                # Validate: at least one key must be a numbered string within
+                # the category range (e.g. "1"-"6" for 6 categories) with a
+                # valid 0/1 value. Missing keys are filled with 0 downstream
+                # (omitted key = category not present).
                 valid_count = sum(
                     1 for k, v in parsed.items()
                     if k in expected_keys and str(v).strip() in ("0", "1")
@@ -1619,15 +1619,21 @@ def _save_partial_results(
             row["image_path"] = result.get("image_path", "")
 
         # Per-model results
+        failed_set = set(result["aggregated"].get("failed_models", []))
         for model_name in model_names:
-            parsed = result["aggregated"]["per_model"].get(model_name, {})
-            for i in range(1, num_categories + 1):
-                key = str(i)
-                value = parsed.get(key, "0")
-                try:
-                    row[f"category_{i}_{model_name}"] = int(value)
-                except (ValueError, TypeError):
-                    row[f"category_{i}_{model_name}"] = 0
+            if model_name in failed_set:
+                # Model failed validation entirely — mark as NA
+                for i in range(1, num_categories + 1):
+                    row[f"category_{i}_{model_name}"] = None
+            else:
+                parsed = result["aggregated"]["per_model"].get(model_name, {})
+                for i in range(1, num_categories + 1):
+                    key = str(i)
+                    value = parsed.get(key, "0")
+                    try:
+                        row[f"category_{i}_{model_name}"] = int(value)
+                    except (ValueError, TypeError):
+                        row[f"category_{i}_{model_name}"] = 0
 
         # Consensus results
         for i in range(1, num_categories + 1):
@@ -2456,8 +2462,8 @@ Provide your answer in JSON format where the category number is the key and "1" 
                         # Check JSON parsing AND schema validation
                         try:
                             parsed = json.loads(json_str)
-                            # Validate: must have at least one numbered key in
-                            # the category range with a valid 0/1 value
+                            # Validate: at least one numbered key in the
+                            # category range with a valid 0/1 value
                             valid_count = sum(
                                 1 for k, v in parsed.items()
                                 if k in expected_keys and str(v).strip() in ("0", "1")
@@ -2649,16 +2655,22 @@ def build_output_dataframes(
         )
 
         # Per-model results
+        failed_set = set(aggregated.get("failed_models", []))
         for model_name in model_names:
-            parsed = aggregated["per_model"].get(model_name, {})
-            for i in range(1, num_categories + 1):
-                key = str(i)
-                col_name = f"category_{i}_{model_name}"
-                value = parsed.get(key, "0")
-                try:
-                    combined_data[col_name].append(int(value))
-                except (ValueError, TypeError):
-                    combined_data[col_name].append(0)
+            if model_name in failed_set:
+                # Model failed validation entirely — mark as NA
+                for i in range(1, num_categories + 1):
+                    combined_data[f"category_{i}_{model_name}"].append(None)
+            else:
+                parsed = aggregated["per_model"].get(model_name, {})
+                for i in range(1, num_categories + 1):
+                    key = str(i)
+                    col_name = f"category_{i}_{model_name}"
+                    value = parsed.get(key, "0")
+                    try:
+                        combined_data[col_name].append(int(value))
+                    except (ValueError, TypeError):
+                        combined_data[col_name].append(0)
 
         # Consensus results
         for i in range(1, num_categories + 1):
