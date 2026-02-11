@@ -401,13 +401,27 @@ def aggregate_results(
     successful = {}
     failed_models = []
 
+    num_cats = len(categories)
+    expected_keys = {str(i) for i in range(1, num_cats + 1)}
+
     for model_name, (json_str, error) in model_results.items():
         if error:
             failed_models.append(model_name)
         else:
             try:
                 parsed = json.loads(json_str)
-                successful[model_name] = parsed
+                # Validate: keys must be numbered strings within the category
+                # range (e.g. "1"-"6" for 6 categories) with valid 0/1 values.
+                # If the model returned category names or out-of-range numbers
+                # instead, treat as a failure.
+                valid_count = sum(
+                    1 for k, v in parsed.items()
+                    if k in expected_keys and str(v).strip() in ("0", "1")
+                )
+                if valid_count > 0:
+                    successful[model_name] = parsed
+                else:
+                    failed_models.append(model_name)
             except json.JSONDecodeError:
                 failed_models.append(model_name)
 
@@ -1602,14 +1616,11 @@ def _save_partial_results(
             parsed = result["aggregated"]["per_model"].get(model_name, {})
             for i in range(1, num_categories + 1):
                 key = str(i)
-                value = parsed.get(key, None)
-                if value is not None:
-                    try:
-                        row[f"category_{i}_{model_name}"] = int(value)
-                    except (ValueError, TypeError):
-                        row[f"category_{i}_{model_name}"] = None
-                else:
-                    row[f"category_{i}_{model_name}"] = None
+                value = parsed.get(key, "0")
+                try:
+                    row[f"category_{i}_{model_name}"] = int(value)
+                except (ValueError, TypeError):
+                    row[f"category_{i}_{model_name}"] = 0
 
         # Consensus results
         for i in range(1, num_categories + 1):
@@ -2590,14 +2601,11 @@ def build_output_dataframes(
             for i in range(1, num_categories + 1):
                 key = str(i)
                 col_name = f"category_{i}_{model_name}"
-                value = parsed.get(key, None)
-                if value is not None:
-                    try:
-                        combined_data[col_name].append(int(value))
-                    except (ValueError, TypeError):
-                        combined_data[col_name].append(None)
-                else:
-                    combined_data[col_name].append(None)
+                value = parsed.get(key, "0")
+                try:
+                    combined_data[col_name].append(int(value))
+                except (ValueError, TypeError):
+                    combined_data[col_name].append(0)
 
         # Consensus results
         for i in range(1, num_categories + 1):
