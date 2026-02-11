@@ -58,6 +58,8 @@ If you encounter a bug, unexpected behavior, or have a feature request, please [
 
 - Bug fixes and error handling improvements
 - Support for additional LLM providers
+- Local model testing and integration (e.g., Ollama, llama.cpp)
+- Support for specialized models (e.g., domain-specific or fine-tuned models)
 - Documentation improvements and usage examples
 - Performance optimizations
 - Test coverage
