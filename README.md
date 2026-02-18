@@ -141,8 +141,18 @@ Supports both **single-model** and **multi-model ensemble** classification for i
 - `filename` (str, optional): Output filename for CSV
 - `save_directory` (str, optional): Directory to save results
 - `model_source` (str, default="auto"): Provider - "auto", "openai", "anthropic", "google", "mistral", "perplexity", "huggingface", "xai"
-- `models` (list, optional): For multi-model ensemble, list of `(model, provider, api_key)` tuples
+- `models` (list, optional): For multi-model ensemble, list of `(model, provider, api_key)` or `(model, provider, api_key, config_dict)` tuples
 - `consensus_threshold` (float, default=0.5): Agreement threshold for ensemble mode (0-1)
+- `thinking_budget` (int, default=0): Token budget for model reasoning/thinking. Set to 0 to disable. Behavior varies by provider:
+
+| Provider | `thinking_budget=0` | `thinking_budget > 0` (e.g., 8192) |
+|----------|---------------------|--------------------------------------|
+| **OpenAI** | `reasoning_effort="minimal"` | `reasoning_effort="high"` |
+| **Anthropic** | Thinking disabled | Extended thinking enabled (min 1024 tokens, forces temperature=1) |
+| **Google** | Thinking disabled | `thinkingConfig: {thinkingBudget: N}` (min 128 tokens) |
+| **HuggingFace** | Thinking disabled (or use non-thinking model variant) | Thinking enabled (or use thinking model variant) |
+
+> **Note:** Mistral and xAI models do not have reasoning/thinking toggles — `thinking_budget` has no effect on these providers. For Qwen3 on HuggingFace, reasoning is controlled by choosing the model variant: use `Qwen3-VL-235B-A22B-Thinking` for reasoning or `Qwen3-VL-235B-A22B-Instruct` for standard mode with `thinking_budget=0`.
 
 **Returns:**
 - `pandas.DataFrame`: Classification results with category columns
