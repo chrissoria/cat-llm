@@ -5,6 +5,13 @@ All notable changes to CatLLM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.4.1] - 2026-02-19
+
+### Fixed
+- **NaN row handling in classify()**: Skipped rows (NaN input) no longer falsely list all models as failed. Previously, NaN inputs generated fake error results for every model, causing `failed_models` to contain all model names. Now skipped rows correctly show empty `failed_models` and NaN category values.
+
+---
+
 ## [2.4.0] - 2026-02-11
 
 ### Fixed

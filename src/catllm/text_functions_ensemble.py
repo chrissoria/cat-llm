@@ -1625,9 +1625,10 @@ def _save_partial_results(
 
         # Per-model results
         failed_set = set(result["aggregated"].get("failed_models", []))
+        is_skipped = result.get("skipped", False)
         for model_name in model_names:
-            if model_name in failed_set:
-                # Model failed validation entirely — mark as NA
+            if is_skipped or model_name in failed_set:
+                # Skipped (NaN input) or model failed — mark as NA
                 for i in range(1, num_categories + 1):
                     row[f"category_{i}_{model_name}"] = None
             else:
@@ -1700,6 +1701,7 @@ def classify_ensemble(
     max_retries: int = 5,
     batch_retries: int = 2,
     retry_delay: float = 1.0,
+    row_delay: float = 0.0,
     filename: str = None,
     save_directory: str = None,
     progress_callback: Callable = None,
@@ -2373,11 +2375,18 @@ Provide your answer in JSON format where the category number is the key and "1" 
 
         # Check for NaN (text mode only)
         if not is_pdf_mode and not is_image_mode and pd.isna(item):
-            # Handle NaN - mark as skipped, not error
+            # Handle NaN - mark as skipped, bypass classification entirely
             skipped_nan = True
-            model_results = {
-                cfg["sanitized_name"]: ('{"1":"e"}', "Skipped NaN input")
-                for cfg in model_configs
+            model_results = {}
+            # Build a clean aggregated result so downstream code doesn't
+            # list every model as failed for a legitimately skipped row.
+            skipped_aggregated = {
+                "per_model": {},
+                "consensus": {},
+                "agreement": {},
+                "failed_models": [],
+                "missing_keys": {},
+                "error": None,
             }
         else:
             # Parallel classification across models
@@ -2395,13 +2404,16 @@ Provide your answer in JSON format where the category number is the key and "1" 
                     # Update progress (for multi-model detailed callbacks only)
                     completed_calls[0] += 1
 
-        # Aggregate results with majority voting
-        aggregated = aggregate_results(
-            model_results,
-            categories,
-            consensus_threshold,
-            fail_strategy
-        )
+        # Aggregate results with majority voting (skip for NaN rows)
+        if skipped_nan:
+            aggregated = skipped_aggregated
+        else:
+            aggregated = aggregate_results(
+                model_results,
+                categories,
+                consensus_threshold,
+                fail_strategy
+            )
 
         # Build result entry
         result_entry = {
@@ -2444,6 +2456,10 @@ Provide your answer in JSON format where the category number is the key and "1" 
                 filename,
                 save_directory,
             )
+
+        # Per-row delay to avoid rate limits when models share a provider
+        if row_delay > 0 and idx < len(items_to_process) - 1:
+            time.sleep(row_delay)
 
     # Retry logic for failed (row, model) pairs
     if batch_retries > 0:

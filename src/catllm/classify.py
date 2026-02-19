@@ -76,6 +76,7 @@ def classify(
     max_retries: int = 5,
     batch_retries: int = 2,
     retry_delay: float = 1.0,
+    row_delay: float = 0.0,
     pdf_dpi: int = 150,
     auto_download: bool = False,
 ):
@@ -130,6 +131,9 @@ def classify(
         max_retries (int): Max retries per API call. Default 5.
         batch_retries (int): Max retries for batch-level failures. Default 2.
         retry_delay (float): Delay between retries in seconds. Default 1.0.
+        row_delay (float): Delay in seconds between processing each row. Useful
+            when multiple models share the same API provider/key to avoid rate
+            limits. Default 0.0 (no delay).
         pdf_dpi (int): DPI for PDF page rendering. Default 150.
         auto_download (bool): Auto-download Ollama models. Default False.
 
@@ -187,6 +191,7 @@ def classify(
         max_retries=max_retries,
         batch_retries=batch_retries,
         retry_delay=retry_delay,
+        row_delay=row_delay,
         auto_download=auto_download,
         example1=example1,
         example2=example2,
