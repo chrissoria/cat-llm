@@ -5,7 +5,7 @@ All notable changes to CatLLM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [2.4.2] - 2026-02-26
+## [2.5.0] - 2026-02-26
 
 ### Added
 - **`has_other_category()` utility**: New function in `catllm._category_analysis` that detects whether a category list contains a catch-all / "Other" category. Uses a two-tier heuristic (anchored patterns for exact matches, phrase patterns for short categories) with an optional LLM fallback for ambiguous cases.
