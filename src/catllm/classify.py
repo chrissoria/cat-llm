@@ -25,6 +25,9 @@ from ._providers import (
     detect_provider,
 )
 
+# Category analysis
+from ._category_analysis import has_other_category
+
 # Import the implementation functions from existing modules
 from .text_functions_ensemble import (
     classify_ensemble,
@@ -47,10 +50,14 @@ def classify(
     creativity=None,
     safety=False,
     chain_of_verification=False,
-    chain_of_thought=True,
+    chain_of_thought=False,
     step_back_prompt=False,
     context_prompt=False,
     thinking_budget=0,
+    # TODO: Auto-restructure examples — accept raw (response, labels) tuples or
+    # dicts and automatically format them into the JSON string format the prompt
+    # expects (e.g. "Response: '<text>' -> {"1": 0, "2": 1, ...}") so callers
+    # don't need to know the internal prompt structure.
     example1=None,
     example2=None,
     example3=None,
@@ -79,6 +86,7 @@ def classify(
     row_delay: float = 0.0,
     pdf_dpi: int = 150,
     auto_download: bool = False,
+    add_other = "prompt",
 ):
     """
     Unified classification function for text, image, and PDF inputs.
@@ -104,7 +112,7 @@ def classify(
         creativity (float): Temperature setting. None uses model default.
         safety (bool): If True, saves progress after each item.
         chain_of_verification (bool): Enable Chain of Verification for accuracy.
-        chain_of_thought (bool): Enable step-by-step reasoning. Default True.
+        chain_of_thought (bool): Enable step-by-step reasoning. Default False.
         step_back_prompt (bool): Enable step-back prompting.
         context_prompt (bool): Add expert context to prompts.
         thinking_budget (int): Controls reasoning behavior per provider:
@@ -136,6 +144,13 @@ def classify(
             limits. Default 0.0 (no delay).
         pdf_dpi (int): DPI for PDF page rendering. Default 150.
         auto_download (bool): Auto-download Ollama models. Default False.
+        add_other (str or bool): Controls auto-addition of an "Other" catch-all
+            category when none is detected. An "Other" category improves accuracy
+            by preventing the model from forcing ambiguous responses into
+            ill-fitting categories.
+            - "prompt" (default): Ask the user to accept or reject the suggestion.
+            - True: Silently add "Other" without prompting.
+            - False: Never add "Other".
 
     Returns:
         pd.DataFrame: Results with classification columns.
@@ -166,6 +181,35 @@ def classify(
     if models is None:
         # Single model mode - build models list from individual params
         models = [(user_model, model_source, api_key)]
+
+    # Auto-append "Other" catch-all category if missing
+    if add_other and categories and categories != "auto":
+        if not has_other_category(categories):
+            if add_other == "prompt":
+                print(
+                    "\n[CatLLM] It looks like your categories may not include a catch-all\n"
+                    "  'Other' option. Adding one can improve accuracy by giving the\n"
+                    "  model an outlet for ambiguous responses instead of forcing them\n"
+                    "  into ill-fitting categories.\n"
+                    "  (If you already have a catch-all under a different name, choose 'n'.)\n"
+                )
+                try:
+                    answer = input("  Add 'Other' to your categories? (Y/n): ").strip().lower()
+                except (EOFError, KeyboardInterrupt):
+                    answer = "n"
+                if answer in ("", "y", "yes"):
+                    categories = list(categories) + ["Other"]
+                    print(f"  -> Categories are now: {categories}\n")
+                else:
+                    print("  -> Keeping original categories.\n")
+            else:
+                # add_other=True — silently add
+                categories = list(categories) + ["Other"]
+                print(
+                    f"[CatLLM] Auto-added 'Other' catch-all category. "
+                    f"Categories are now: {categories}  "
+                    f"(set add_other=False to disable)"
+                )
 
     # Map mode to pdf_mode
     pdf_mode = mode if mode in ("image", "text", "both") else "image"

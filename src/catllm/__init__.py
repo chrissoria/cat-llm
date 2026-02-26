@@ -21,6 +21,9 @@ from .explore import explore
 from .classify import classify
 from .summarize import summarize
 
+# Category analysis
+from ._category_analysis import has_other_category
+
 # =============================================================================
 # Provider utilities (for advanced users)
 # =============================================================================
@@ -86,6 +89,8 @@ __all__ = [
     "explore",
     "classify",
     "summarize",
+    # Category analysis
+    "has_other_category",
     # Provider utilities
     "UnifiedLLMClient",
     "detect_provider",
