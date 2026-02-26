@@ -5,11 +5,12 @@ Provides functions for analyzing user-provided category lists,
 such as detecting whether an "Other" catch-all category exists.
 """
 
+import json
 import re
 
 from .text_functions import UnifiedLLMClient, detect_provider
 
-__all__ = ["has_other_category"]
+__all__ = ["has_other_category", "check_category_verbosity"]
 
 # Max words for a category to be checked against broad phrase patterns.
 # Real catch-all categories are short ("Other", "None of the above", "Does not fit").
@@ -125,6 +126,20 @@ def _llm_check(categories: list, api_key: str, model: str, provider: str) -> boo
     return answer in ("yes", "true")
 
 
+def _resolve_provider_and_model(user_model, model_source):
+    """Resolve provider and model from user args, falling back to top-tier defaults."""
+    if user_model is not None:
+        provider = detect_provider(user_model, provider=model_source)
+        model = user_model
+    else:
+        if model_source and model_source.lower() != "auto":
+            provider = model_source.lower()
+        else:
+            provider = "openai"
+        model = _TOP_TIER_MODELS.get(provider, "gpt-4o")
+    return provider, model
+
+
 def has_other_category(
     categories: list,
     api_key: str = None,
@@ -178,16 +193,160 @@ def has_other_category(
     if api_key is None:
         return False
 
-    # Resolve provider and model
-    if user_model is not None:
-        provider = detect_provider(user_model, provider=model_source)
-        model = user_model
-    else:
-        # No model specified — pick a default
-        if model_source and model_source.lower() != "auto":
-            provider = model_source.lower()
-        else:
-            provider = "openai"
-        model = _TOP_TIER_MODELS.get(provider, "gpt-4o")
-
+    provider, model = _resolve_provider_and_model(user_model, model_source)
     return _llm_check(categories, api_key, model, provider)
+
+
+# =============================================================================
+# Category Verbosity Check
+# TODO: Add a function that auto-generates verbose category definitions
+# (description + examples) from bare labels, letting the user review/edit.
+# TODO: Consider caching verbosity results per category list to avoid
+# redundant API calls across repeated classify() invocations.
+# =============================================================================
+
+def check_category_verbosity(
+    categories: list,
+    api_key: str,
+    user_model: str = None,
+    model_source: str = "auto",
+) -> list:
+    """
+    Assess whether each category has a clear description and illustrative examples.
+
+    Makes a single LLM call to evaluate all categories at once. Returns per-category
+    flags indicating what's present and what's missing.
+
+    Args:
+        categories: List of category strings to analyze.
+        api_key: API key for the LLM provider (required).
+        user_model: Model name to use. If not provided, a top-tier default is
+                    selected based on the provider.
+        model_source: Provider (e.g. "openai", "anthropic", "google").
+                      Defaults to "auto".
+
+    Returns:
+        A list of dicts, one per category, each containing::
+
+            {
+                "category": str,         # the original category text
+                "has_description": bool,  # has an explanation beyond a bare label
+                "has_examples": bool,     # includes concrete examples
+                "is_verbose": bool,       # True if BOTH description and examples present
+            }
+
+    Examples:
+        >>> check_category_verbosity(
+        ...     ["Positive", "Negative: expresses dissatisfaction (e.g., 'I hate this')"],
+        ...     api_key="sk-...",
+        ... )
+        [
+            {"category": "Positive", "has_description": False, "has_examples": False, "is_verbose": False},
+            {"category": "Negative: ...", "has_description": True, "has_examples": True, "is_verbose": True},
+        ]
+    """
+    if not categories:
+        return []
+
+    provider, model = _resolve_provider_and_model(user_model, model_source)
+
+    # Build numbered list for the prompt
+    cat_list = "\n".join(f"{i+1}. {c}" for i, c in enumerate(categories))
+
+    messages = [
+        {
+            "role": "system",
+            "content": (
+                "You are an expert at evaluating classification category definitions. "
+                "Return ONLY valid JSON, no other text."
+            ),
+        },
+        {
+            "role": "user",
+            "content": (
+                "For each category below, assess two things:\n"
+                "1. **has_description**: Does it include an explanation or clarification "
+                "beyond just a bare label? (e.g., 'Positive: the response expresses "
+                "satisfaction or approval' has a description, but just 'Positive' does not)\n"
+                "2. **has_examples**: Does it include concrete examples of what belongs "
+                "in the category? (e.g., 'such as rent increases, pay cuts' or "
+                "'e.g., I love this product')\n\n"
+                f"Categories:\n{cat_list}\n\n"
+                'Return a JSON object with a "results" array containing one object per '
+                "category (in the same order), each with:\n"
+                '- "category_number": the 1-based index\n'
+                '- "has_description": true or false\n'
+                '- "has_examples": true or false\n\n'
+                "Example response format:\n"
+                '{"results": [{"category_number": 1, "has_description": false, '
+                '"has_examples": false}, ...]}'
+            ),
+        },
+    ]
+
+    client = UnifiedLLMClient(provider=provider, api_key=api_key, model=model)
+    response_text, error = client.complete(
+        messages=messages,
+        force_json=True,
+        max_retries=3,
+        creativity=0.0,
+    )
+
+    # Parse the LLM response
+    results = _parse_verbosity_response(response_text, error, categories)
+    return results
+
+
+def _parse_verbosity_response(response_text, error, categories):
+    """Parse LLM response into per-category verbosity flags."""
+    # Default: assume nothing is verbose (safe fallback)
+    default = [
+        {
+            "category": cat,
+            "has_description": False,
+            "has_examples": False,
+            "is_verbose": False,
+        }
+        for cat in categories
+    ]
+
+    if error or not response_text:
+        return default
+
+    try:
+        data = json.loads(response_text)
+    except json.JSONDecodeError:
+        # Try extracting JSON from the response (may have markdown wrapping)
+        match = re.search(r'\{.*\}', response_text, re.DOTALL)
+        if not match:
+            return default
+        try:
+            data = json.loads(match.group())
+        except json.JSONDecodeError:
+            return default
+
+    llm_results = data.get("results", [])
+
+    output = []
+    for i, cat in enumerate(categories):
+        # Find the matching LLM result by index
+        llm_entry = None
+        for entry in llm_results:
+            if entry.get("category_number") == i + 1:
+                llm_entry = entry
+                break
+        # Fall back to positional match
+        if llm_entry is None and i < len(llm_results):
+            llm_entry = llm_results[i]
+
+        has_desc = bool(llm_entry.get("has_description", False)) if llm_entry else False
+        has_ex = bool(llm_entry.get("has_examples", False)) if llm_entry else False
+
+        output.append({
+            "category": cat,
+            "has_description": has_desc,
+            "has_examples": has_ex,
+            "is_verbose": has_desc and has_ex,
+        })
+
+    return output

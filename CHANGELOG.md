@@ -10,6 +10,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **`has_other_category()` utility**: New function in `catllm._category_analysis` that detects whether a category list contains a catch-all / "Other" category. Uses a two-tier heuristic (anchored patterns for exact matches, phrase patterns for short categories) with an optional LLM fallback for ambiguous cases.
 - **`add_other` parameter in `classify()`**: Automatically detects when categories lack a catch-all "Other" option and prompts the user to add one. Supports three modes: `"prompt"` (default, interactive), `True` (silent), `False` (disabled). Including an "Other" category improves accuracy by giving models an outlet for ambiguous responses.
+- **`check_category_verbosity()` utility**: New function that uses a single LLM call to assess whether each category has a description and examples. Returns per-category flags (`has_description`, `has_examples`, `is_verbose`).
+- **`check_verbosity` parameter in `classify()`**: Alerts users when categories lack descriptions or examples (1 API call). Verbose categories with descriptions and examples improve accuracy by ~7 pp over bare labels. Default `True`.
+- **Evidence-based prompting strategy warnings**: `classify()` now prints informational warnings when users enable strategies that empirical evidence shows are ineffective or harmful for structured classification:
+  - `chain_of_verification=True`: WARNING — degrades accuracy by ~2 pp, costs 4x API calls.
+  - Few-shot examples (`example1`–`example6`): NOTE — degrades accuracy by ~1 pp, amplifies over-classification.
+  - `thinking_budget > 0`: NOTE — negligible gains, high failure rates, massive latency increase.
+  - `chain_of_thought=True`: NOTE — no measurable effect on accuracy.
+  - `step_back_prompt=True`: NOTE — small/inconsistent gains, hurts top-tier models, 2x cost.
 
 ---
 

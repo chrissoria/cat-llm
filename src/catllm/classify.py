@@ -26,7 +26,7 @@ from ._providers import (
 )
 
 # Category analysis
-from ._category_analysis import has_other_category
+from ._category_analysis import has_other_category, check_category_verbosity
 
 # Import the implementation functions from existing modules
 from .text_functions_ensemble import (
@@ -87,6 +87,7 @@ def classify(
     pdf_dpi: int = 150,
     auto_download: bool = False,
     add_other = "prompt",
+    check_verbosity: bool = True,
 ):
     """
     Unified classification function for text, image, and PDF inputs.
@@ -151,6 +152,10 @@ def classify(
             - "prompt" (default): Ask the user to accept or reject the suggestion.
             - True: Silently add "Other" without prompting.
             - False: Never add "Other".
+        check_verbosity (bool): Check whether each category has a description
+            and examples (1 API call). Verbose categories with descriptions and
+            examples significantly improve classification accuracy over bare
+            labels. Default True. Set to False to skip.
 
     Returns:
         pd.DataFrame: Results with classification columns.
@@ -210,6 +215,115 @@ def classify(
                     f"Categories are now: {categories}  "
                     f"(set add_other=False to disable)"
                 )
+
+    # Check category verbosity (1 API call)
+    # TODO: Offer to auto-generate verbose versions of bare categories using
+    # the LLM (description + examples) and let the user accept/edit them.
+    if check_verbosity and categories and categories != "auto":
+        # Extract API key and provider from first model entry
+        first_entry = models[0]
+        check_key = first_entry[2] if len(first_entry) >= 3 else None
+        check_source = first_entry[1] if len(first_entry) >= 2 else "auto"
+
+        if check_key:
+            try:
+                verbosity = check_category_verbosity(
+                    categories,
+                    api_key=check_key,
+                    model_source=check_source,
+                )
+                lacking = [r for r in verbosity if not r["is_verbose"]]
+
+                if lacking:
+                    missing_desc = [r for r in lacking if not r["has_description"]]
+                    missing_ex = [r for r in lacking if not r["has_examples"]]
+
+                    print(
+                        "\n[CatLLM] Category verbosity check (set check_verbosity=False to skip):"
+                    )
+                    for r in lacking:
+                        issues = []
+                        if not r["has_description"]:
+                            issues.append("description")
+                        if not r["has_examples"]:
+                            issues.append("examples")
+                        print(f'  - "{r["category"]}"  (missing: {", ".join(issues)})')
+
+                    print(
+                        "\n  Verbose categories with descriptions and examples significantly\n"
+                        "  improve classification accuracy over bare labels.\n"
+                        "\n"
+                        "  Instead of:\n"
+                        '    "Positive"\n'
+                        "  Consider:\n"
+                        '    "Positive: The response expresses satisfaction, approval, or\n'
+                        "     happiness (e.g., 'I love this product', 'Great experience',\n"
+                        "     'Very pleased with the result')\"\n"
+                    )
+            except Exception:
+                pass  # Non-critical — don't block classification
+
+    # =========================================================================
+    # Evidence-based warnings for prompting strategies
+    # Based on empirical findings from Soria et al. (2026) comparing prompting
+    # strategies across 4 representative models and 4 survey tasks.
+    # =========================================================================
+    _strategy_warnings = []
+
+    if chain_of_verification:
+        _strategy_warnings.append(
+            "[CatLLM] WARNING: chain_of_verification=True is enabled.\n"
+            "  Empirical evidence shows CoVe DEGRADES accuracy by ~2 pp and\n"
+            "  sensitivity by up to 12 pp for structured classification tasks.\n"
+            "  The verification step causes models to retract correct classifications.\n"
+            "  Cost: ~4x API calls per response.\n"
+            "  This feature is provided for research purposes only — it is not\n"
+            "  recommended for improving classification accuracy."
+        )
+
+    examples = [example1, example2, example3, example4, example5, example6]
+    n_examples = sum(1 for ex in examples if ex is not None)
+    if n_examples > 0:
+        _strategy_warnings.append(
+            f"[CatLLM] NOTE: {n_examples} few-shot example(s) provided.\n"
+            "  Empirical evidence shows few-shot examples DEGRADE accuracy by\n"
+            "  ~1.1-1.2 pp on average. Examples encourage over-classification\n"
+            "  (sensitivity up, but precision drops ~2-3 pp), amplifying false\n"
+            "  positives. This feature is provided for research purposes — for\n"
+            "  best results, use verbose category definitions instead."
+        )
+
+    if thinking_budget and thinking_budget > 0:
+        _strategy_warnings.append(
+            f"[CatLLM] NOTE: thinking_budget={thinking_budget} is enabled.\n"
+            "  Empirical evidence shows reasoning/thinking modes produce negligible\n"
+            "  accuracy gains (<1 pp) for classification tasks, while significantly\n"
+            "  increasing latency, token usage, and failure rates (up to 40% timeouts\n"
+            "  observed for some models). Consider thinking_budget=0 unless you are\n"
+            "  specifically researching reasoning effects."
+        )
+
+    if chain_of_thought:
+        _strategy_warnings.append(
+            "[CatLLM] NOTE: chain_of_thought=True is enabled.\n"
+            "  Empirical evidence shows CoT has no measurable effect on structured\n"
+            "  classification accuracy (~0 pp change). When categories are well-defined\n"
+            "  with verbose descriptions, explicit reasoning steps add no value.\n"
+            "  This won't hurt results, but it won't help either."
+        )
+
+    if step_back_prompt:
+        _strategy_warnings.append(
+            "[CatLLM] NOTE: step_back_prompt=True is enabled.\n"
+            "  Empirical evidence shows step-back prompting produces small, inconsistent\n"
+            "  gains (+0.6 pp average) and actually degrades top-tier model performance.\n"
+            "  Cost: ~2x API calls per response."
+        )
+
+    if _strategy_warnings:
+        print()
+        print("\n\n".join(_strategy_warnings))
+        print()
 
     # Map mode to pdf_mode
     pdf_mode = mode if mode in ("image", "text", "both") else "image"

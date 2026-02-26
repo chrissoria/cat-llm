@@ -22,7 +22,7 @@ from .classify import classify
 from .summarize import summarize
 
 # Category analysis
-from ._category_analysis import has_other_category
+from ._category_analysis import has_other_category, check_category_verbosity
 
 # =============================================================================
 # Provider utilities (for advanced users)
@@ -91,6 +91,7 @@ __all__ = [
     "summarize",
     # Category analysis
     "has_other_category",
+    "check_category_verbosity",
     # Provider utilities
     "UnifiedLLMClient",
     "detect_provider",
