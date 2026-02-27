@@ -1,0 +1,24 @@
+Package: catllm
+Title: LLM-Powered Text Classification and Category Extraction
+Version: 0.1.0
+Authors@R:
+    person("Chris", "Soria", email = "chrissoria@berkeley.edu",
+           role = c("aut", "cre"))
+Author: Chris Soria [aut, cre]
+Maintainer: Chris Soria <chrissoria@berkeley.edu>
+Description: R interface to the 'catllm' Python package for LLM-powered text
+    classification, category extraction, and corpus exploration. Wraps the
+    Python classify(), extract(), and explore() functions via 'reticulate',
+    allowing R users to leverage large language models for qualitative data
+    analysis without writing Python code.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Imports:
+    reticulate (>= 1.28)
+Suggests:
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3
+URL: https://github.com/chrissoria/cat-llm
+BugReports: https://github.com/chrissoria/cat-llm/issues

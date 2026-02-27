@@ -30,7 +30,9 @@ With leading models like GPT-5, Gemini, and Qwen 3, CatLLM achieves **98% accura
 ## Table of Contents
 
 - [Installation](#installation)
+  - [R Package](#r-package)
 - [Quick Start](#quick-start)
+- [Best Practices for Classification](#best-practices-for-classification)
 - [Configuration](#configuration)
 - [Supported Models](#supported-models)
 - [API Reference](#api-reference)
@@ -64,6 +66,20 @@ pip install cat-llm[pdf]
 > ```
 > See [llm-web-research](https://github.com/chrissoria/llm-web-research) for details.
 
+### R Package
+
+An R wrapper is available for users who prefer R over Python. It uses [reticulate](https://rstudio.github.io/reticulate/) to call the Python package under the hood.
+
+```r
+# Install from GitHub
+devtools::install_github("chrissoria/cat-llm", subdir = "r-package/catllm")
+
+# Install the Python backend (one-time setup)
+catllm::install_catllm()
+```
+
+All three core functions — `classify()`, `extract()`, and `explore()` — are available with native R syntax. See the [R package README](r-package/catllm/README.md) for full documentation and examples.
+
 -----
 
 ## Quick Start
@@ -79,6 +95,30 @@ All outputs are formatted for immediate statistical analysis and can be exported
 *Not to be confused with CAT-LLM for Chinese article‐style transfer ([Tao et al. 2024](https://arxiv.org/html/2401.05707v1)).*
 
 
+
+## Best Practices for Classification
+
+These recommendations are based on empirical testing across 4 surveys, 4 models (7B to frontier-class), and 250-row subsamples compared against human-coded ground truth.
+
+### What works
+
+- **Detailed category descriptions**: The single biggest lever for accuracy. Instead of short labels like `"Job change"`, use verbose descriptions like `"The person had a job or school or career change, including transferred and retired."` This consistently improves accuracy across all models by several percentage points.
+- **Include an "Other" category**: Adding a catch-all category like `"Other: The response does not fit any of the above categories."` prevents the model from forcing ambiguous responses into ill-fitting categories, improving precision.
+- **Few-shot examples** (`example1`–`example6`): Providing 2–4 labeled examples can help, particularly for weaker models. Effects are modest (+0–1 pp on average) and model-dependent.
+- **Low temperature** (`creativity=0`): For classification tasks, deterministic output is generally preferable. Higher temperatures introduce noise without improving accuracy.
+
+### What doesn't help (or hurts)
+
+- **Chain of Thought** (`chain_of_thought`): In our testing, enabling COT did not improve classification accuracy for any model and slightly degraded it for some. It is now off by default.
+- **Chain of Verification** (`chain_of_verification`): CoVE uses ~4x the API calls per response for a self-verification loop. Despite the added cost, it consistently reduced accuracy by 1–2 percentage points, primarily by retracting correct classifications during the verification step. Not recommended for classification tasks.
+- **Step-back prompting** (`step_back_prompt`): Results were inconsistent — slight gains for weaker models (~+1.8 pp) but slight losses for stronger models (~-0.5 pp), with high variance across surveys. Not recommended as a default strategy.
+- **Context prompting** (`context_prompt`): Adds generic expert context to the prompt. No consistent benefit observed.
+
+### Summary
+
+The most effective approach is straightforward: **write detailed category descriptions, include an "Other" category, and use a capable model at low temperature.** Advanced prompting strategies add complexity and cost without reliable gains for classification tasks.
+
+-----
 
 ## Configuration
 
@@ -137,7 +177,7 @@ Supports both **single-model** and **multi-model ensemble** classification for i
 - `user_model` (str, default="gpt-4o"): Model to use
 - `mode` (str, default="image"): PDF processing mode - "image", "text", or "both"
 - `creativity` (float, optional): Temperature setting (0.0-1.0)
-- `chain_of_thought` (bool, default=True): Enable step-by-step reasoning
+- `chain_of_thought` (bool, default=False): Enable step-by-step reasoning
 - `filename` (str, optional): Output filename for CSV
 - `save_directory` (str, optional): Directory to save results
 - `model_source` (str, default="auto"): Provider - "auto", "openai", "anthropic", "google", "mistral", "perplexity", "huggingface", "xai"

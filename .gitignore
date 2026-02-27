@@ -53,8 +53,12 @@ images/generate_classify_diagram.py
 src/catllm/old_code/
 src/catllm/circle_classifier.py
 
-# Test files and test directory
-tests/
+# Test files and test directory (top-level only)
+/tests/
 
 # Survey summarizer (separate project)
 survey-summarizer
+
+# R package build/check artifacts
+*.Rcheck/
+*.tar.gz
