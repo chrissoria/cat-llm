@@ -10,7 +10,7 @@
   },
   "plugins": [
     {
-      "name": "catllm",
+      "name": "cat-llm",
       "source": "./",
       "description": "Classify, extract, explore, and summarize survey responses, images, and PDFs using LLMs. Designed for survey research at scale with 98% accuracy.",
       "version": "2.5.0",
