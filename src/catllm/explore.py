@@ -31,6 +31,7 @@ def explore(
     random_state=None,
     focus=None,
     progress_callback=None,
+    chunk_delay: float = 0.0,
 ):
     """
     Explore categories in text data, returning the raw extracted list.
@@ -57,6 +58,8 @@ def explore(
         random_state (int): Random seed for reproducibility.
         focus (str): Optional focus instruction for category extraction.
         progress_callback (callable): Optional callback for progress updates.
+        chunk_delay (float): Delay in seconds between API calls to avoid rate
+            limits. Default 0.0 (no delay).
 
     Returns:
         list[str]: Every category string extracted from every chunk across
@@ -93,6 +96,7 @@ def explore(
         focus=focus,
         progress_callback=progress_callback,
         return_raw=True,
+        chunk_delay=chunk_delay,
     )
 
     if filename:

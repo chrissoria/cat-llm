@@ -74,7 +74,7 @@ def classify(
     progress_callback=None,
     # Multi-model parameters
     models=None,
-    consensus_threshold: Union[str, float] = "majority",
+    consensus_threshold: Union[str, float] = "unanimous",
     # Parameters previously only on classify_ensemble
     survey_question: str = "",
     use_json_schema: bool = True,
@@ -129,9 +129,10 @@ def classify(
         models (list): For multi-model mode, list of (model, provider, api_key) tuples.
             If provided, overrides user_model/api_key/model_source.
         consensus_threshold (str or float): For multi-model mode, agreement threshold.
-            - "majority": 50% agreement (default)
+            - "unanimous": 100% agreement (default — empirically produces
+              the highest accuracy by aggressively eliminating false positives)
+            - "majority": 50% agreement
             - "two-thirds": 67% agreement
-            - "unanimous": 100% agreement
             - float: Custom threshold between 0 and 1
         survey_question (str): The survey question (used when categories="auto").
         use_json_schema (bool): Use JSON schema for structured output. Default True.
@@ -179,7 +180,7 @@ def classify(
         ...         ("gpt-4o", "openai", "sk-..."),
         ...         ("claude-sonnet-4-5-20250929", "anthropic", "sk-ant-..."),
         ...     ],
-        ...     consensus_threshold="majority",  # or "two-thirds", "unanimous", or 0.75
+        ...     consensus_threshold="unanimous",  # or "majority", "two-thirds", or 0.75
         ... )
     """
     # Build models list

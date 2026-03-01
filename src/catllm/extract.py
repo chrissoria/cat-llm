@@ -56,6 +56,7 @@ def extract(
     random_state=None,
     focus=None,
     progress_callback=None,
+    chunk_delay: float = 0.0,
 ):
     """
     Unified category extraction function for text, image, and PDF inputs.
@@ -99,6 +100,8 @@ def extract(
             will prioritize extracting categories related to this focus.
         progress_callback (callable): Optional callback function for progress updates.
             Called as progress_callback(current_step, total_steps, step_label).
+        chunk_delay (float): Delay in seconds between API calls to avoid rate
+            limits. Default 0.0 (no delay).
 
     Returns:
         dict with keys:
@@ -154,6 +157,7 @@ def extract(
             random_state=random_state,
             focus=focus,
             progress_callback=progress_callback,
+            chunk_delay=chunk_delay,
         )
 
     elif input_type == "image":
