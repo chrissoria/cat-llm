@@ -1,0 +1,14 @@
+{
+  "hooks": {
+    "SessionStart": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python -c 'import catllm' 2>/dev/null || pip install cat-llm 2>&1 | tail -1; echo 'CatLLM plugin loaded'"
+          }
+        ]
+      }
+    ]
+  }
+}

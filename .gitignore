@@ -6,8 +6,8 @@
 # Environment variables (secrets)
 .env
 
-# Claude instructions
-CLAUDE.md
+# Claude instructions (local overrides only)
+# CLAUDE.md is tracked as part of the Claude Code plugin
 
 # OS files
 .DS_Store

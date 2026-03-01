@@ -1,0 +1,12 @@
+{
+  "name": "catllm",
+  "description": "CatLLM: Automated categorization, extraction, exploration, and summarization of survey responses, images, and PDFs using LLMs. Designed for survey research at scale.",
+  "version": "2.5.0",
+  "author": {
+    "name": "Chris Soria",
+    "email": "chrissoria@berkeley.edu"
+  },
+  "homepage": "https://github.com/chrissoria/cat-llm",
+  "repository": "https://github.com/chrissoria/cat-llm",
+  "license": "GPL-3.0-or-later"
+}
