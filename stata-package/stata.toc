@@ -1,0 +1,11 @@
+v 3
+d catllm -- LLM-powered classification and extraction for survey data
+d Christopher Soria, University of California, Berkeley
+d chrissoria@berkeley.edu
+d https://github.com/chrissoria/cat-llm
+d
+d Requires: Stata 16+, Python 3.8+
+d
+d Distribution-Date: 20260301
+
+p catllm LLM-powered text classification, category extraction, and summarization

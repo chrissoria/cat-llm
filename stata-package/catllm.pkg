@@ -1,0 +1,28 @@
+v 3
+d catllm: LLM-powered classification and extraction for survey data
+d
+d catllm provides a Stata interface to the catllm Python package for
+d automating the categorization of open-ended survey responses using
+d large language models (LLMs). Supports text classification, category
+d discovery, saturation analysis, and text summarization across 8+
+d LLM providers (OpenAI, Anthropic, Google, and more).
+d
+d Requires: Stata 16+ with Python integration, Python 3.8+
+d
+d Author: Christopher Soria
+d Support: chrissoria@berkeley.edu
+d
+d Distribution-Date: 20260301
+
+F catllm.ado
+F catllm_classify.ado
+F catllm_extract.ado
+F catllm_explore.ado
+F catllm_summarize.ado
+F catllm_setup.ado
+F catllm.sthlp
+F catllm_classify.sthlp
+F catllm_extract.sthlp
+F catllm_explore.sthlp
+F catllm_summarize.sthlp
+F catllm_setup.sthlp
