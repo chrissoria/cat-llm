@@ -1,0 +1,28 @@
+{
+  "name": "cat-llm",
+  "owner": {
+    "name": "Chris Soria",
+    "email": "chrissoria@berkeley.edu"
+  },
+  "metadata": {
+    "description": "CatLLM: Automated survey response categorization using LLMs",
+    "version": "2.5.0"
+  },
+  "plugins": [
+    {
+      "name": "catllm",
+      "source": "./",
+      "description": "Classify, extract, explore, and summarize survey responses, images, and PDFs using LLMs. Designed for survey research at scale with 98% accuracy.",
+      "version": "2.5.0",
+      "author": {
+        "name": "Chris Soria",
+        "email": "chrissoria@berkeley.edu"
+      },
+      "homepage": "https://github.com/chrissoria/cat-llm",
+      "repository": "https://github.com/chrissoria/cat-llm",
+      "license": "GPL-3.0-or-later",
+      "keywords": ["llm", "survey", "classification", "categorization", "text-classification", "image-classification", "pdf", "research"],
+      "category": "research"
+    }
+  ]
+}
