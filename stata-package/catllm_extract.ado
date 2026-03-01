@@ -109,8 +109,8 @@ def _catllm_do_extract():
 
     texts = []
     for i in range(n):
-        if Data.getNum(touse_idx, i) == 1:
-            val = Data.getStr(var_idx, i)
+        if Data.getAt(touse_idx, i) == 1:
+            val = Data.getAt(var_idx, i)
             if val:
                 texts.append(val)
 
@@ -156,10 +156,10 @@ def _catllm_do_extract():
 
     # Store each category as r(cat1), r(cat2), ...
     for i, cat in enumerate(top_cats, 1):
-        Macro.setLocal("r(cat{})".format(i), cat)
+        Macro.setGlobal("r(cat{})".format(i), cat)
 
     # Store full category list as single macro
-    Macro.setLocal("r(categories)", " ".join('"{}"'.format(c) for c in top_cats))
+    Macro.setGlobal("r(categories)", " ".join('"{}"'.format(c) for c in top_cats))
 
     # Store counts as a Stata matrix if available
     if counts_df is not None and len(counts_df) > 0:

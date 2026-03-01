@@ -791,7 +791,7 @@ def build_text_classification_prompt(
     categories_str: str,
     survey_question_context: str = "",
     examples_text: str = "",
-    chain_of_thought: bool = True,
+    chain_of_thought: bool = False,
     context_prompt: bool = False,
     step_back_prompt: bool = False,
     stepback_insights: dict = None,
@@ -897,7 +897,7 @@ def build_text_summarization_prompt(
     summary_instructions: str = "",
     max_length: int = None,
     focus: str = None,
-    chain_of_thought: bool = True,
+    chain_of_thought: bool = False,
     context_prompt: bool = False,
     step_back_prompt: bool = False,
     stepback_insights: dict = None,
@@ -1011,7 +1011,7 @@ def build_pdf_summarization_prompt(
     focus: str = None,
     provider: str = "openai",
     pdf_mode: str = "image",
-    chain_of_thought: bool = True,
+    chain_of_thought: bool = False,
     context_prompt: bool = False,
     step_back_prompt: bool = False,
     stepback_insights: dict = None,
@@ -1183,7 +1183,7 @@ def build_pdf_classification_prompt(
     input_description: str = "",
     provider: str = "openai",
     pdf_mode: str = "image",
-    chain_of_thought: bool = True,
+    chain_of_thought: bool = False,
     context_prompt: bool = False,
     step_back_prompt: bool = False,
     stepback_insights: dict = None,
@@ -1409,7 +1409,7 @@ def build_image_classification_prompt(
     categories_str: str,
     input_description: str = "",
     provider: str = "openai",
-    chain_of_thought: bool = True,
+    chain_of_thought: bool = False,
     context_prompt: bool = False,
     step_back_prompt: bool = False,
     stepback_insights: dict = None,
@@ -1688,14 +1688,14 @@ def classify_ensemble(
     example5: str = None,
     example6: str = None,
     creativity: float = None,
-    chain_of_thought: bool = True,
+    chain_of_thought: bool = False,
     chain_of_verification: bool = False,
     step_back_prompt: bool = False,
     context_prompt: bool = False,
     thinking_budget: int = 0,
     use_json_schema: bool = True,
     max_workers: int = None,
-    consensus_threshold: Union[str, float] = "majority",
+    consensus_threshold: Union[str, float] = "unanimous",
     fail_strategy: str = "partial",
     safety: bool = False,
     max_retries: int = 5,
@@ -1762,10 +1762,10 @@ def classify_ensemble(
 
         # Ensemble parameters:
         max_workers: Maximum parallel workers (default: min(len(models), 8))
-        consensus_threshold: Threshold for majority vote. Can be:
-            - "majority": 50% agreement (default)
+        consensus_threshold: Threshold for consensus vote. Can be:
+            - "unanimous": 100% agreement (default — best accuracy in empirical testing)
+            - "majority": 50% agreement
             - "two-thirds": 67% agreement
-            - "unanimous": 100% agreement
             - float: Custom threshold between 0 and 1 (e.g., 0.75 for 75%)
         fail_strategy: How to handle model failures:
             - "partial": Continue with successful models
@@ -2806,7 +2806,7 @@ def summarize_ensemble(
     pdf_mode: str = "image",
     pdf_dpi: int = 150,
     creativity: float = None,
-    chain_of_thought: bool = True,
+    chain_of_thought: bool = False,
     context_prompt: bool = False,
     step_back_prompt: bool = False,
     max_retries: int = 5,
@@ -3032,7 +3032,7 @@ def summarize_ensemble(
                         max_retries=max_retries,
                     )
                 else:
-                    response = client.complete(
+                    response, _err = client.complete(
                         messages=messages,
                         json_schema=json_schema,
                         creativity=creativity,
@@ -3078,7 +3078,7 @@ def summarize_ensemble(
 
                 json_schema = json_schemas[model_name]
 
-                response = client.complete(
+                response, _err = client.complete(
                     messages=messages,
                     json_schema=json_schema,
                     creativity=creativity,
@@ -3306,7 +3306,7 @@ Provide your answer in JSON format: {{"summary": "your synthesized summary"}}"""
             include_additional_properties=synthesis_config["provider"] != "google"
         )
 
-        response = client.complete(
+        response, _err = client.complete(
             messages=[{"role": "user", "content": synthesis_prompt}],
             json_schema=json_schema,
             creativity=0.3,  # Low creativity for synthesis

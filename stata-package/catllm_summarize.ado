@@ -139,8 +139,8 @@ def _catllm_do_summarize():
     texts = []
     obs_map = []
     for i in range(n):
-        if Data.getNum(touse_idx, i) == 1:
-            val = Data.getStr(var_idx, i)
+        if Data.getAt(touse_idx, i) == 1:
+            val = Data.getAt(var_idx, i)
             texts.append(val if val else "")
             obs_map.append(i)
 
@@ -192,7 +192,7 @@ def _catllm_do_summarize():
         stata_obs = obs_map[row_i]
         val = result_df.iloc[row_i].get(summ_col, "")
         if val and str(val) != "nan":
-            Data.setStr(gen_idx, str(val), stata_obs)
+            Data.storeAt(gen_idx, stata_obs, str(val))
 
     SFIToolkit.displayln("{txt}Python summarization complete.")
 end

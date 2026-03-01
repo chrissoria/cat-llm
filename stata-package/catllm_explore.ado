@@ -113,8 +113,8 @@ def _catllm_do_explore():
 
     texts = []
     for i in range(n):
-        if Data.getNum(touse_idx, i) == 1:
-            val = Data.getStr(var_idx, i)
+        if Data.getAt(touse_idx, i) == 1:
+            val = Data.getAt(var_idx, i)
             if val:
                 texts.append(val)
 
@@ -160,13 +160,13 @@ def _catllm_do_explore():
 
     # Store unique categories
     for i, cat in enumerate(unique_cats[:100], 1):  # cap at 100
-        Macro.setLocal("r(cat{})".format(i), cat)
+        Macro.setGlobal("r(cat{})".format(i), cat)
 
     # Store frequency table as macro
     from collections import Counter
     freq = Counter(raw_cats)
     top_20 = freq.most_common(20)
-    Macro.setLocal("r(top_categories)",
+    Macro.setGlobal("r(top_categories)",
                    " ".join('"{}"'.format(c) for c, _ in top_20))
 
     # Optionally save raw results to a new dataset

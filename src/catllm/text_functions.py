@@ -7,6 +7,7 @@ Perplexity, HuggingFace, and Ollama) without requiring provider-specific SDKs.
 """
 
 import json
+import time
 import warnings
 
 # Exported names (excludes deprecated multi_class)
@@ -141,8 +142,14 @@ def extract_json(reply: str) -> str:
 
     extracted = regex.findall(r'\{(?:[^{}]|(?R))*\}', reply, regex.DOTALL)
     if extracted:
-        # Clean up the JSON string
-        return extracted[0].replace('[', '').replace(']', '').replace('\n', '').replace(" ", '')
+        raw = extracted[0].replace('[', '').replace(']', '')
+        # Parse and re-serialize to normalize structural whitespace while
+        # preserving spaces inside string values (e.g. summaries)
+        try:
+            parsed = json.loads(raw)
+            return json.dumps(parsed, separators=(',', ':'))
+        except json.JSONDecodeError:
+            return raw.replace('\n', '')
     else:
         return '{"1":"e"}'
 
@@ -493,6 +500,7 @@ def explore_common_categories(
     focus: str = None,
     progress_callback: callable = None,
     return_raw: bool = False,
+    chunk_delay: float = 0.0,
     # Legacy parameter names for backward compatibility
     user_model: str = None,
     model_source: str = None,
@@ -649,6 +657,10 @@ def explore_common_categories(
             if progress_callback:
                 progress_callback(current_step, total_steps, f"Pass {pass_idx+1}/{iterations}, chunk {i+1}/{divisions}")
 
+            # Per-chunk delay to avoid rate limits
+            if chunk_delay > 0:
+                time.sleep(chunk_delay)
+
     # Early return for raw output (used by explore())
     if return_raw:
         return all_items
@@ -765,7 +777,7 @@ def multi_class(
     creativity: float = None,
     safety: bool = False,
     chain_of_verification: bool = False,
-    chain_of_thought: bool = True,
+    chain_of_thought: bool = False,
     step_back_prompt: bool = False,
     context_prompt: bool = False,
     thinking_budget: int = 0,

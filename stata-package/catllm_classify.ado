@@ -171,8 +171,8 @@ def _catllm_do_classify():
     texts = []
     obs_map = []  # maps position in texts[] back to Stata obs number
     for i in range(n):
-        if Data.getNum(touse_idx, i) == 1:
-            val = Data.getStr(var_idx, i)
+        if Data.getAt(touse_idx, i) == 1:
+            val = Data.getAt(var_idx, i)
             texts.append(val if val else "")
             obs_map.append(i)
 
@@ -231,16 +231,15 @@ def _catllm_do_classify():
             base = cc.rsplit("_consensus", 1)[0]
             col_to_cat[cc] = base
     else:
-        # Single model: category columns match the input categories
-        # Try exact match first
-        cat_cols = [c for c in cols if c in categories]
-        if not cat_cols:
-            # Columns might be in a different format; try all non-metadata cols
-            meta = {"survey_input", "processing_status", "failed_models",
-                    "pdf_path", "page_index", "image_path"}
-            cat_cols = [c for c in cols if c not in meta
-                        and not c.endswith("_agreement")]
-        col_to_cat = {c: c for c in cat_cols}
+        # Single model: columns are positional (category_1, category_2, ...)
+        meta = {"survey_input", "processing_status", "failed_models",
+                "pdf_path", "page_index", "image_path"}
+        cat_cols = [c for c in cols if c not in meta
+                    and not c.endswith("_agreement")]
+        # Map positional columns back to the input category names in order
+        col_to_cat = {}
+        for i, cc in enumerate(cat_cols):
+            col_to_cat[cc] = categories[i] if i < len(categories) else cc
 
     # --- write results back to Stata ---
     for row_i in range(len(result_df)):
@@ -258,7 +257,7 @@ def _catllm_do_classify():
                 continue
 
         if assigned:
-            Data.setStr(gen_idx, assigned, stata_obs)
+            Data.storeAt(gen_idx, stata_obs, assigned)
 
     SFIToolkit.displayln("{txt}Python classification complete.")
 end
