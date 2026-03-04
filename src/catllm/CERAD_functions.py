@@ -1,9 +1,9 @@
 # CERAD Constructional Praxis scoring function
-# Scores drawings of shapes (circles, diamonds, rectangles, cubes) using image_multi_class
+# Scores drawings of shapes (circles, diamonds, rectangles, cubes) using classify()
 
 """
-This function wraps image_multi_class to implement CERAD Constructional Praxis test scoring.
-It defines shape-specific categories, calls image_multi_class for the LLM classification,
+This function wraps classify() to implement CERAD Constructional Praxis test scoring.
+It defines shape-specific categories, calls classify() for the LLM classification,
 then applies algorithmic scoring rules to convert binary classifications into CERAD scores.
 
 Supported shapes:
@@ -13,10 +13,9 @@ Supported shapes:
 - cube: max score 4
 """
 
-# Only export cerad_drawn_score (not the internal import of image_multi_class)
 __all__ = ["cerad_drawn_score"]
 
-from .image_functions import image_multi_class
+from .classify import classify
 
 
 def cerad_drawn_score(
@@ -111,10 +110,11 @@ def cerad_drawn_score(
     else:
         raise ValueError("Invalid shape! Choose from 'circle', 'diamond', 'rectangles', or 'cube'.")
 
-    # Call image_multi_class to get binary classifications
-    result_df = image_multi_class(
-        image_description=image_description,
-        image_input=image_input,
+    # Call classify() to get binary classifications
+    result_df = classify(
+        input_data=image_input,
+        input_type="image",
+        description=image_description,
         categories=categories,
         api_key=api_key,
         user_model=user_model,
@@ -123,7 +123,7 @@ def cerad_drawn_score(
         chain_of_thought=chain_of_thought,
         filename=filename,
         save_directory=save_directory,
-        model_source=model_source
+        model_source=model_source,
     )
 
     # Rename category columns to meaningful names based on shape
