@@ -72,6 +72,21 @@ def classify(
     divisions=10,
     research_question=None,
     progress_callback=None,
+    # TODO: Add batch_mode=False parameter for async batch inference.
+    # All major providers offer a batch API with 50% cost savings, separate rate
+    # limit pools, and a JSONL-upload → poll → download pattern. Supported:
+    #   - OpenAI:     POST /v1/batches (up to 24h, often faster)
+    #   - Anthropic:  POST /v1/messages/batches (usually <1h, max 24h)
+    #   - Google:     Gemini Batch API via files.upload + batches.create (≤24h)
+    #   - Mistral:    client.batch.jobs.create() (configurable, default 24h)
+    #   - xAI (Grok): POST /v1/batches/{id}/requests (≤24h, launched Feb 2026)
+    #   - HuggingFace: no batch API
+    #   - Perplexity:  no batch API (async wrapper only, no discount)
+    # Constraints:
+    #   - Single-model only (ensemble requires per-item consensus — incompatible)
+    #   - Disables progress_callback (no per-item progress until job completes)
+    #   - Use pure HTTP throughout to avoid adding provider SDK dependencies
+    #   - Polling loop needed; surface estimated wait time to caller
     # Multi-model parameters
     models=None,
     consensus_threshold: Union[str, float] = "unanimous",
