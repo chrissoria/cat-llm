@@ -5,6 +5,13 @@ All notable changes to CatLLM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+- `CERAD_functions.py`: Refactored `cerad_drawn_score()` to call `classify()` directly instead of the deprecated `image_multi_class()`. All scoring logic unchanged.
+
+---
+
 ## [2.5.0] - 2026-02-26
 
 ### Added
