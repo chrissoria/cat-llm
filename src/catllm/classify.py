@@ -72,21 +72,10 @@ def classify(
     divisions=10,
     research_question=None,
     progress_callback=None,
-    # TODO: Add batch_mode=False parameter for async batch inference.
-    # All major providers offer a batch API with 50% cost savings, separate rate
-    # limit pools, and a JSONL-upload → poll → download pattern. Supported:
-    #   - OpenAI:     POST /v1/batches (up to 24h, often faster)
-    #   - Anthropic:  POST /v1/messages/batches (usually <1h, max 24h)
-    #   - Google:     Gemini Batch API via files.upload + batches.create (≤24h)
-    #   - Mistral:    client.batch.jobs.create() (configurable, default 24h)
-    #   - xAI (Grok): POST /v1/batches/{id}/requests (≤24h, launched Feb 2026)
-    #   - HuggingFace: no batch API
-    #   - Perplexity:  no batch API (async wrapper only, no discount)
-    # Constraints:
-    #   - Single-model only (ensemble requires per-item consensus — incompatible)
-    #   - Disables progress_callback (no per-item progress until job completes)
-    #   - Use pure HTTP throughout to avoid adding provider SDK dependencies
-    #   - Polling loop needed; surface estimated wait time to caller
+    # Batch mode parameters
+    batch_mode: bool = False,
+    batch_poll_interval: float = 30.0,
+    batch_timeout: float = 86400.0,
     # Multi-model parameters
     models=None,
     consensus_threshold: Union[str, float] = "unanimous",
@@ -141,6 +130,12 @@ def classify(
         model_source (str): Provider - "auto", "openai", "anthropic", "google",
             "mistral", "perplexity", "huggingface", "xai".
         progress_callback: Optional callback for progress updates.
+        batch_mode (bool): If True, use async batch API (50% cost savings, higher rate limits).
+            Supported providers: openai, anthropic, google, mistral, xai.
+            Not supported: huggingface, perplexity, ollama.
+            Incompatible with: multi-model ensemble, PDF/image input, progress_callback.
+        batch_poll_interval (float): Seconds between batch job status checks. Default 30.
+        batch_timeout (float): Max seconds to wait for batch completion. Default 86400 (24h).
         models (list): For multi-model mode, list of (model, provider, api_key) tuples.
             If provided, overrides user_model/api_key/model_source.
         consensus_threshold (str or float): For multi-model mode, agreement threshold.
@@ -343,6 +338,83 @@ def classify(
 
     # Map mode to pdf_mode
     pdf_mode = mode if mode in ("image", "text", "both") else "image"
+
+    # =========================================================================
+    # Batch mode — bypass classify_ensemble entirely
+    # =========================================================================
+    if batch_mode:
+        from ._batch import UNSUPPORTED_BATCH_PROVIDERS, run_batch_classify
+        from .text_functions_ensemble import prepare_json_schemas, prepare_model_configs
+
+        # Guard: single model only
+        if len(models) > 1:
+            raise ValueError(
+                "batch_mode=True is not compatible with multi-model ensemble. "
+                "Pass a single model or set batch_mode=False."
+            )
+
+        # Guard: text input only (auto-detect)
+        from .text_functions_ensemble import _detect_input_type
+        detected_type = _detect_input_type(input_data)
+        if detected_type in ("pdf", "image"):
+            raise ValueError(
+                f"batch_mode=True only supports text input, but detected input type is '{detected_type}'. "
+                "Set batch_mode=False for PDF/image classification."
+            )
+
+        # Guard: supported provider only
+        model_configs = prepare_model_configs(models, auto_download=auto_download)
+        cfg = model_configs[0]
+        if cfg["provider"] in UNSUPPORTED_BATCH_PROVIDERS:
+            raise ValueError(
+                f"batch_mode=True is not supported for provider '{cfg['provider']}'. "
+                f"Supported providers: openai, anthropic, google, mistral, xai."
+            )
+
+        # Warn if progress_callback was provided (incompatible with batch)
+        if progress_callback is not None:
+            print(
+                "[CatLLM] WARNING: progress_callback is not available in batch_mode "
+                "(no per-item progress until the job completes). Ignoring callback."
+            )
+
+        # Build prompt components (mirrors what classify_ensemble does)
+        categories_str = "\n".join(f"{i + 1}. {cat}" for i, cat in enumerate(categories))
+        survey_question_context = f"A respondent was asked: {survey_question}." if survey_question else ""
+        examples = [example1, example2, example3, example4, example5, example6]
+        examples_text = "\n".join(
+            f"Example {i}: {ex}" for i, ex in enumerate(examples, 1) if ex is not None
+        )
+
+        json_schemas = prepare_json_schemas(model_configs, categories, use_json_schema)
+
+        prompt_params = {
+            "categories_str": categories_str,
+            "survey_question_context": survey_question_context,
+            "examples_text": examples_text,
+            "chain_of_thought": chain_of_thought,
+            "context_prompt": context_prompt,
+            "step_back_prompt": step_back_prompt,
+            "stepback_insights": {},
+            "json_schema": json_schemas[cfg["model"]],
+            "creativity": creativity,
+            "thinking_budget": thinking_budget,
+        }
+
+        import pandas as pd
+        items = list(input_data) if not isinstance(input_data, list) else input_data
+
+        return run_batch_classify(
+            items=items,
+            cfg=cfg,
+            categories=categories,
+            prompt_params=prompt_params,
+            filename=filename,
+            save_directory=save_directory,
+            batch_poll_interval=batch_poll_interval,
+            batch_timeout=batch_timeout,
+            fail_strategy=fail_strategy,
+        )
 
     return classify_ensemble(
         survey_input=input_data,

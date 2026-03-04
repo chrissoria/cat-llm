@@ -12,6 +12,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ---
 
+## [2.6.0] - 2026-03-04
+
+### Added
+- **`batch_mode=True` in `classify()`**: New async batch inference mode that reduces API costs by 50% and bypasses standard rate limits. Supported providers: OpenAI, Anthropic, Google (Gemini), Mistral, and xAI (Grok). Not supported: HuggingFace, Perplexity, Ollama.
+  - Packages all classification requests as a JSONL file, submits a single batch job, polls for completion, and returns a DataFrame identical in format to the synchronous single-model path.
+  - New parameters: `batch_poll_interval` (seconds between polls, default 30) and `batch_timeout` (max wait in seconds, default 86400 = 24h).
+  - Incompatible with multi-model ensemble (`models` list with >1 entry), PDF/image input, and `progress_callback`.
+  - Returns the same simplified DataFrame format as synchronous single-model mode: `category_1`, `category_2`, ... columns with no model suffix, consensus, or agreement columns.
+- **`BatchJobExpiredError`**: New exception raised when a batch job expires or is cancelled. Includes the job ID for provider dashboard lookup.
+- **`BatchJobFailedError`**: New exception raised when a batch job terminates in a failed state.
+- **`src/catllm/_batch.py`**: New internal module implementing all batch logic (JSONL building, file upload, job creation, polling, result download and parsing) for all five supported providers via pure HTTP — no provider SDKs required.
+
+---
+
 ## [2.5.0] - 2026-02-26
 
 ### Added

@@ -27,6 +27,8 @@ from ._category_analysis import has_other_category, check_category_verbosity
 # =============================================================================
 # Provider utilities (for advanced users)
 # =============================================================================
+from ._batch import BatchJobExpiredError, BatchJobFailedError
+
 from ._providers import (
     UnifiedLLMClient,
     detect_provider,
@@ -84,6 +86,9 @@ from .image_functions import (
 
 # Define public API
 __all__ = [
+    # Batch mode exceptions
+    "BatchJobExpiredError",
+    "BatchJobFailedError",
     # Main entry points
     "extract",
     "explore",

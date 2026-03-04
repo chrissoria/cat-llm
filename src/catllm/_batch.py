@@ -1,0 +1,822 @@
+"""
+Async batch inference for CatLLM.
+
+Supports OpenAI, Anthropic, Google, Mistral, and xAI — all offer 50% cost
+savings and higher rate limits compared to synchronous API calls.
+
+All five providers follow the same conceptual pattern:
+  1. Package all requests as JSONL
+  2. Submit a batch job (file upload → job creation, or inline for Anthropic)
+  3. Poll until the job reaches a terminal state
+  4. Download and parse results
+  5. Return a DataFrame identical in format to the synchronous single-model path
+
+Not supported: HuggingFace, Perplexity, Ollama (no batch API).
+Not compatible: Multi-model ensemble (batch is single-model only).
+Not compatible: PDF/image input (text only).
+"""
+
+import io
+import json
+import os
+import time
+
+import requests
+
+from ._providers import UnifiedLLMClient
+from ._utils import extract_json
+
+# =============================================================================
+# Constants
+# =============================================================================
+
+BATCH_ENDPOINTS = {
+    "openai": {
+        "upload":  "https://api.openai.com/v1/files",
+        "create":  "https://api.openai.com/v1/batches",
+        "status":  "https://api.openai.com/v1/batches/{job_id}",
+        "results": "https://api.openai.com/v1/files/{file_id}/content",
+    },
+    "anthropic": {
+        # No file upload — requests are sent inline at job creation
+        "create":  "https://api.anthropic.com/v1/messages/batches",
+        "status":  "https://api.anthropic.com/v1/messages/batches/{job_id}",
+        "results": "https://api.anthropic.com/v1/messages/batches/{job_id}/results",
+    },
+    "google": {
+        "upload":  "https://generativelanguage.googleapis.com/upload/v1beta/files",
+        "create":  "https://generativelanguage.googleapis.com/v1beta/batches",
+        "status":  "https://generativelanguage.googleapis.com/v1beta/{job_name}",
+    },
+    "mistral": {
+        "upload":  "https://api.mistral.ai/v1/files",
+        "create":  "https://api.mistral.ai/v1/batch/jobs",
+        "status":  "https://api.mistral.ai/v1/batch/jobs/{job_id}",
+        "results": "https://api.mistral.ai/v1/files/{file_id}/content",
+    },
+    "xai": {
+        "create":  "https://api.x.ai/v1/batches",
+        "add":     "https://api.x.ai/v1/batches/{job_id}/requests",
+        "status":  "https://api.x.ai/v1/batches/{job_id}",
+        "results": "https://api.x.ai/v1/batches/{job_id}/results",
+    },
+}
+
+UNSUPPORTED_BATCH_PROVIDERS = {"huggingface", "huggingface-together", "perplexity", "ollama"}
+
+# Terminal states per provider
+_TERMINAL_STATES = {
+    "openai":    {"completed", "failed", "expired", "cancelled"},
+    "anthropic": {"ended"},
+    "google":    {"JOB_STATE_SUCCEEDED", "JOB_STATE_FAILED", "JOB_STATE_CANCELLED"},
+    "mistral":   {"SUCCESS", "FAILED", "TIMEOUT_EXCEEDED", "CANCELLATION_REQUESTED"},
+    "xai":       {"completed", "failed", "expired", "cancelled"},
+}
+
+_SUCCESS_STATES = {
+    "openai":    {"completed"},
+    "anthropic": {"ended"},   # must check request_counts.failed separately
+    "google":    {"JOB_STATE_SUCCEEDED"},
+    "mistral":   {"SUCCESS"},
+    "xai":       {"completed"},
+}
+
+
+# =============================================================================
+# Exceptions
+# =============================================================================
+
+class BatchJobExpiredError(RuntimeError):
+    """Raised when a batch job expires before completing."""
+    pass
+
+
+class BatchJobFailedError(RuntimeError):
+    """Raised when a batch job terminates in a failed state."""
+    pass
+
+
+# =============================================================================
+# Auth headers
+# =============================================================================
+
+def _get_batch_headers(provider: str, api_key: str) -> dict:
+    """Return HTTP headers for the given provider's batch API."""
+    headers = {"Content-Type": "application/json"}
+    if provider == "openai":
+        headers["Authorization"] = f"Bearer {api_key}"
+    elif provider == "anthropic":
+        headers["x-api-key"] = api_key
+        headers["anthropic-version"] = "2023-06-01"
+        headers["anthropic-beta"] = "message-batches-2024-09-24"
+    elif provider == "google":
+        headers["x-goog-api-key"] = api_key
+    elif provider == "mistral":
+        headers["Authorization"] = f"Bearer {api_key}"
+    elif provider == "xai":
+        headers["Authorization"] = f"Bearer {api_key}"
+    return headers
+
+
+# =============================================================================
+# JSONL line builders
+# =============================================================================
+
+def _build_jsonl_line(provider: str, custom_id: str, payload: dict, model: str) -> dict:
+    """
+    Wrap a provider payload in the provider's batch JSONL envelope.
+
+    Returns a dict that will be serialized as one JSONL line.
+    """
+    if provider == "openai":
+        return {
+            "custom_id": custom_id,
+            "method": "POST",
+            "url": "/v1/chat/completions",
+            "body": payload,
+        }
+    elif provider == "anthropic":
+        # Anthropic uses "params" key; no file upload needed
+        return {
+            "custom_id": custom_id,
+            "params": payload,
+        }
+    elif provider == "google":
+        # Google uses "key" field; request wraps the generateContent payload
+        return {
+            "key": custom_id,
+            "request": payload,
+        }
+    elif provider == "mistral":
+        return {
+            "custom_id": custom_id,
+            "method": "POST",
+            "url": "/v1/chat/completions",
+            "body": payload,
+        }
+    elif provider == "xai":
+        # xAI requests are added one-by-one after batch creation; same OpenAI-compat format
+        return {
+            "custom_id": custom_id,
+            "method": "POST",
+            "url": "/v1/chat/completions",
+            "body": payload,
+        }
+    raise ValueError(f"Unsupported batch provider: {provider}")
+
+
+# =============================================================================
+# File upload (OpenAI, Google, Mistral)
+# =============================================================================
+
+def _upload_jsonl(provider: str, api_key: str, jsonl_bytes: bytes, filename: str = "batch_requests.jsonl") -> str:
+    """
+    Upload a JSONL file to the provider's files API.
+
+    Returns:
+        file_id string used when creating the batch job.
+    """
+    headers = _get_batch_headers(provider, api_key)
+    # Content-Type for multipart upload — remove JSON header
+    headers.pop("Content-Type", None)
+
+    if provider == "openai":
+        url = BATCH_ENDPOINTS["openai"]["upload"]
+        files = {"file": (filename, io.BytesIO(jsonl_bytes), "application/jsonl")}
+        data = {"purpose": "batch"}
+        resp = requests.post(url, headers=headers, files=files, data=data, timeout=120)
+        resp.raise_for_status()
+        return resp.json()["id"]
+
+    elif provider == "mistral":
+        url = BATCH_ENDPOINTS["mistral"]["upload"]
+        files = {"file": (filename, io.BytesIO(jsonl_bytes), "application/octet-stream")}
+        data = {"purpose": "batch"}
+        resp = requests.post(url, headers=headers, files=files, data=data, timeout=120)
+        resp.raise_for_status()
+        return resp.json()["id"]
+
+    elif provider == "google":
+        # Google Files API: resumable upload
+        upload_url = BATCH_ENDPOINTS["google"]["upload"]
+        # Step 1: Initiate upload
+        init_headers = {
+            "x-goog-api-key": api_key,
+            "X-Goog-Upload-Protocol": "resumable",
+            "X-Goog-Upload-Command": "start",
+            "X-Goog-Upload-Header-Content-Type": "application/jsonl",
+            "X-Goog-Upload-Header-Content-Length": str(len(jsonl_bytes)),
+            "Content-Type": "application/json",
+        }
+        init_body = json.dumps({"file": {"display_name": filename}})
+        init_resp = requests.post(upload_url, headers=init_headers, data=init_body, timeout=60)
+        init_resp.raise_for_status()
+        session_url = init_resp.headers.get("X-Goog-Upload-URL")
+        if not session_url:
+            raise RuntimeError("Google file upload: no session URL returned")
+        # Step 2: Upload bytes
+        upload_headers = {
+            "X-Goog-Upload-Command": "upload, finalize",
+            "X-Goog-Upload-Offset": "0",
+            "Content-Type": "application/jsonl",
+        }
+        upload_resp = requests.post(session_url, headers=upload_headers, data=jsonl_bytes, timeout=120)
+        upload_resp.raise_for_status()
+        file_info = upload_resp.json()
+        return file_info.get("name") or file_info.get("uri")
+
+    raise ValueError(f"Provider '{provider}' does not use file upload for batch")
+
+
+# =============================================================================
+# Batch job creation
+# =============================================================================
+
+def _create_batch_job(
+    provider: str,
+    api_key: str,
+    model: str,
+    file_id: str = None,
+    requests_list: list = None,
+) -> str:
+    """
+    Create a batch job and return the job ID.
+
+    Args:
+        provider: Provider name
+        api_key: API key
+        model: Model name (used for Mistral and xAI)
+        file_id: Uploaded file ID (OpenAI, Google, Mistral)
+        requests_list: Inline request list (Anthropic only)
+
+    Returns:
+        job_id string for polling
+    """
+    headers = _get_batch_headers(provider, api_key)
+
+    if provider == "openai":
+        url = BATCH_ENDPOINTS["openai"]["create"]
+        body = {
+            "input_file_id": file_id,
+            "endpoint": "/v1/chat/completions",
+            "completion_window": "24h",
+        }
+        resp = requests.post(url, headers=headers, json=body, timeout=60)
+        resp.raise_for_status()
+        return resp.json()["id"]
+
+    elif provider == "anthropic":
+        url = BATCH_ENDPOINTS["anthropic"]["create"]
+        body = {"requests": requests_list}
+        resp = requests.post(url, headers=headers, json=body, timeout=60)
+        resp.raise_for_status()
+        return resp.json()["id"]
+
+    elif provider == "google":
+        url = BATCH_ENDPOINTS["google"]["create"]
+        body = {
+            "model": f"models/{model}",
+            "src": {"file_name": file_id},
+            "dest": {"file_name": f"batch_output_{int(time.time())}.jsonl"},
+        }
+        resp = requests.post(url, headers=headers, json=body, timeout=60)
+        resp.raise_for_status()
+        result = resp.json()
+        # Google returns the job name (e.g. "batches/abc123") — use as job_id
+        return result.get("name", result.get("id"))
+
+    elif provider == "mistral":
+        url = BATCH_ENDPOINTS["mistral"]["create"]
+        body = {
+            "input_files": [file_id],
+            "model": model,
+            "endpoint": "/v1/chat/completions",
+        }
+        resp = requests.post(url, headers=headers, json=body, timeout=60)
+        resp.raise_for_status()
+        return resp.json()["id"]
+
+    elif provider == "xai":
+        # Step 1: Create empty batch
+        url = BATCH_ENDPOINTS["xai"]["create"]
+        body = {"completion_window": "24h"}
+        resp = requests.post(url, headers=headers, json=body, timeout=60)
+        resp.raise_for_status()
+        job_id = resp.json()["id"]
+
+        # Step 2: Add all requests to the batch
+        add_url = BATCH_ENDPOINTS["xai"]["add"].format(job_id=job_id)
+        add_resp = requests.post(add_url, headers=headers, json=requests_list, timeout=120)
+        add_resp.raise_for_status()
+        return job_id
+
+    raise ValueError(f"Unsupported batch provider: {provider}")
+
+
+# =============================================================================
+# Polling
+# =============================================================================
+
+def _poll_batch_job(
+    provider: str,
+    api_key: str,
+    job_id: str,
+    interval: float = 30.0,
+    timeout: float = 86400.0,
+) -> dict:
+    """
+    Poll the batch job until it reaches a terminal state.
+
+    Prints one-line status updates each poll cycle.
+
+    Returns:
+        The final status response dict (contains output file ID or job name for result retrieval).
+
+    Raises:
+        BatchJobExpiredError: If the job expired or was cancelled.
+        BatchJobFailedError: If the job terminated in a failed state.
+        TimeoutError: If timeout is reached before the job completes.
+    """
+    headers = _get_batch_headers(provider, api_key)
+    terminal = _TERMINAL_STATES[provider]
+    success = _SUCCESS_STATES[provider]
+
+    start = time.time()
+    attempt = 0
+
+    if provider == "google":
+        status_url = BATCH_ENDPOINTS["google"]["status"].format(job_name=job_id)
+    else:
+        status_url = BATCH_ENDPOINTS[provider]["status"].format(job_id=job_id)
+
+    while True:
+        elapsed = time.time() - start
+        if elapsed >= timeout:
+            raise TimeoutError(
+                f"Batch job '{job_id}' did not complete within {timeout/3600:.1f}h. "
+                f"Increase batch_timeout or switch to synchronous mode."
+            )
+
+        try:
+            resp = requests.get(status_url, headers=headers, timeout=30)
+            if resp.status_code >= 500:
+                # Server error — back off and retry
+                wait = min(60 * (2 ** min(attempt, 4)), 300)
+                print(f"  [batch] Server error {resp.status_code}; retrying in {wait}s...")
+                time.sleep(wait)
+                attempt += 1
+                continue
+            resp.raise_for_status()
+        except requests.exceptions.RequestException as e:
+            wait = min(60 * (2 ** min(attempt, 4)), 300)
+            print(f"  [batch] Network error ({e}); retrying in {wait}s...")
+            time.sleep(wait)
+            attempt += 1
+            continue
+
+        attempt = 0
+        status_data = resp.json()
+
+        # Extract state string per provider
+        if provider == "openai":
+            state = status_data.get("status", "")
+            counts = status_data.get("request_counts", {})
+            progress_str = (
+                f"completed={counts.get('completed', '?')} "
+                f"failed={counts.get('failed', '?')} "
+                f"total={counts.get('total', '?')}"
+            )
+        elif provider == "anthropic":
+            state = status_data.get("processing_status", "")
+            counts = status_data.get("request_counts", {})
+            progress_str = (
+                f"processing={counts.get('processing', '?')} "
+                f"succeeded={counts.get('succeeded', '?')} "
+                f"errored={counts.get('errored', '?')}"
+            )
+        elif provider == "google":
+            state = status_data.get("state", "")
+            progress_str = f"state={state}"
+        elif provider == "mistral":
+            state = status_data.get("status", "")
+            progress_str = (
+                f"succeeded={status_data.get('succeeded_requests', '?')} "
+                f"failed={status_data.get('failed_requests', '?')} "
+                f"total={status_data.get('total_requests', '?')}"
+            )
+        elif provider == "xai":
+            state = status_data.get("status", "")
+            counts = status_data.get("request_counts", {})
+            progress_str = (
+                f"completed={counts.get('completed', '?')} "
+                f"failed={counts.get('failed', '?')}"
+            )
+        else:
+            state = ""
+            progress_str = ""
+
+        print(f"  [batch] {provider} | elapsed={elapsed:.0f}s | {progress_str} | state={state}")
+
+        if state in terminal:
+            if state not in success:
+                expired = {"expired", "TIMEOUT_EXCEEDED", "JOB_STATE_CANCELLED", "CANCELLATION_REQUESTED"}
+                if state in expired or "cancel" in state.lower() or "timeout" in state.lower():
+                    raise BatchJobExpiredError(
+                        f"Batch job '{job_id}' expired/was cancelled (state: {state}). "
+                        f"Job ID saved above — check provider dashboard for details."
+                    )
+                raise BatchJobFailedError(
+                    f"Batch job '{job_id}' failed (state: {state}). "
+                    f"Check the provider dashboard for details."
+                )
+            return status_data
+
+        time.sleep(interval)
+
+
+# =============================================================================
+# Result download
+# =============================================================================
+
+def _download_batch_results(
+    provider: str,
+    api_key: str,
+    job_id: str,
+    status_data: dict,
+) -> str:
+    """
+    Download completed batch results as raw JSONL text.
+
+    Args:
+        provider: Provider name
+        api_key: API key
+        job_id: Batch job ID
+        status_data: Final status dict from polling (contains output file references)
+
+    Returns:
+        Raw JSONL string (one JSON object per line)
+    """
+    headers = _get_batch_headers(provider, api_key)
+
+    if provider == "openai":
+        output_file_id = status_data.get("output_file_id")
+        if not output_file_id:
+            raise RuntimeError("OpenAI batch: no output_file_id in completed status")
+        url = BATCH_ENDPOINTS["openai"]["results"].format(file_id=output_file_id)
+        headers_dl = dict(headers)
+        headers_dl.pop("Content-Type", None)
+        resp = requests.get(url, headers=headers_dl, timeout=120)
+        resp.raise_for_status()
+        return resp.text
+
+    elif provider == "anthropic":
+        url = BATCH_ENDPOINTS["anthropic"]["results"].format(job_id=job_id)
+        headers_dl = dict(headers)
+        headers_dl.pop("Content-Type", None)
+        resp = requests.get(url, headers=headers_dl, timeout=120, stream=True)
+        resp.raise_for_status()
+        return resp.text
+
+    elif provider == "google":
+        # Google returns the output file name in the completed job status
+        dest = status_data.get("dest", {})
+        output_file_name = dest.get("file_name") or dest.get("fileName")
+        if not output_file_name:
+            raise RuntimeError("Google batch: no dest.file_name in completed status")
+        # Download via Files API
+        download_url = f"https://generativelanguage.googleapis.com/v1beta/{output_file_name}"
+        headers_dl = {"x-goog-api-key": api_key}
+        resp = requests.get(download_url, headers=headers_dl, timeout=120)
+        resp.raise_for_status()
+        return resp.text
+
+    elif provider == "mistral":
+        output_file_id = status_data.get("output_file")
+        if not output_file_id:
+            raise RuntimeError("Mistral batch: no output_file in completed status")
+        url = BATCH_ENDPOINTS["mistral"]["results"].format(file_id=output_file_id)
+        headers_dl = dict(headers)
+        headers_dl.pop("Content-Type", None)
+        resp = requests.get(url, headers=headers_dl, timeout=120)
+        resp.raise_for_status()
+        return resp.text
+
+    elif provider == "xai":
+        url = BATCH_ENDPOINTS["xai"]["results"].format(job_id=job_id)
+        headers_dl = dict(headers)
+        headers_dl.pop("Content-Type", None)
+        resp = requests.get(url, headers=headers_dl, timeout=120)
+        resp.raise_for_status()
+        return resp.text
+
+    raise ValueError(f"Unsupported batch provider: {provider}")
+
+
+# =============================================================================
+# Result parsing
+# =============================================================================
+
+def _parse_batch_results(
+    provider: str,
+    raw_results: str,
+    custom_id_map: dict,
+    client: "UnifiedLLMClient",
+) -> dict:
+    """
+    Parse the downloaded JSONL results back into per-item classification strings.
+
+    Args:
+        provider: Provider name
+        raw_results: Raw JSONL text from the batch results download
+        custom_id_map: Dict mapping custom_id string → original item index
+        client: UnifiedLLMClient instance (used to call _parse_response())
+
+    Returns:
+        Dict mapping item_index → (json_str, error_or_None)
+        Missing items (job dropped them) get (None, "Missing from batch results").
+    """
+    parsed_results = {}
+
+    for line in raw_results.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        try:
+            data = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+
+        # Extract custom_id and the embedded response object
+        if provider == "openai":
+            custom_id = data.get("custom_id")
+            response_body = data.get("response", {}).get("body")
+            error_val = data.get("response", {}).get("error")
+            if error_val or response_body is None:
+                error_msg = str(error_val) if error_val else "No response body"
+                idx = custom_id_map.get(custom_id)
+                if idx is not None:
+                    parsed_results[idx] = (None, error_msg)
+                continue
+            raw_text = client._parse_response(response_body)
+
+        elif provider == "anthropic":
+            custom_id = data.get("custom_id")
+            result = data.get("result", {})
+            if result.get("type") != "succeeded":
+                error_msg = str(result.get("error", "Request did not succeed"))
+                idx = custom_id_map.get(custom_id)
+                if idx is not None:
+                    parsed_results[idx] = (None, error_msg)
+                continue
+            raw_text = client._parse_response(result.get("message", {}))
+
+        elif provider == "google":
+            custom_id = data.get("key")
+            response_data = data.get("response")
+            status = data.get("status", {})
+            if status.get("code", 0) != 0 or response_data is None:
+                error_msg = status.get("message", "Google batch item failed")
+                idx = custom_id_map.get(custom_id)
+                if idx is not None:
+                    parsed_results[idx] = (None, error_msg)
+                continue
+            raw_text = client._parse_response(response_data)
+
+        elif provider == "mistral":
+            custom_id = data.get("custom_id")
+            response_body = data.get("response", {})
+            error_val = response_body.get("error")
+            if error_val:
+                idx = custom_id_map.get(custom_id)
+                if idx is not None:
+                    parsed_results[idx] = (None, str(error_val))
+                continue
+            raw_text = client._parse_response(response_body)
+
+        elif provider == "xai":
+            custom_id = data.get("custom_id")
+            response_body = data.get("response", {}).get("body")
+            error_val = data.get("response", {}).get("error")
+            if error_val or response_body is None:
+                error_msg = str(error_val) if error_val else "No response body"
+                idx = custom_id_map.get(custom_id)
+                if idx is not None:
+                    parsed_results[idx] = (None, error_msg)
+                continue
+            raw_text = client._parse_response(response_body)
+
+        else:
+            continue
+
+        idx = custom_id_map.get(custom_id)
+        if idx is None:
+            continue
+
+        json_str = extract_json(raw_text)
+        parsed_results[idx] = (json_str, None)
+
+    return parsed_results
+
+
+# =============================================================================
+# Main entry point
+# =============================================================================
+
+def run_batch_classify(
+    items: list,
+    cfg: dict,
+    categories: list,
+    prompt_params: dict,
+    filename: str = None,
+    save_directory: str = None,
+    batch_poll_interval: float = 30.0,
+    batch_timeout: float = 86400.0,
+    fail_strategy: str = "partial",
+) -> "pd.DataFrame":
+    """
+    Run batch classification for a single model against a list of text items.
+
+    This is the main entry point called from classify() when batch_mode=True.
+    Returns a DataFrame in the same format as the synchronous single-model path.
+
+    Args:
+        items: List of text strings to classify
+        cfg: Model config dict from prepare_model_configs() (single entry)
+        categories: List of category names
+        prompt_params: Dict containing prompt-building parameters:
+            - categories_str (str)
+            - survey_question_context (str)
+            - examples_text (str)
+            - chain_of_thought (bool)
+            - context_prompt (bool)
+            - step_back_prompt (bool)
+            - stepback_insights (dict)
+            - json_schema (dict or None)
+            - creativity (float or None)
+            - thinking_budget (int)
+        filename: Optional CSV filename to save results
+        save_directory: Optional directory to save results
+        batch_poll_interval: Seconds between poll checks (default 30)
+        batch_timeout: Max seconds to wait for job (default 86400 = 24h)
+        fail_strategy: "partial" or "strict"
+
+    Returns:
+        pd.DataFrame with category_1, category_2, ... columns (same as sync path)
+    """
+    import pandas as pd
+    from .text_functions_ensemble import (
+        aggregate_results,
+        build_output_dataframes,
+        build_text_classification_prompt,
+        prepare_model_configs,
+    )
+
+    provider = cfg["provider"]
+    api_key = cfg["api_key"]
+    model = cfg["model"]
+
+    categories_str = prompt_params["categories_str"]
+    survey_question_context = prompt_params.get("survey_question_context", "")
+    examples_text = prompt_params.get("examples_text", "")
+    chain_of_thought = prompt_params.get("chain_of_thought", False)
+    context_prompt = prompt_params.get("context_prompt", False)
+    step_back_prompt = prompt_params.get("step_back_prompt", False)
+    stepback_insights = prompt_params.get("stepback_insights", {})
+    json_schema = prompt_params.get("json_schema")
+    creativity = prompt_params.get("creativity")
+    thinking_budget = prompt_params.get("thinking_budget", 0)
+
+    client = UnifiedLLMClient(provider=provider, api_key=api_key, model=model)
+
+    print(f"\n[batch] Building {len(items)} request(s) for {model} ({provider})...")
+
+    # =========================================================================
+    # Step 1: Build per-item payloads and JSONL
+    # =========================================================================
+    custom_id_map = {}   # custom_id → item index
+    jsonl_lines = []
+    requests_list = []   # Used directly for Anthropic and xAI
+
+    for idx, item in enumerate(items):
+        custom_id = f"item-{idx}"
+        custom_id_map[custom_id] = idx
+
+        # Build prompt messages
+        messages = build_text_classification_prompt(
+            response_text=str(item) if item is not None else "",
+            categories_str=categories_str,
+            survey_question_context=survey_question_context,
+            examples_text=examples_text,
+            chain_of_thought=chain_of_thought,
+            context_prompt=context_prompt,
+            step_back_prompt=step_back_prompt,
+            stepback_insights=stepback_insights,
+            model_name=model,
+        )
+
+        # Build provider-specific payload using existing _build_payload logic
+        payload = client._build_payload(
+            messages=messages,
+            json_schema=json_schema,
+            creativity=creativity,
+            thinking_budget=thinking_budget if thinking_budget and thinking_budget > 0 else None,
+        )
+
+        line = _build_jsonl_line(provider, custom_id, payload, model)
+        jsonl_lines.append(line)
+        if provider in ("anthropic", "xai"):
+            requests_list.append(line)
+
+    # Serialize to JSONL bytes (for file upload providers)
+    jsonl_bytes = b"\n".join(json.dumps(line).encode("utf-8") for line in jsonl_lines)
+
+    # =========================================================================
+    # Step 2: Upload file (OpenAI, Google, Mistral)
+    # =========================================================================
+    file_id = None
+    if provider in ("openai", "mistral", "google"):
+        print(f"[batch] Uploading JSONL ({len(jsonl_bytes)/1024:.1f} KB) to {provider}...")
+        file_id = _upload_jsonl(provider, api_key, jsonl_bytes)
+        print(f"[batch] File uploaded: {file_id}")
+
+    # =========================================================================
+    # Step 3: Create batch job
+    # =========================================================================
+    print(f"[batch] Creating batch job...")
+    job_id = _create_batch_job(
+        provider=provider,
+        api_key=api_key,
+        model=model,
+        file_id=file_id,
+        requests_list=requests_list if provider in ("anthropic", "xai") else None,
+    )
+    print(f"[batch] Job created: {job_id}")
+    print(f"[batch] Polling every {batch_poll_interval}s (timeout={batch_timeout/3600:.1f}h)...")
+
+    # =========================================================================
+    # Step 4: Poll until complete
+    # =========================================================================
+    status_data = _poll_batch_job(
+        provider=provider,
+        api_key=api_key,
+        job_id=job_id,
+        interval=batch_poll_interval,
+        timeout=batch_timeout,
+    )
+    print(f"[batch] Job complete.")
+
+    # =========================================================================
+    # Step 5: Download results
+    # =========================================================================
+    print(f"[batch] Downloading results...")
+    raw_results = _download_batch_results(
+        provider=provider,
+        api_key=api_key,
+        job_id=job_id,
+        status_data=status_data,
+    )
+
+    # =========================================================================
+    # Step 6: Parse results back to per-item classifications
+    # =========================================================================
+    item_results = _parse_batch_results(
+        provider=provider,
+        raw_results=raw_results,
+        custom_id_map=custom_id_map,
+        client=client,
+    )
+
+    # =========================================================================
+    # Step 7: Build all_results list in the format aggregate_results expects
+    # =========================================================================
+    model_name = cfg["sanitized_name"]
+    all_results = []
+
+    for idx, item in enumerate(items):
+        json_str, error = item_results.get(idx, (None, "Missing from batch results"))
+
+        model_results = {model_name: (json_str, error)}
+        aggregated = aggregate_results(
+            model_results=model_results,
+            categories=categories,
+            consensus_threshold="unanimous",
+            fail_strategy=fail_strategy,
+        )
+
+        all_results.append({
+            "response": str(item) if item is not None else "",
+            "model_results": model_results,
+            "aggregated": aggregated,
+            "skipped": (item is None or (isinstance(item, float) and __import__("math").isnan(item))),
+        })
+
+    # =========================================================================
+    # Step 8: Build output DataFrame (reuses existing pipeline)
+    # =========================================================================
+    return build_output_dataframes(
+        all_results=all_results,
+        model_configs=[cfg],
+        categories=categories,
+        filename=filename,
+        save_directory=save_directory,
+    )
