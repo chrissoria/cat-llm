@@ -183,6 +183,9 @@ Supports both **single-model** and **multi-model ensemble** classification for i
 - `model_source` (str, default="auto"): Provider - "auto", "openai", "anthropic", "google", "mistral", "perplexity", "huggingface", "xai"
 - `models` (list, optional): For multi-model ensemble, list of `(model, provider, api_key)` or `(model, provider, api_key, config_dict)` tuples
 - `consensus_threshold` (float, default=0.5): Agreement threshold for ensemble mode (0-1)
+- `batch_mode` (bool, default=False): *(Experimental)* Submit the entire job as an async batch request instead of making synchronous calls. Supported providers: OpenAI, Anthropic, Google, Mistral, xAI. Reduces API costs by ~50% at these providers. Not compatible with multi-model ensemble or image/PDF inputs. The function blocks until the batch completes.
+- `batch_poll_interval` (float, default=30.0): Seconds between status polls when `batch_mode=True`.
+- `batch_timeout` (float, default=86400.0): Maximum seconds to wait for a batch job before raising `BatchJobExpiredError`.
 - `thinking_budget` (int, default=0): Token budget for model reasoning/thinking. Set to 0 to disable. Behavior varies by provider:
 
 | Provider | `thinking_budget=0` | `thinking_budget > 0` (e.g., 8192) |
