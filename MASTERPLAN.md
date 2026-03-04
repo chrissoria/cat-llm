@@ -2,41 +2,83 @@
 
 ## Vision
 
-**cat-llm** evolves from a monolithic package into a meta-package — the tidyverse of
-LLM-powered social science text analysis. Installing `cat-llm` pulls in a family of
-domain-specific sub-packages, each with its own PyPI release, versioning, and focus,
-but sharing a common provider infrastructure and a consistent API surface.
+**cat-llm** keeps its brand and identity as the meta-package — the tidyverse of
+LLM-powered text analysis for social science. Installing `cat-llm` pulls in a family
+of domain-specific sub-packages, each with its own PyPI release, versioning, and focus.
+
+The shared infrastructure and general-purpose base lives in **`cat-content`**: a
+standalone package for classifying any text column, with no domain assumptions.
+Domain-specific packages (`cat-survey`, `cat-vader`, etc.) extend `cat-content`
+with domain-tuned prompts, metadata injection, and workflow helpers.
 
 ```
 pip install cat-llm
 # brings in:
+#   cat-content   general-purpose text column classification (the base)
 #   cat-survey    survey response classification & extraction
 #   cat-vader     social media (Reddit, Twitter/X, forums)
 #   cat-ademic    academic papers, PDFs, citations
 #   cat-pol       political text (manifestos, speeches, legislation)
 ```
 
+**Dependency graph** (modeled on tidyverse / rlang):
+
+```
+cat-content                    ← general base + shared infra (like rlang)
+                                  independently useful; no domain assumptions
+    ↑
+cat-survey  cat-vader  cat-ademic  cat-pol    ← domain packages, each depends on cat-content
+    ↑           ↑          ↑          ↑
+                    cat-llm                    ← pure meta-package, keeps the brand
+                                               (depends on all domain packages + cat-content)
+```
+
+Every package is independently installable:
+```
+pip install cat-content   # general text classification, no domain framing
+pip install cat-survey    # survey-specific, pulls in cat-content automatically
+pip install cat-llm       # everything
+```
+
 ---
 
-## The Sub-Packages
+## The Packages
 
-### cat-survey *(extract from current cat-llm core)*
-Survey response classification and category extraction.
-This is the current heart of `cat-llm` — it gets spun out as its own package.
+### `cat-content` *(new — the base)*
+General-purpose text column classification and extraction with no domain assumptions.
+This replaces the need for a separate invisible `catcore` — it is both the shared
+infrastructure layer AND independently useful for researchers who just have a text
+column and don't fit neatly into a domain.
 
 **Scope:**
-- `classify()` for open-ended survey responses (text only)
-- `extract()` / `explore()` for category discovery
-- `summarize()` for response-level summarization
-- All prompt strategies tested in the paper (CoT, CoVe, step-back, few-shot)
-- R and Stata wrappers live here
+- `classify()`, `extract()`, `explore()`, `summarize()` for any text input
+- `UnifiedLLMClient`, `PROVIDER_CONFIG`, `detect_provider` — all provider infrastructure
+- `_batch.py` — async batch API logic
+- Shared text utilities: `build_json_schema`, `extract_json`, `validate_classification_json`
+- No survey framing, no social media framing, no PDF-first assumptions
 
-**Status:** Exists inside `cat-llm/src/catllm/`. Needs to be extracted into its own repo
-(`cat-survey`) and published separately, then re-imported by `cat-llm`.
+**Status:** Does not exist yet. Code lives inside `cat-llm/src/catllm/` and needs to be
+extracted. This is the prerequisite for all other phases.
 
 ---
 
-### cat-vader *(already separate)*
+### `cat-survey` *(extract from current cat-llm)*
+Survey response classification — the current heart of `cat-llm`, spun out as its
+own package. Keeps the paper methodology, R/Stata wrappers, and survey-specific defaults.
+
+**Scope:**
+- `classify()` / `extract()` / `explore()` / `summarize()` with survey-tuned prompts
+- All prompt strategies from the paper: CoT, CoVe, step-back, few-shot examples
+- Defaults calibrated for survey data (temperature, verbosity checks, etc.)
+- R and Stata wrappers
+- HuggingFace Space: `CatLLM/survey-classifier`
+
+**Status:** Code exists inside `cat-llm`. Needs to be extracted into its own repo
+and published, then wired back into `cat-llm` as a dependency.
+
+---
+
+### `cat-vader` *(already separate)*
 Social media text classification with platform-aware context injection.
 
 **Scope:**
@@ -45,27 +87,27 @@ Social media text classification with platform-aware context injection.
 - Reddit thread classification (nested comment structure)
 - HuggingFace Space: `CatLLM/CatVader`
 
-**Status:** Separate repo and PyPI package. Needs to be wired into `cat-llm` as a
-declared dependency and re-exported.
+**Status:** Separate repo and PyPI package. Needs to be updated to depend on
+`cat-content` instead of carrying its own provider copy, then wired into `cat-llm`.
 
 ---
 
-### cat-ademic *(planned)*
+### `cat-ademic` *(planned)*
 Classification and extraction for academic and long-form documents.
 
 **Scope:**
-- PDF-first classify/extract — builds on current `pdf_functions.py` logic
+- PDF-first `classify()` / `extract()` — builds on current `pdf_functions.py` logic
 - Per-page and whole-document classification modes
 - Citation and abstract extraction
-- CERAD scoring (currently in `cat-llm` — natural home here given image + PDF focus)
+- CERAD scoring (natural home here given image + PDF focus)
 - Designed for systematic reviews, coding codebooks, content analysis of papers
 
-**Status:** Not yet started. Core PDF machinery exists in `cat-llm/src/catllm/pdf_functions.py`
-and `image_functions.py` — these become the seed.
+**Status:** Not started. Core PDF machinery in `cat-llm/src/catllm/pdf_functions.py`
+and `image_functions.py` becomes the seed.
 
 ---
 
-### cat-pol *(future)*
+### `cat-pol` *(future)*
 Political text analysis — manifestos, speeches, legislation, news.
 
 **Scope:**
@@ -79,69 +121,47 @@ Political text analysis — manifestos, speeches, legislation, news.
 
 ---
 
-## Shared Infrastructure — `catcore`
+### `cat-llm` *(stays as meta-package)*
+Keeps its brand identity as the survey-analysis flagship and the entry point for the
+full ecosystem. Marketing and documentation continues to emphasize survey use cases,
+but installing it gives you everything.
 
-Modeled on how tidyverse handles shared infrastructure (e.g., `rlang`, `cli`):
-a dedicated base package that sub-packages depend on directly, with the meta-package
-(`cat-llm`) knowing about sub-packages but sub-packages having no knowledge of the
-meta-package.
-
-**`catcore`** contains:
-- `_providers.py` — `UnifiedLLMClient`, `PROVIDER_CONFIG`, `detect_provider`, Ollama utils
-- `_batch.py` — async batch API logic for all providers
-- `text_functions.py` — `build_json_schema`, `extract_json`, `validate_classification_json`
-
-Each sub-package lists `catcore` as a dependency. `cat-llm` lists all sub-packages
-as dependencies and is otherwise empty — just an `__init__.py` that imports and
-re-exports everything. This mirrors exactly how `tidyverse` works in R.
-
-**Dependency graph:**
-
-```
-catcore                        ← no cat-* deps (leaf)
-    ↑
-cat-survey  cat-vader  cat-ademic  cat-pol    ← each depends only on catcore
-    ↑           ↑          ↑          ↑
-                    cat-llm                    ← pure meta-package
-                                               (depends on all four + catcore)
-```
-
-This means every sub-package is independently installable:
-```
-pip install cat-survey   # works standalone, no cat-llm required
-pip install cat-llm      # installs everything
-```
+**Scope:**
+- `pyproject.toml` lists all sub-packages as dependencies
+- `__init__.py` re-exports all sub-package public APIs
+- README, academic citation, HuggingFace org hub
+- No domain logic lives here
 
 ---
 
 ## Target Package Structure
 
 ```
-catcore/                      ← shared infrastructure (like rlang in R)
-├── src/catcore/
+cat-content/                  ← general base + shared infra (like rlang)
+├── src/catcontent/
 │   ├── _providers.py         ← UnifiedLLMClient, PROVIDER_CONFIG
 │   ├── _batch.py             ← batch API logic
-│   └── text_functions.py     ← shared text utilities
+│   ├── text_functions.py     ← shared text utilities
+│   ├── classify.py           ← domain-agnostic classify()
+│   ├── extract.py            ← domain-agnostic extract()
+│   ├── explore.py            ← domain-agnostic explore()
+│   └── summarize.py          ← domain-agnostic summarize()
 
-cat-survey/                   ← survey response package
-│   depends on: catcore
-│   classify(), extract(), explore(), summarize()
+cat-survey/                   ← survey package (depends on cat-content)
+│   survey-tuned classify(), extract(), explore(), summarize()
 │   R + Stata wrappers
 
-cat-vader/                    ← social media package (already exists)
-│   depends on: catcore
+cat-vader/                    ← social media (depends on cat-content)
 │   classify(), extract(), explore() with social metadata
 
-cat-ademic/                   ← academic/PDF package (planned)
-│   depends on: catcore
+cat-ademic/                   ← academic/PDF (depends on cat-content)
 │   classify(), extract() for PDFs, CERAD scoring
 
-cat-pol/                      ← political text package (future)
-│   depends on: catcore
+cat-pol/                      ← political text (depends on cat-content)
 │   classify(), extract() with political science prompt library
 
-cat-llm/                      ← pure meta-package (like tidyverse in R)
-│   depends on: cat-survey, cat-vader, cat-ademic, cat-pol, catcore
+cat-llm/                      ← pure meta-package, keeps the brand
+│   depends on: cat-content, cat-survey, cat-vader, cat-ademic, cat-pol
 │   src/catllm/__init__.py re-exports all sub-package public APIs
 │   No domain logic lives here
 ```
@@ -150,28 +170,28 @@ cat-llm/                      ← pure meta-package (like tidyverse in R)
 
 ## Migration Path
 
-### Phase 1 — Stabilize the core (now)
-- Keep everything in `cat-llm` as-is; ship features normally.
-- Identify and document the exact boundary between `catcore` code and
-  survey-specific code — this is the prerequisite for Phase 2.
-- Continue publishing `cat-llm` as the all-in-one package.
+### Phase 1 — Stabilize (now)
+- Ship features in `cat-llm` as-is; no structural changes yet.
+- Draw a clear internal boundary between general-purpose code (→ `cat-content`)
+  and survey-specific code (→ `cat-survey`). This is the design prerequisite.
 
-### Phase 2 — Create `catcore`
-- Extract `_providers.py`, `_batch.py`, and shared text utilities into a new `catcore` repo.
-- Publish `catcore` to PyPI.
-- Update `cat-llm` and `cat-vader` to depend on `catcore` instead of carrying their own copies.
+### Phase 2 — Create `cat-content`
+- Extract `_providers.py`, `_batch.py`, `text_functions.py`, and the four core
+  entry-point functions (`classify`, `extract`, `explore`, `summarize`) into a new repo.
+- Publish `cat-content` to PyPI.
+- Update `cat-vader` to depend on `cat-content`.
 
 ### Phase 3 — Extract `cat-survey`
-- Move survey-specific code (`classify`, `extract`, `explore`, `summarize`, R/Stata wrappers)
-  into a new `cat-survey` repo depending on `catcore`.
+- Move survey-specific code (prompt strategies, defaults, R/Stata wrappers) into a
+  new `cat-survey` repo; add `cat-content` as a dependency.
 - Publish `cat-survey` to PyPI independently.
-- Slim `cat-llm` down to a meta-package: `pyproject.toml` lists sub-packages as dependencies,
+- Slim `cat-llm` to a meta-package: `pyproject.toml` lists sub-packages as deps,
   `__init__.py` re-exports their public APIs.
-- Version bump; update README.
+- Version bump `cat-llm`; update README.
 
 ### Phase 4 — Build `cat-ademic`
-- Seed from existing `pdf_functions.py`, `image_functions.py`, CERAD functions in cat-llm.
-- Publish `cat-ademic` to PyPI; add to `cat-llm` dependencies.
+- Seed from `pdf_functions.py`, `image_functions.py`, CERAD functions currently in cat-llm.
+- Publish `cat-ademic`; add to `cat-llm` dependencies.
 
 ### Phase 5 — `cat-pol` (when ready)
 - Develop domain-tuned prompt library for political science.
@@ -179,10 +199,9 @@ cat-llm/                      ← pure meta-package (like tidyverse in R)
 
 ---
 
-## API Consistency Across Sub-Packages
+## API Consistency Across Packages
 
-Modeled on tidyverse's verb consistency (every package uses `filter`, `select`, `mutate` etc.):
-all cat-* packages expose the same four core functions.
+All packages expose the same four verbs — modeled on tidyverse's consistent grammar:
 
 | Function | Purpose |
 |----------|---------|
@@ -192,8 +211,8 @@ all cat-* packages expose the same four core functions.
 | `summarize()` | Summarize documents |
 
 Domain-specific behavior is injected through keyword arguments
-(e.g., `platform=`, `metadata=` in cat-vader; `page_mode=` in cat-ademic),
-not by changing function names. This keeps the learning curve flat: learn once, apply anywhere.
+(`platform=`, `metadata=` in cat-vader; `page_mode=` in cat-ademic),
+never by changing function names. Learn once, apply anywhere.
 
 The `pyproject.toml` for `cat-llm` will look like:
 
@@ -201,10 +220,10 @@ The `pyproject.toml` for `cat-llm` will look like:
 [project]
 name = "cat-llm"
 dependencies = [
-    "catcore>=1.0",
-    "cat-survey>=1.0",
-    "cat-vader>=1.0",
-    "cat-ademic>=1.0",
+    "cat-content~=1.0",
+    "cat-survey~=1.0",
+    "cat-vader~=1.0",
+    "cat-ademic~=1.0",
 ]
 ```
 
@@ -212,14 +231,15 @@ dependencies = [
 
 ## Open Questions
 
-- **Namespace**: Sub-packages use flat names (`import catsurvey`, `import catvader`) matching
-  the tidyverse pattern (`library(dplyr)`, not `library(tidyverse::dplyr)`). When installed via
-  `cat-llm`, they are still importable by their own names.
-- **Versioning**: Use compatible-release (`~=`) constraints in `cat-llm`'s dependencies
-  (e.g., `cat-survey~=1.0`) so patch updates propagate automatically but breaking changes
-  require an explicit `cat-llm` bump. Same approach tidyverse uses.
-- **R/Stata wrappers**: Live in `cat-survey` — they wrap survey-specific functions.
-  A future `cat-llm` R meta-package could re-export them.
-- **HuggingFace Spaces**: Keep one Space per sub-package (current approach for cat-vader).
-  A unified multi-tab Space under `CatLLM/` is a nice long-term goal once 2+ sub-packages
-  have Spaces.
+- **Namespace**: Flat import names (`import catcontent`, `import catsurvey`) matching
+  the tidyverse pattern. All importable by their own names whether installed directly
+  or via `cat-llm`.
+- **Versioning**: Compatible-release (`~=`) constraints so patch updates propagate
+  automatically but breaking changes require an explicit `cat-llm` bump.
+- **R/Stata wrappers**: Live in `cat-survey`. A future R meta-package could mirror
+  the Python ecosystem.
+- **HuggingFace Spaces**: One Space per domain package (current approach). A unified
+  multi-tab Space under `CatLLM/` is a long-term goal once 2+ Spaces exist.
+- **`cat-content` marketing**: Position it as "classify any text column" —
+  useful for researchers outside the survey/social-media domains who want the
+  LLM pipeline without domain framing.
