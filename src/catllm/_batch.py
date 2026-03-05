@@ -44,9 +44,10 @@ BATCH_ENDPOINTS = {
         "results": "https://api.anthropic.com/v1/messages/batches/{job_id}/results",
     },
     "google": {
-        "upload":  "https://generativelanguage.googleapis.com/upload/v1beta/files",
-        "create":  "https://generativelanguage.googleapis.com/v1beta/batches",
-        "status":  "https://generativelanguage.googleapis.com/v1beta/{job_name}",
+        "upload":   "https://generativelanguage.googleapis.com/upload/v1beta/files",
+        "create":   "https://generativelanguage.googleapis.com/v1beta/models/{model}:batchGenerateContent",
+        "status":   "https://generativelanguage.googleapis.com/v1beta/{job_name}",
+        "download": "https://generativelanguage.googleapis.com/download/v1beta/{file_name}:download",
     },
     "mistral": {
         "upload":  "https://api.mistral.ai/v1/files",
@@ -142,10 +143,10 @@ def _build_jsonl_line(provider: str, custom_id: str, payload: dict, model: str) 
             "params": payload,
         }
     elif provider == "google":
-        # Google uses "key" field; request wraps the generateContent payload
+        # Google batch JSONL format: request payload + metadata with key
         return {
-            "key": custom_id,
             "request": payload,
+            "metadata": {"key": custom_id},
         }
     elif provider == "mistral":
         return {
@@ -273,11 +274,12 @@ def _create_batch_job(
         return resp.json()["id"]
 
     elif provider == "google":
-        url = BATCH_ENDPOINTS["google"]["create"]
+        url = BATCH_ENDPOINTS["google"]["create"].format(model=model)
         body = {
-            "model": f"models/{model}",
-            "src": {"file_name": file_id},
-            "dest": {"file_name": f"batch_output_{int(time.time())}.jsonl"},
+            "batch": {
+                "display_name": f"catllm_batch_{int(time.time())}",
+                "input_config": {"file_name": file_id},
+            }
         }
         resp = requests.post(url, headers=headers, json=body, timeout=60)
         resp.raise_for_status()
@@ -395,7 +397,9 @@ def _poll_batch_job(
                 f"errored={counts.get('errored', '?')}"
             )
         elif provider == "google":
-            state = status_data.get("state", "")
+            # State lives at metadata.state in the batchGenerateContent response
+            state = (status_data.get("metadata", {}).get("state", "")
+                     or status_data.get("state", ""))
             progress_str = f"state={state}"
         elif provider == "mistral":
             state = status_data.get("status", "")
@@ -478,13 +482,15 @@ def _download_batch_results(
         return resp.text
 
     elif provider == "google":
-        # Google returns the output file name in the completed job status
-        dest = status_data.get("dest", {})
-        output_file_name = dest.get("file_name") or dest.get("fileName")
-        if not output_file_name:
-            raise RuntimeError("Google batch: no dest.file_name in completed status")
-        # Download via Files API
-        download_url = f"https://generativelanguage.googleapis.com/v1beta/{output_file_name}"
+        # Completed job status contains response.responsesFile
+        responses_file = status_data.get("response", {}).get("responsesFile")
+        if not responses_file:
+            raise RuntimeError(
+                f"Google batch: no response.responsesFile in completed status. "
+                f"Status keys: {list(status_data.keys())}"
+            )
+        download_url = (BATCH_ENDPOINTS["google"]["download"].format(file_name=responses_file)
+                        + "?alt=media")
         headers_dl = {"x-goog-api-key": api_key}
         resp = requests.get(download_url, headers=headers_dl, timeout=120)
         resp.raise_for_status()
@@ -571,11 +577,13 @@ def _parse_batch_results(
             raw_text = client._parse_response(result.get("message", {}))
 
         elif provider == "google":
+            # Output JSONL: {"key": "item-0", "response": {generateContent response}}
+            # or           {"key": "item-0", "error": {"code": ..., "message": ...}}
             custom_id = data.get("key")
+            error_val = data.get("error")
             response_data = data.get("response")
-            status = data.get("status", {})
-            if status.get("code", 0) != 0 or response_data is None:
-                error_msg = status.get("message", "Google batch item failed")
+            if error_val or response_data is None:
+                error_msg = str(error_val) if error_val else "No response in batch output"
                 idx = custom_id_map.get(custom_id)
                 if idx is not None:
                     parsed_results[idx] = (None, error_msg)
@@ -583,14 +591,16 @@ def _parse_batch_results(
             raw_text = client._parse_response(response_data)
 
         elif provider == "mistral":
+            # Mistral batch output mirrors OpenAI: response.body holds the completion
             custom_id = data.get("custom_id")
-            response_body = data.get("response", {})
-            error_val = response_body.get("error")
+            response_obj = data.get("response", {})
+            error_val = data.get("error") or response_obj.get("error")
             if error_val:
                 idx = custom_id_map.get(custom_id)
                 if idx is not None:
                     parsed_results[idx] = (None, str(error_val))
                 continue
+            response_body = response_obj.get("body", response_obj)
             raw_text = client._parse_response(response_body)
 
         elif provider == "xai":
