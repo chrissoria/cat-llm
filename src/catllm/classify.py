@@ -133,7 +133,10 @@ def classify(
         batch_mode (bool): If True, use async batch API (50% cost savings, higher rate limits).
             Supported providers: openai, anthropic, google, mistral, xai.
             Not supported: huggingface, perplexity, ollama.
-            Incompatible with: multi-model ensemble, PDF/image input, progress_callback.
+            Ensemble mode: supported. Each model submits its own batch job concurrently.
+            Providers without batch API (HuggingFace, Perplexity, Ollama) fall back to
+            synchronous calls and are merged in with the batch results.
+            Incompatible with: PDF/image input, progress_callback.
         batch_poll_interval (float): Seconds between batch job status checks. Default 30.
         batch_timeout (float): Max seconds to wait for batch completion. Default 86400 (24h).
         models (list): For multi-model mode, list of (model, provider, api_key) tuples.
@@ -346,13 +349,6 @@ def classify(
         from ._batch import UNSUPPORTED_BATCH_PROVIDERS, run_batch_classify
         from .text_functions_ensemble import prepare_json_schemas, prepare_model_configs
 
-        # Guard: single model only
-        if len(models) > 1:
-            raise ValueError(
-                "batch_mode=True is not compatible with multi-model ensemble. "
-                "Pass a single model or set batch_mode=False."
-            )
-
         # Guard: text input only (auto-detect)
         from .text_functions_ensemble import _detect_input_type
         detected_type = _detect_input_type(input_data)
@@ -360,15 +356,6 @@ def classify(
             raise ValueError(
                 f"batch_mode=True only supports text input, but detected input type is '{detected_type}'. "
                 "Set batch_mode=False for PDF/image classification."
-            )
-
-        # Guard: supported provider only
-        model_configs = prepare_model_configs(models, auto_download=auto_download)
-        cfg = model_configs[0]
-        if cfg["provider"] in UNSUPPORTED_BATCH_PROVIDERS:
-            raise ValueError(
-                f"batch_mode=True is not supported for provider '{cfg['provider']}'. "
-                f"Supported providers: openai, anthropic, google, mistral, xai."
             )
 
         # Warn if progress_callback was provided (incompatible with batch)
@@ -386,34 +373,74 @@ def classify(
             f"Example {i}: {ex}" for i, ex in enumerate(examples, 1) if ex is not None
         )
 
+        model_configs = prepare_model_configs(models, auto_download=auto_download)
         json_schemas = prepare_json_schemas(model_configs, categories, use_json_schema)
-
-        prompt_params = {
-            "categories_str": categories_str,
-            "survey_question_context": survey_question_context,
-            "examples_text": examples_text,
-            "chain_of_thought": chain_of_thought,
-            "context_prompt": context_prompt,
-            "step_back_prompt": step_back_prompt,
-            "stepback_insights": {},
-            "json_schema": json_schemas[cfg["model"]],
-            "creativity": creativity,
-            "thinking_budget": thinking_budget,
-        }
-
-        import pandas as pd
         items = list(input_data) if not isinstance(input_data, list) else input_data
 
-        return run_batch_classify(
+        if len(models) == 1:
+            cfg = model_configs[0]
+            if cfg["provider"] in UNSUPPORTED_BATCH_PROVIDERS:
+                raise ValueError(
+                    f"batch_mode=True is not supported for provider '{cfg['provider']}'. "
+                    f"Supported providers: openai, anthropic, google, mistral, xai."
+                )
+            prompt_params = {
+                "categories_str": categories_str,
+                "survey_question_context": survey_question_context,
+                "examples_text": examples_text,
+                "chain_of_thought": chain_of_thought,
+                "context_prompt": context_prompt,
+                "step_back_prompt": step_back_prompt,
+                "stepback_insights": {},
+                "json_schema": json_schemas[cfg["model"]],
+                "creativity": creativity,
+                "thinking_budget": thinking_budget,
+            }
+            return run_batch_classify(
+                items=items,
+                cfg=cfg,
+                categories=categories,
+                prompt_params=prompt_params,
+                filename=filename,
+                save_directory=save_directory,
+                batch_poll_interval=batch_poll_interval,
+                batch_timeout=batch_timeout,
+                fail_strategy=fail_strategy,
+            )
+
+        # Ensemble batch path: one job per model, run concurrently
+        print(
+            "[CatLLM] NOTE: batch_mode=True with multiple models is experimental. "
+            "Each model submits a separate batch job concurrently. Providers without "
+            "a batch API (HuggingFace, Perplexity, Ollama) fall back to synchronous calls."
+        )
+        from ._batch import run_batch_ensemble_classify
+        prompt_params_per_model = {
+            cfg["model"]: {
+                "categories_str": categories_str,
+                "survey_question_context": survey_question_context,
+                "examples_text": examples_text,
+                "chain_of_thought": chain_of_thought,
+                "context_prompt": context_prompt,
+                "step_back_prompt": step_back_prompt,
+                "stepback_insights": {},
+                "json_schema": json_schemas[cfg["model"]],
+                "creativity": cfg["creativity"] if cfg["creativity"] is not None else creativity,
+                "thinking_budget": thinking_budget,
+            }
+            for cfg in model_configs
+        }
+        return run_batch_ensemble_classify(
             items=items,
-            cfg=cfg,
+            model_configs=model_configs,
             categories=categories,
-            prompt_params=prompt_params,
+            prompt_params_per_model=prompt_params_per_model,
+            consensus_threshold=consensus_threshold,
+            fail_strategy=fail_strategy,
             filename=filename,
             save_directory=save_directory,
             batch_poll_interval=batch_poll_interval,
             batch_timeout=batch_timeout,
-            fail_strategy=fail_strategy,
         )
 
     return classify_ensemble(

@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- **Ensemble batch mode (experimental)**: `batch_mode=True` now works with multi-model ensembles. Each model submits its own batch job concurrently via `ThreadPoolExecutor`; results are merged through the existing `aggregate_results` + `build_output_dataframes` pipeline and return the same DataFrame format as synchronous ensemble mode (per-model columns, `_consensus`, `_agreement`). Providers without a batch API (HuggingFace, Perplexity, Ollama) fall back to synchronous calls automatically. Prints an `[CatLLM] NOTE: experimental` warning when used.
+  - New internal helpers: `_run_one_batch_job` (extracted from `run_batch_classify`), `_run_one_sync_model` (sync fallback), and `run_batch_ensemble_classify` (orchestrator) in `src/catllm/_batch.py`.
+
 ---
 
 ## [2.6.0] - 2026-03-05

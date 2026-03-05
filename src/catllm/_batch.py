@@ -12,7 +12,9 @@ All five providers follow the same conceptual pattern:
   5. Return a DataFrame identical in format to the synchronous single-model path
 
 Not supported: HuggingFace, Perplexity, Ollama (no batch API).
-Not compatible: Multi-model ensemble (batch is single-model only).
+Ensemble mode: supported. Each model submits its own batch job concurrently.
+  Providers without batch API (HuggingFace, Perplexity, Ollama) fall back to
+  synchronous calls and are merged in with the batch results.
 Not compatible: PDF/image input (text only).
 """
 
@@ -655,7 +657,174 @@ def _parse_batch_results(
 
 
 # =============================================================================
-# Main entry point
+# Per-model helpers (used by both single-model and ensemble batch paths)
+# =============================================================================
+
+def _run_one_batch_job(
+    cfg: dict,
+    items: list,
+    prompt_params: dict,
+    batch_poll_interval: float = 30.0,
+    batch_timeout: float = 86400.0,
+) -> dict:
+    """
+    Submit, poll, download, and parse a batch job for one model.
+    Returns {item_index: (json_str_or_None, error_or_None)}.
+    """
+    from .text_functions_ensemble import build_text_classification_prompt
+
+    provider = cfg["provider"]
+    api_key = cfg["api_key"]
+    model = cfg["model"]
+
+    categories_str = prompt_params["categories_str"]
+    survey_question_context = prompt_params.get("survey_question_context", "")
+    examples_text = prompt_params.get("examples_text", "")
+    chain_of_thought = prompt_params.get("chain_of_thought", False)
+    context_prompt = prompt_params.get("context_prompt", False)
+    step_back_prompt = prompt_params.get("step_back_prompt", False)
+    stepback_insights = prompt_params.get("stepback_insights", {})
+    json_schema = prompt_params.get("json_schema")
+    creativity = prompt_params.get("creativity")
+    thinking_budget = prompt_params.get("thinking_budget", 0)
+
+    client = UnifiedLLMClient(provider=provider, api_key=api_key, model=model)
+
+    print(f"\n[batch] Building {len(items)} request(s) for {model} ({provider})...")
+
+    # Step 1: Build per-item payloads and JSONL
+    custom_id_map = {}
+    jsonl_lines = []
+    requests_list = []
+
+    for idx, item in enumerate(items):
+        custom_id = f"item-{idx}"
+        custom_id_map[custom_id] = idx
+
+        messages = build_text_classification_prompt(
+            response_text=str(item) if item is not None else "",
+            categories_str=categories_str,
+            survey_question_context=survey_question_context,
+            examples_text=examples_text,
+            chain_of_thought=chain_of_thought,
+            context_prompt=context_prompt,
+            step_back_prompt=step_back_prompt,
+            stepback_insights=stepback_insights,
+            model_name=model,
+        )
+
+        payload = client._build_payload(
+            messages=messages,
+            json_schema=json_schema,
+            creativity=creativity,
+            thinking_budget=thinking_budget if thinking_budget and thinking_budget > 0 else None,
+        )
+
+        line = _build_jsonl_line(provider, custom_id, payload, model)
+        jsonl_lines.append(line)
+        if provider in ("anthropic", "xai", "google"):
+            requests_list.append(line)
+
+    jsonl_bytes = b"\n".join(json.dumps(line).encode("utf-8") for line in jsonl_lines)
+
+    # Step 2: Upload file (OpenAI, Mistral only — Google uses inline requests)
+    file_id = None
+    if provider in ("openai", "mistral"):
+        print(f"[batch] Uploading JSONL ({len(jsonl_bytes)/1024:.1f} KB) to {provider}...")
+        file_id = _upload_jsonl(provider, api_key, jsonl_bytes)
+        print(f"[batch] File uploaded: {file_id}")
+
+    # Step 3: Create batch job
+    print(f"[batch] Creating batch job for {model}...")
+    job_id = _create_batch_job(
+        provider=provider,
+        api_key=api_key,
+        model=model,
+        file_id=file_id,
+        requests_list=requests_list if provider in ("anthropic", "xai", "google") else None,
+    )
+    print(f"[batch] Job created: {job_id}")
+    print(f"[batch] Polling every {batch_poll_interval}s (timeout={batch_timeout/3600:.1f}h)...")
+
+    # Step 4: Poll until complete
+    status_data = _poll_batch_job(
+        provider=provider,
+        api_key=api_key,
+        job_id=job_id,
+        interval=batch_poll_interval,
+        timeout=batch_timeout,
+    )
+    print(f"[batch] Job complete for {model}.")
+
+    # Step 5: Download results
+    print(f"[batch] Downloading results for {model}...")
+    raw_results = _download_batch_results(
+        provider=provider,
+        api_key=api_key,
+        job_id=job_id,
+        status_data=status_data,
+    )
+
+    # Step 6: Parse results
+    return _parse_batch_results(
+        provider=provider,
+        raw_results=raw_results,
+        custom_id_map=custom_id_map,
+        client=client,
+    )
+
+
+def _run_one_sync_model(
+    cfg: dict,
+    items: list,
+    prompt_params: dict,
+) -> dict:
+    """
+    Classify all items synchronously for one model (fallback for unsupported batch providers).
+    Returns {item_index: (json_str_or_None, error_or_None)}.
+    """
+    from .text_functions_ensemble import build_text_classification_prompt
+
+    provider = cfg["provider"]
+    api_key = cfg["api_key"]
+    model = cfg["model"]
+    json_schema = prompt_params.get("json_schema")
+    creativity = prompt_params.get("creativity")
+    thinking_budget = prompt_params.get("thinking_budget", 0)
+
+    client = UnifiedLLMClient(provider=provider, api_key=api_key, model=model)
+    item_results = {}
+
+    print(f"\n[batch] Synchronous fallback for {model} ({provider}): {len(items)} item(s)...")
+
+    for idx, item in enumerate(items):
+        messages = build_text_classification_prompt(
+            response_text=str(item) if item is not None else "",
+            categories_str=prompt_params["categories_str"],
+            survey_question_context=prompt_params.get("survey_question_context", ""),
+            examples_text=prompt_params.get("examples_text", ""),
+            chain_of_thought=prompt_params.get("chain_of_thought", False),
+            context_prompt=prompt_params.get("context_prompt", False),
+            step_back_prompt=prompt_params.get("step_back_prompt", False),
+            stepback_insights=prompt_params.get("stepback_insights", {}),
+            model_name=model,
+        )
+        try:
+            raw = client.complete(
+                messages=messages,
+                json_schema=json_schema,
+                creativity=creativity,
+                thinking_budget=thinking_budget if thinking_budget and thinking_budget > 0 else None,
+            )
+            item_results[idx] = (extract_json(raw), None)
+        except Exception as e:
+            item_results[idx] = (None, str(e))
+
+    return item_results
+
+
+# =============================================================================
+# Main entry point (single-model)
 # =============================================================================
 
 def run_batch_classify(
@@ -699,127 +868,17 @@ def run_batch_classify(
     Returns:
         pd.DataFrame with category_1, category_2, ... columns (same as sync path)
     """
-    import pandas as pd
-    from .text_functions_ensemble import (
-        aggregate_results,
-        build_output_dataframes,
-        build_text_classification_prompt,
-        prepare_model_configs,
-    )
-
-    provider = cfg["provider"]
-    api_key = cfg["api_key"]
-    model = cfg["model"]
-
-    categories_str = prompt_params["categories_str"]
-    survey_question_context = prompt_params.get("survey_question_context", "")
-    examples_text = prompt_params.get("examples_text", "")
-    chain_of_thought = prompt_params.get("chain_of_thought", False)
-    context_prompt = prompt_params.get("context_prompt", False)
-    step_back_prompt = prompt_params.get("step_back_prompt", False)
-    stepback_insights = prompt_params.get("stepback_insights", {})
-    json_schema = prompt_params.get("json_schema")
-    creativity = prompt_params.get("creativity")
-    thinking_budget = prompt_params.get("thinking_budget", 0)
-
-    client = UnifiedLLMClient(provider=provider, api_key=api_key, model=model)
-
-    print(f"\n[batch] Building {len(items)} request(s) for {model} ({provider})...")
+    from .text_functions_ensemble import aggregate_results, build_output_dataframes
 
     # =========================================================================
-    # Step 1: Build per-item payloads and JSONL
+    # Steps 1-6: Submit, poll, download, and parse the batch job
     # =========================================================================
-    custom_id_map = {}   # custom_id → item index
-    jsonl_lines = []
-    requests_list = []   # Used directly for Anthropic and xAI
-
-    for idx, item in enumerate(items):
-        custom_id = f"item-{idx}"
-        custom_id_map[custom_id] = idx
-
-        # Build prompt messages
-        messages = build_text_classification_prompt(
-            response_text=str(item) if item is not None else "",
-            categories_str=categories_str,
-            survey_question_context=survey_question_context,
-            examples_text=examples_text,
-            chain_of_thought=chain_of_thought,
-            context_prompt=context_prompt,
-            step_back_prompt=step_back_prompt,
-            stepback_insights=stepback_insights,
-            model_name=model,
-        )
-
-        # Build provider-specific payload using existing _build_payload logic
-        payload = client._build_payload(
-            messages=messages,
-            json_schema=json_schema,
-            creativity=creativity,
-            thinking_budget=thinking_budget if thinking_budget and thinking_budget > 0 else None,
-        )
-
-        line = _build_jsonl_line(provider, custom_id, payload, model)
-        jsonl_lines.append(line)
-        if provider in ("anthropic", "xai", "google"):
-            requests_list.append(line)
-
-    # Serialize to JSONL bytes (for file upload providers)
-    jsonl_bytes = b"\n".join(json.dumps(line).encode("utf-8") for line in jsonl_lines)
-
-    # =========================================================================
-    # Step 2: Upload file (OpenAI, Mistral only — Google uses inline requests)
-    # =========================================================================
-    file_id = None
-    if provider in ("openai", "mistral"):
-        print(f"[batch] Uploading JSONL ({len(jsonl_bytes)/1024:.1f} KB) to {provider}...")
-        file_id = _upload_jsonl(provider, api_key, jsonl_bytes)
-        print(f"[batch] File uploaded: {file_id}")
-
-    # =========================================================================
-    # Step 3: Create batch job
-    # =========================================================================
-    print(f"[batch] Creating batch job...")
-    job_id = _create_batch_job(
-        provider=provider,
-        api_key=api_key,
-        model=model,
-        file_id=file_id,
-        requests_list=requests_list if provider in ("anthropic", "xai", "google") else None,
-    )
-    print(f"[batch] Job created: {job_id}")
-    print(f"[batch] Polling every {batch_poll_interval}s (timeout={batch_timeout/3600:.1f}h)...")
-
-    # =========================================================================
-    # Step 4: Poll until complete
-    # =========================================================================
-    status_data = _poll_batch_job(
-        provider=provider,
-        api_key=api_key,
-        job_id=job_id,
-        interval=batch_poll_interval,
-        timeout=batch_timeout,
-    )
-    print(f"[batch] Job complete.")
-
-    # =========================================================================
-    # Step 5: Download results
-    # =========================================================================
-    print(f"[batch] Downloading results...")
-    raw_results = _download_batch_results(
-        provider=provider,
-        api_key=api_key,
-        job_id=job_id,
-        status_data=status_data,
-    )
-
-    # =========================================================================
-    # Step 6: Parse results back to per-item classifications
-    # =========================================================================
-    item_results = _parse_batch_results(
-        provider=provider,
-        raw_results=raw_results,
-        custom_id_map=custom_id_map,
-        client=client,
+    item_results = _run_one_batch_job(
+        cfg=cfg,
+        items=items,
+        prompt_params=prompt_params,
+        batch_poll_interval=batch_poll_interval,
+        batch_timeout=batch_timeout,
     )
 
     # =========================================================================
@@ -856,3 +915,101 @@ def run_batch_classify(
         filename=filename,
         save_directory=save_directory,
     )
+
+
+# =============================================================================
+# Ensemble batch entry point
+# =============================================================================
+
+def run_batch_ensemble_classify(
+    items: list,
+    model_configs: list,
+    categories: list,
+    prompt_params_per_model: dict,
+    consensus_threshold,
+    fail_strategy: str = "partial",
+    filename: str = None,
+    save_directory: str = None,
+    batch_poll_interval: float = 30.0,
+    batch_timeout: float = 86400.0,
+) -> "pd.DataFrame":
+    """
+    Run batch classification for multiple models concurrently, then merge results.
+
+    Batch-capable providers (openai, anthropic, google, mistral, xai) submit jobs
+    concurrently. Unsupported providers (huggingface, perplexity, ollama) fall back
+    to synchronous per-item calls and are merged with the batch results.
+
+    Args:
+        items: List of text strings to classify
+        model_configs: List of model config dicts from prepare_model_configs()
+        categories: List of category names
+        prompt_params_per_model: Dict mapping model name → prompt_params dict
+        consensus_threshold: Agreement threshold (str or float)
+        fail_strategy: "partial" or "strict"
+        filename: Optional CSV filename to save results
+        save_directory: Optional directory to save results
+        batch_poll_interval: Seconds between poll checks (default 30)
+        batch_timeout: Max seconds to wait for job (default 86400 = 24h)
+
+    Returns:
+        pd.DataFrame with consensus columns and per-model columns (same as sync ensemble)
+    """
+    import math
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    from .text_functions_ensemble import aggregate_results, build_output_dataframes
+
+    batch_cfgs = [c for c in model_configs if c["provider"] not in UNSUPPORTED_BATCH_PROVIDERS]
+    sync_cfgs  = [c for c in model_configs if c["provider"] in UNSUPPORTED_BATCH_PROVIDERS]
+
+    if batch_cfgs:
+        print(
+            f"\n[batch ensemble] {len(batch_cfgs)} model(s) will use batch API: "
+            f"{', '.join(c['model'] for c in batch_cfgs)}"
+        )
+    if sync_cfgs:
+        print(
+            f"[batch ensemble] {len(sync_cfgs)} model(s) will use synchronous fallback: "
+            f"{', '.join(c['model'] for c in sync_cfgs)}"
+        )
+
+    all_model_results = {}
+
+    def _run_cfg(cfg):
+        model_key = cfg["sanitized_name"]
+        pp = prompt_params_per_model[cfg["model"]]
+        if cfg["provider"] in UNSUPPORTED_BATCH_PROVIDERS:
+            return model_key, _run_one_sync_model(cfg, items, pp)
+        else:
+            return model_key, _run_one_batch_job(cfg, items, pp, batch_poll_interval, batch_timeout)
+
+    with ThreadPoolExecutor(max_workers=len(model_configs)) as executor:
+        futures = {executor.submit(_run_cfg, cfg): cfg for cfg in model_configs}
+        for future in as_completed(futures):
+            model_key, result = future.result()
+            all_model_results[model_key] = result
+
+    all_results = []
+    for idx, item in enumerate(items):
+        model_results = {
+            cfg["sanitized_name"]: all_model_results[cfg["sanitized_name"]].get(
+                idx, (None, "Missing from batch results")
+            )
+            for cfg in model_configs
+        }
+        aggregated = aggregate_results(
+            model_results=model_results,
+            categories=categories,
+            consensus_threshold=consensus_threshold,
+            fail_strategy=fail_strategy,
+        )
+        skipped = item is None or (isinstance(item, float) and math.isnan(item))
+        all_results.append({
+            "response": str(item) if not skipped else "",
+            "model_results": model_results,
+            "aggregated": aggregated,
+            "skipped": skipped,
+        })
+
+    return build_output_dataframes(all_results, model_configs, categories, filename, save_directory)

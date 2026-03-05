@@ -5,13 +5,15 @@ Test script for batch_mode=True in catllm.classify().
 Tests:
   1. Smoke test per supported provider (5 rows each)
   2. Output format parity vs. synchronous path (column names, dtypes, value range)
-  3. ValueError guard conditions (ensemble, image input, unsupported provider)
+  3. ValueError guard conditions (image input, unsupported provider)
   4. Partial failure handling (bad row doesn't crash the job)
+  5. Ensemble batch mode (multiple models, concurrent batch jobs)
 
 Usage:
   python examples/test_batch_mode.py                  # all providers
   python examples/test_batch_mode.py openai           # single provider
   python examples/test_batch_mode.py guards           # guard-condition tests only
+  python examples/test_batch_mode.py ensemble         # ensemble batch test only
 """
 
 import os
@@ -205,25 +207,7 @@ def test_format_parity(provider_name="openai"):
 def test_guards():
     api_key = API_KEYS.get("openai") or "fake-key"
 
-    # Guard 1: multi-model ensemble
-    try:
-        catllm.classify(
-            input_data=SAMPLE_TEXTS,
-            categories=CATEGORIES,
-            models=[
-                ("gpt-4o-mini", "openai", api_key),
-                ("gpt-4o", "openai", api_key),
-            ],
-            batch_mode=True,
-            add_other=False,
-            check_verbosity=False,
-        )
-        assert False, "Should have raised ValueError for multi-model ensemble"
-    except ValueError as e:
-        assert "ensemble" in str(e).lower() or "single" in str(e).lower(), f"Unexpected error: {e}"
-        print(f"  Guard 1 (multi-model ensemble): PASSED — {e}")
-
-    # Guard 2: unsupported provider
+    # Guard 1: unsupported provider (single-model — huggingface has no batch API)
     try:
         catllm.classify(
             input_data=SAMPLE_TEXTS,
@@ -238,12 +222,60 @@ def test_guards():
         assert False, "Should have raised ValueError for huggingface"
     except ValueError as e:
         assert "huggingface" in str(e).lower() or "not supported" in str(e).lower(), f"Unexpected error: {e}"
-        print(f"  Guard 2 (huggingface provider): PASSED — {e}")
+        print(f"  Guard 1 (huggingface single-model): PASSED — {e}")
 
     print(f"  All guards PASSED")
 
 # =============================================================================
-# Test 4: Partial failure handling
+# Test 4: Ensemble batch mode (multiple models, concurrent jobs)
+# =============================================================================
+
+def test_ensemble_batch():
+    """Two batch-capable models — both should submit concurrent jobs and merge."""
+    openai_key = API_KEYS.get("openai")
+    mistral_key = API_KEYS.get("mistral")
+
+    if not openai_key or not mistral_key:
+        print(f"  SKIPPED — need both openai and mistral API keys")
+        return
+
+    result = catllm.classify(
+        input_data=SAMPLE_TEXTS,
+        categories=CATEGORIES,
+        models=[
+            ("gpt-4o-mini", "openai", openai_key),
+            ("mistral-small-latest", "mistral", mistral_key),
+        ],
+        batch_mode=True,
+        batch_poll_interval=10.0,
+        add_other=False,
+        check_verbosity=False,
+    )
+
+    print_result(result)
+
+    # Ensemble output should have per-model columns + consensus columns
+    assert isinstance(result, pd.DataFrame), f"Expected DataFrame, got {type(result)}"
+    assert len(result) == len(SAMPLE_TEXTS), f"Expected {len(SAMPLE_TEXTS)} rows, got {len(result)}"
+
+    cols = list(result.columns)
+    # Should have per-model columns
+    model_cols = [c for c in cols if "gpt_4o_mini" in c or "mistral_small" in c]
+    assert len(model_cols) > 0, f"Expected per-model columns, got: {cols}"
+    # Should have consensus columns
+    consensus_cols = [c for c in cols if "_consensus" in c]
+    assert len(consensus_cols) > 0, f"Expected consensus columns, got: {cols}"
+    # Should have agreement columns
+    agreement_cols = [c for c in cols if "_agreement" in c]
+    assert len(agreement_cols) > 0, f"Expected agreement columns, got: {cols}"
+
+    print(f"  Columns: {cols}")
+    print(f"  PASSED — ensemble batch produced {len(model_cols)} model cols, "
+          f"{len(consensus_cols)} consensus cols")
+
+
+# =============================================================================
+# Test 5: Partial failure handling
 # =============================================================================
 
 def test_partial_failures(provider_name="openai"):
@@ -287,6 +319,10 @@ if __name__ == "__main__":
         print_section("Test: Guard Conditions")
         test_guards()
 
+    elif target == "ensemble":
+        print_section("Test: Ensemble Batch Mode")
+        test_ensemble_batch()
+
     elif target in API_KEYS:
         print_section(f"Test: Smoke Test — {target}")
         test_provider(target)
@@ -314,6 +350,9 @@ if __name__ == "__main__":
                 print_section(f"Test: Format Parity — {provider}")
                 test_format_parity(provider)
                 break
+
+        print_section("Test: Ensemble Batch Mode")
+        test_ensemble_batch()
 
         print_section("Test: Partial Failures")
         for provider in API_KEYS:
