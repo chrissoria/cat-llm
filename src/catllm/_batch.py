@@ -224,7 +224,12 @@ def _upload_jsonl(provider: str, api_key: str, jsonl_bytes: bytes, filename: str
         upload_resp = requests.post(session_url, headers=upload_headers, data=jsonl_bytes, timeout=120)
         upload_resp.raise_for_status()
         file_info = upload_resp.json()
-        return file_info.get("name") or file_info.get("uri")
+        # Response wraps file metadata under a "file" key: {"file": {"name": "files/abc", ...}}
+        file_obj = file_info.get("file", file_info)
+        file_name = file_obj.get("name") or file_obj.get("uri")
+        if not file_name:
+            raise RuntimeError(f"Google file upload: could not extract file name. Response: {file_info}")
+        return file_name
 
     raise ValueError(f"Provider '{provider}' does not use file upload for batch")
 
