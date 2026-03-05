@@ -69,7 +69,10 @@ UNSUPPORTED_BATCH_PROVIDERS = {"huggingface", "huggingface-together", "perplexit
 _TERMINAL_STATES = {
     "openai":    {"completed", "failed", "expired", "cancelled"},
     "anthropic": {"ended"},
-    "google":    {"JOB_STATE_SUCCEEDED", "JOB_STATE_FAILED", "JOB_STATE_CANCELLED"},
+    "google":    {
+        "BATCH_STATE_SUCCEEDED", "BATCH_STATE_FAILED", "BATCH_STATE_CANCELLED", "BATCH_STATE_EXPIRED",
+        "JOB_STATE_SUCCEEDED", "JOB_STATE_FAILED", "JOB_STATE_CANCELLED",
+    },
     "mistral":   {"SUCCESS", "FAILED", "TIMEOUT_EXCEEDED", "CANCELLATION_REQUESTED"},
     "xai":       {"completed", "failed", "expired", "cancelled"},
 }
@@ -77,7 +80,7 @@ _TERMINAL_STATES = {
 _SUCCESS_STATES = {
     "openai":    {"completed"},
     "anthropic": {"ended"},   # must check request_counts.failed separately
-    "google":    {"JOB_STATE_SUCCEEDED"},
+    "google":    {"BATCH_STATE_SUCCEEDED", "JOB_STATE_SUCCEEDED"},
     "mistral":   {"SUCCESS"},
     "xai":       {"completed"},
 }
@@ -280,10 +283,18 @@ def _create_batch_job(
 
     elif provider == "google":
         url = BATCH_ENDPOINTS["google"]["create"].format(model=model)
+        # Google inline batch: requests are sent in the body (no file upload needed)
         body = {
             "batch": {
                 "display_name": f"catllm_batch_{int(time.time())}",
-                "input_config": {"file_name": file_id},
+                "input_config": {
+                    "requests": {
+                        "requests": [
+                            {"request": line["request"], "metadata": line["metadata"]}
+                            for line in (requests_list or [])
+                        ]
+                    }
+                },
             }
         }
         resp = requests.post(url, headers=headers, json=body, timeout=60)
@@ -487,19 +498,29 @@ def _download_batch_results(
         return resp.text
 
     elif provider == "google":
-        # Completed job status contains response.responsesFile
-        responses_file = status_data.get("response", {}).get("responsesFile")
-        if not responses_file:
+        # Inline batch results live in the operation response:
+        # status_data["response"]["inlinedResponses"]["inlinedResponses"] → list of items
+        resp_outer = status_data.get("response", {})
+        inlined_wrapper = resp_outer.get("inlinedResponses", {})
+        if isinstance(inlined_wrapper, dict):
+            inlined = inlined_wrapper.get("inlinedResponses", [])
+        elif isinstance(inlined_wrapper, list):
+            inlined = inlined_wrapper
+        else:
+            inlined = []
+        if not inlined:
             raise RuntimeError(
-                f"Google batch: no response.responsesFile in completed status. "
-                f"Status keys: {list(status_data.keys())}"
+                f"Google batch: no inlinedResponses in completed status. "
+                f"Status keys: {list(status_data.keys())}, "
+                f"response keys: {list(resp_outer.keys()) if isinstance(resp_outer, dict) else resp_outer}"
             )
-        download_url = (BATCH_ENDPOINTS["google"]["download"].format(file_name=responses_file)
-                        + "?alt=media")
-        headers_dl = {"x-goog-api-key": api_key}
-        resp = requests.get(download_url, headers=headers_dl, timeout=120)
-        resp.raise_for_status()
-        return resp.text
+        # Responses are NOT necessarily in order — use the metadata.key from each item,
+        # which preserves the original request key (e.g. "item-42") for correct mapping.
+        lines = [
+            json.dumps({"key": item.get("metadata", {}).get("key", f"item-{i}"), **item})
+            for i, item in enumerate(inlined)
+        ]
+        return "\n".join(lines)
 
     elif provider == "mistral":
         output_file_id = status_data.get("output_file")
@@ -739,17 +760,17 @@ def run_batch_classify(
 
         line = _build_jsonl_line(provider, custom_id, payload, model)
         jsonl_lines.append(line)
-        if provider in ("anthropic", "xai"):
+        if provider in ("anthropic", "xai", "google"):
             requests_list.append(line)
 
     # Serialize to JSONL bytes (for file upload providers)
     jsonl_bytes = b"\n".join(json.dumps(line).encode("utf-8") for line in jsonl_lines)
 
     # =========================================================================
-    # Step 2: Upload file (OpenAI, Google, Mistral)
+    # Step 2: Upload file (OpenAI, Mistral only — Google uses inline requests)
     # =========================================================================
     file_id = None
-    if provider in ("openai", "mistral", "google"):
+    if provider in ("openai", "mistral"):
         print(f"[batch] Uploading JSONL ({len(jsonl_bytes)/1024:.1f} KB) to {provider}...")
         file_id = _upload_jsonl(provider, api_key, jsonl_bytes)
         print(f"[batch] File uploaded: {file_id}")
@@ -763,7 +784,7 @@ def run_batch_classify(
         api_key=api_key,
         model=model,
         file_id=file_id,
-        requests_list=requests_list if provider in ("anthropic", "xai") else None,
+        requests_list=requests_list if provider in ("anthropic", "xai", "google") else None,
     )
     print(f"[batch] Job created: {job_id}")
     print(f"[batch] Polling every {batch_poll_interval}s (timeout={batch_timeout/3600:.1f}h)...")

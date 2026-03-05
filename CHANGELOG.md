@@ -7,12 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-### Changed
-- `CERAD_functions.py`: Refactored `cerad_drawn_score()` to call `classify()` directly instead of the deprecated `image_multi_class()`. All scoring logic unchanged.
-
 ---
 
-## [2.6.0] - 2026-03-04
+## [2.6.0] - 2026-03-05
 
 ### Added
 - **`batch_mode=True` in `classify()`**: New async batch inference mode that reduces API costs by 50% and bypasses standard rate limits. Supported providers: OpenAI, Anthropic, Google (Gemini), Mistral, and xAI (Grok). Not supported: HuggingFace, Perplexity, Ollama.
@@ -23,6 +20,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **`BatchJobExpiredError`**: New exception raised when a batch job expires or is cancelled. Includes the job ID for provider dashboard lookup.
 - **`BatchJobFailedError`**: New exception raised when a batch job terminates in a failed state.
 - **`src/catllm/_batch.py`**: New internal module implementing all batch logic (JSONL building, file upload, job creation, polling, result download and parsing) for all five supported providers via pure HTTP — no provider SDKs required.
+
+### Fixed
+- **Google (Gemini) batch**: Switched from file-upload to inline requests format; fixed terminal state names (`BATCH_STATE_SUCCEEDED` not `JOB_STATE_SUCCEEDED`); fixed result extraction path (`response.inlinedResponses.inlinedResponses`); fixed response ordering — Google returns results out of order, so responses are now mapped via `metadata.key` rather than positional index. Verified: ≤0.3pp accuracy delta vs synchronous calls.
+- **Mistral batch**: Fixed response parsing — Mistral wraps the completion inside `response.body`, mirroring the OpenAI envelope. Verified: ≤0.4pp accuracy delta vs synchronous calls.
+
+### Changed
+- `CERAD_functions.py`: Refactored `cerad_drawn_score()` to call `classify()` directly instead of the deprecated `image_multi_class()`. All scoring logic unchanged.
 
 ---
 
