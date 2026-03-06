@@ -379,6 +379,7 @@ def aggregate_results(
     categories: list,
     consensus_threshold: Union[str, float],
     fail_strategy: str,
+    formatter_state: dict = None,
 ) -> dict:
     """
     Aggregate results from multiple models using majority voting.
@@ -1716,6 +1717,8 @@ def classify_ensemble(
     input_description: str = "",
     # Ollama parameters
     auto_download: bool = False,
+    # JSON formatter fallback
+    formatter_state: dict = None,
 ):
     """
     Multi-class classification with support for text AND PDF inputs, single or multiple LLM models.
@@ -2033,6 +2036,27 @@ Categorize survey responses into the following categories:
 {categories_str}
 Provide your answer in JSON format where the category number is the key and "1" if present, "0" if not."""
 
+    # Formatter fallback helper (only active when formatter_state is provided)
+    def _try_formatter_fallback(json_result, raw_reply):
+        """Try the JSON formatter if extract_json produced invalid output."""
+        if not formatter_state:
+            return json_result
+        is_valid, _ = validate_classification_json(json_result, len(categories))
+        if is_valid:
+            return json_result
+        from ._formatter import run_formatter
+        fixed_output = run_formatter(
+            raw_reply, categories,
+            formatter_state["model"],
+            formatter_state["tokenizer"],
+            formatter_state["device"],
+        )
+        fixed_json = extract_json(fixed_output)
+        fixed_valid, _ = validate_classification_json(fixed_json, len(categories))
+        if fixed_valid:
+            return fixed_json
+        return json_result
+
     # Classification function for single model + single item (text, PDF page, or image)
     def classify_single(cfg: dict, item) -> tuple:
         """
@@ -2134,6 +2158,7 @@ Provide your answer in JSON format where the category number is the key and "1" 
                     json_result = '{"1":"e"}'
                 else:
                     json_result = extract_json(reply)
+                    json_result = _try_formatter_fallback(json_result, reply)
 
                 # Note: CoVe for PDF mode is not yet implemented
                 # (would require re-attaching PDF/image to verification prompts)
@@ -2189,6 +2214,7 @@ Provide your answer in JSON format where the category number is the key and "1" 
                     json_result = '{"1":"e"}'
                 else:
                     json_result = extract_json(reply)
+                    json_result = _try_formatter_fallback(json_result, reply)
 
                 # Note: CoVe for image mode is not yet implemented
 
@@ -2208,6 +2234,8 @@ Provide your answer in JSON format where the category number is the key and "1" 
                         creativity=effective_creativity,
                         max_retries=max_retries,
                     )
+                    if not error:
+                        json_result = _try_formatter_fallback(json_result, json_result)
                     # CoVe not supported for Ollama two-step (already has verification)
                 else:
                     messages = build_text_classification_prompt(
@@ -2232,6 +2260,7 @@ Provide your answer in JSON format where the category number is the key and "1" 
                         json_result = '{"1":"e"}'
                     else:
                         json_result = extract_json(reply)
+                        json_result = _try_formatter_fallback(json_result, reply)
 
                         # Run Chain of Verification if enabled
                         if chain_of_verification and not error:

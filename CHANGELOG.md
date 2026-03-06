@@ -10,6 +10,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Added
 - **Ensemble batch mode (experimental)**: `batch_mode=True` now works with multi-model ensembles. Each model submits its own batch job concurrently via `ThreadPoolExecutor`; results are merged through the existing `aggregate_results` + `build_output_dataframes` pipeline and return the same DataFrame format as synchronous ensemble mode (per-model columns, `_consensus`, `_agreement`). Providers without a batch API (HuggingFace, Perplexity, Ollama) fall back to synchronous calls automatically. Prints an `[CatLLM] NOTE: experimental` warning when used.
   - New internal helpers: `_run_one_batch_job` (extracted from `run_batch_classify`), `_run_one_sync_model` (sync fallback), and `run_batch_ensemble_classify` (orchestrator) in `src/catllm/_batch.py`.
+- **`json_formatter=True` in `classify()`**: Opt-in local JSON formatter fallback that uses a fine-tuned Qwen2.5-0.5B model to fix malformed classification JSON before marking responses as failed. The formatter only runs when `extract_json()` produces invalid output — zero cost on the happy path. On first use, the model (~1GB) is downloaded from HuggingFace Hub ([chrissoria/catllm-json-formatter](https://huggingface.co/chrissoria/catllm-json-formatter)). Requires `pip install cat-llm[formatter]`.
+- **`src/catllm/_formatter.py`**: New internal module with `ensure_formatter_available()`, `load_formatter()`, and `run_formatter()` functions for the JSON formatter fallback.
+- **`[formatter]` optional dependency group**: `pip install cat-llm[formatter]` installs `torch`, `transformers`, and `accelerate`.
 
 ---
 

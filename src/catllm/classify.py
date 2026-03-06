@@ -92,6 +92,7 @@ def classify(
     auto_download: bool = False,
     add_other = "prompt",
     check_verbosity: bool = True,
+    json_formatter: bool = False,
 ):
     """
     Unified classification function for text, image, and PDF inputs.
@@ -170,6 +171,12 @@ def classify(
             and examples (1 API call). Verbose categories with descriptions and
             examples significantly improve classification accuracy over bare
             labels. Default True. Set to False to skip.
+        json_formatter (bool): If True, use a local fine-tuned model to fix
+            malformed JSON output from classification LLMs before marking
+            responses as failed. The formatter runs only when extract_json()
+            produces invalid output — zero cost on the happy path. On first
+            use, the model (~1GB) is downloaded from HuggingFace Hub.
+            Requires: pip install cat-llm[formatter]. Default False.
 
     Returns:
         pd.DataFrame: Results with classification columns.
@@ -339,6 +346,29 @@ def classify(
         print("\n\n".join(_strategy_warnings))
         print()
 
+    # =========================================================================
+    # JSON formatter fallback (opt-in)
+    # =========================================================================
+    _formatter_state = None
+    if json_formatter:
+        try:
+            from ._formatter import ensure_formatter_available, load_formatter
+
+            if ensure_formatter_available():
+                fmt_model, fmt_tokenizer, fmt_device = load_formatter()
+                _formatter_state = {
+                    "model": fmt_model,
+                    "tokenizer": fmt_tokenizer,
+                    "device": fmt_device,
+                }
+            else:
+                json_formatter = False
+                print("[CatLLM] Continuing without JSON formatter fallback.")
+        except ImportError as e:
+            json_formatter = False
+            print(f"[CatLLM] JSON formatter unavailable: {e}")
+            print("[CatLLM] Continuing without JSON formatter fallback.")
+
     # Map mode to pdf_mode
     pdf_mode = mode if mode in ("image", "text", "both") else "image"
 
@@ -480,4 +510,5 @@ def classify(
         filename=filename,
         save_directory=save_directory,
         progress_callback=progress_callback,
+        formatter_state=_formatter_state,
     )
