@@ -60,6 +60,16 @@ For PDF support:
 pip install cat-llm[pdf]
 ```
 
+For embedding-based similarity scores:
+```console
+pip install cat-llm[embeddings]
+```
+
+For the local JSON formatter fallback:
+```console
+pip install cat-llm[formatter]
+```
+
 > **Note:** Web data collection (`build_dataset_from_web`) has been moved to its own package due to its different focus. Install it separately:
 > ```console
 > pip install llm-web-research
@@ -181,11 +191,17 @@ Supports both **single-model** and **multi-model ensemble** classification for i
 - `filename` (str, optional): Output filename for CSV
 - `save_directory` (str, optional): Directory to save results
 - `model_source` (str, default="auto"): Provider - "auto", "openai", "anthropic", "google", "mistral", "perplexity", "huggingface", "xai"
+- `multi_label` (bool, default=True): If True, multiple categories can be assigned per input (multi-label). If False, the model picks the single best category (single-label). Output format is unchanged—still one 0/1 column per category.
 - `models` (list, optional): For multi-model ensemble, list of `(model, provider, api_key)` or `(model, provider, api_key, config_dict)` tuples
-- `consensus_threshold` (float, default=0.5): Agreement threshold for ensemble mode (0-1)
-- `batch_mode` (bool, default=False): *(Experimental)* Submit the entire job as an async batch request instead of making synchronous calls. Supported providers: OpenAI, Anthropic, Google, Mistral, xAI. Reduces API costs by ~50% at these providers. Not compatible with multi-model ensemble or image/PDF inputs. The function blocks until the batch completes.
+- `consensus_threshold` (str or float, default="unanimous"): Agreement threshold for ensemble mode. Options: `"unanimous"` (100%, default — best accuracy), `"majority"` (50%), `"two-thirds"` (67%), or a custom float between 0 and 1.
+- `batch_mode` (bool, default=False): *(Experimental)* Submit the entire job as an async batch request instead of making synchronous calls. Supported providers: OpenAI, Anthropic, Google, Mistral, xAI. Reduces API costs by ~50%. Works with both single-model and multi-model ensemble (each model submits its own batch job concurrently; providers without batch API fall back to synchronous calls). Not compatible with PDF/image inputs. The function blocks until the batch completes.
 - `batch_poll_interval` (float, default=30.0): Seconds between status polls when `batch_mode=True`.
 - `batch_timeout` (float, default=86400.0): Maximum seconds to wait for a batch job before raising `BatchJobExpiredError`.
+- `embeddings` (bool, default=False): Add embedding-based similarity scores alongside binary 0/1 classifications. Adds `category_N_similarity` columns (0–1 float) using a local sentence-transformer model (`BAAI/bge-small-en-v1.5`, ~130MB). Text input only (skipped for PDF/image). Requires `pip install cat-llm[embeddings]`.
+- `category_descriptions` (dict, optional): Richer text descriptions per category for embedding similarity (e.g., `{"Past_Support": "References to help received from family"}`). Only used when `embeddings=True`.
+- `json_formatter` (bool, default=False): Use a local fine-tuned model to fix malformed JSON output before marking responses as failed. The formatter runs only when `extract_json()` produces invalid output—zero cost on the happy path. On first use, the model (~1GB) is downloaded from HuggingFace Hub. Requires `pip install cat-llm[formatter]`.
+- `add_other` (str or bool, default="prompt"): Controls auto-addition of an "Other" catch-all category. `"prompt"` asks the user, `True` adds silently, `False` never adds.
+- `check_verbosity` (bool, default=True): Check whether categories have descriptions and examples (1 API call). Set to False to skip.
 - `thinking_budget` (int, default=0): Token budget for model reasoning/thinking. Set to 0 to disable. Behavior varies by provider:
 
 | Provider | `thinking_budget=0` | `thinking_budget > 0` (e.g., 8192) |
@@ -230,6 +246,14 @@ results = cat.classify(
     api_key=api_key
 )
 
+# Single-label classification (pick one best category per response)
+results = cat.classify(
+    input_data=df['responses'],
+    categories=["Positive", "Negative", "Neutral"],
+    multi_label=False,
+    api_key=api_key
+)
+
 # Multi-model ensemble for higher accuracy
 results = cat.classify(
     input_data=df['responses'],
@@ -239,7 +263,7 @@ results = cat.classify(
         ("claude-sonnet-4-5-20250929", "anthropic", "sk-ant-..."),
         ("gemini-2.5-flash", "google", "AIza..."),
     ],
-    consensus_threshold=0.5,  # Majority vote
+    consensus_threshold="unanimous",
 )
 ```
 
