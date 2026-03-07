@@ -41,7 +41,8 @@ def extract(
     input_data,
     api_key,
     input_type="text",
-    description="",
+    survey_question="",
+    description=None,
     max_categories=12,
     categories_per_chunk=10,
     divisions=12,
@@ -57,6 +58,7 @@ def extract(
     focus=None,
     progress_callback=None,
     chunk_delay: float = 0.0,
+    auto_download: bool = False,
 ):
     """
     Unified category extraction function for text, image, and PDF inputs.
@@ -75,10 +77,9 @@ def extract(
             - "text" (default): Text/survey responses
             - "image": Image files
             - "pdf": PDF documents
-        description (str): Description of the input data. Used as:
-            - survey_question for text
-            - image_description for images
-            - pdf_description for PDFs
+        survey_question (str): The survey question or description of the text data.
+            Passed directly to explore_common_categories as survey_question.
+        description (str): Deprecated alias for survey_question. Use survey_question instead.
         max_categories (int): Maximum number of final categories to return.
         categories_per_chunk (int): Categories to extract per chunk.
         divisions (int): Number of chunks to divide data into.
@@ -92,7 +93,7 @@ def extract(
             - For pdf: "text" (default), "image", or "both"
         filename (str): Optional CSV filename to save results.
         model_source (str): Provider - "auto", "openai", "anthropic", "google",
-            "mistral", "huggingface", "xai".
+            "mistral", "huggingface", "xai", "ollama".
         iterations (int): Number of passes over the data.
         random_state (int): Random seed for reproducibility.
         focus (str): Optional focus instruction for category extraction (e.g.,
@@ -102,6 +103,8 @@ def extract(
             Called as progress_callback(current_step, total_steps, step_label).
         chunk_delay (float): Delay in seconds between API calls to avoid rate
             limits. Default 0.0 (no delay).
+        auto_download (bool): If True, automatically download missing Ollama
+            models without prompting. Default False.
 
     Returns:
         dict with keys:
@@ -139,11 +142,14 @@ def extract(
     """
     input_type = input_type.lower().rstrip('s')  # Normalize: "texts" -> "text", "images" -> "image", "pdfs" -> "pdf"
 
+    # survey_question is the canonical name; description is kept for backward compatibility
+    resolved_survey_question = survey_question if survey_question else (description or "")
+
     if input_type == "text":
         return explore_common_categories(
             survey_input=input_data,
             api_key=api_key,
-            survey_question=description,
+            survey_question=resolved_survey_question,
             max_categories=max_categories,
             categories_per_chunk=categories_per_chunk,
             divisions=divisions,
@@ -158,13 +164,14 @@ def extract(
             focus=focus,
             progress_callback=progress_callback,
             chunk_delay=chunk_delay,
+            auto_download=auto_download,
         )
 
     elif input_type == "image":
         return explore_image_categories(
             image_input=input_data,
             api_key=api_key,
-            image_description=description,
+            image_description=description or "",
             max_categories=max_categories,
             categories_per_chunk=categories_per_chunk,
             divisions=divisions,
@@ -184,7 +191,7 @@ def extract(
         return explore_pdf_categories(
             pdf_input=input_data,
             api_key=api_key,
-            pdf_description=description,
+            pdf_description=description or "",
             max_categories=max_categories,
             categories_per_chunk=categories_per_chunk,
             divisions=divisions,

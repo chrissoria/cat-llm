@@ -501,6 +501,7 @@ def explore_common_categories(
     progress_callback: callable = None,
     return_raw: bool = False,
     chunk_delay: float = 0.0,
+    auto_download: bool = False,
     # Legacy parameter names for backward compatibility
     user_model: str = None,
     model_source: str = None,
@@ -530,6 +531,8 @@ def explore_common_categories(
                will prioritize extracting categories related to this focus.
         progress_callback: Optional callback function for progress updates.
             Called as progress_callback(current_step, total_steps, step_label).
+        auto_download: If True, automatically download missing Ollama models
+            without prompting. Default False (interactive prompt).
 
     Returns:
         dict with 'counts_df', 'top_categories', and 'raw_top_text'
@@ -549,6 +552,73 @@ def explore_common_categories(
     # Validate api_key
     if provider != "ollama" and not api_key:
         raise ValueError(f"api_key is required for provider '{provider}'")
+
+    # Ollama-specific checks
+    if provider == "ollama":
+        if not check_ollama_running():
+            raise ConnectionError(
+                "\n" + "="*60 + "\n"
+                "  OLLAMA NOT RUNNING\n"
+                "="*60 + "\n\n"
+                "Ollama must be running to use local models.\n\n"
+                "To start Ollama:\n"
+                "  macOS:   Open the Ollama app, or run 'ollama serve'\n"
+                "  Linux:   Run 'ollama serve' in terminal\n"
+                "  Windows: Open the Ollama app\n\n"
+                "Don't have Ollama installed?\n"
+                "  Download from: https://ollama.ai/download\n\n"
+                "After starting Ollama, run your code again.\n"
+                + "="*60
+            )
+
+        # Check system resources before proceeding
+        resources = check_system_resources(model)
+
+        # Check if model needs to be downloaded
+        model_installed = check_ollama_model(model)
+
+        if not model_installed:
+            if not pull_ollama_model(model, auto_confirm=auto_download):
+                raise RuntimeError(
+                    f"Model '{model}' not available. "
+                    f"To download manually: ollama pull {model}"
+                )
+        else:
+            # Model is installed - still check if it can run
+            if resources["warnings"] or not resources["can_run"]:
+                print(f"\n{'='*60}")
+                print(f"  Model '{model}' - System Resource Check")
+                print(f"{'='*60}")
+                size_estimate = get_ollama_model_size_estimate(model)
+                print(f"  Model size:      {size_estimate}")
+                if resources["details"].get("estimated_ram"):
+                    print(f"  RAM required:    ~{resources['details']['estimated_ram']}")
+                if resources["details"].get("total_ram"):
+                    print(f"  System RAM:      {resources['details']['total_ram']}")
+
+                if resources["warnings"]:
+                    print(f"\n  {'!'*50}")
+                    for warning in resources["warnings"]:
+                        print(f"  Warning: {warning}")
+                    print(f"  {'!'*50}")
+
+                if not resources["can_run"]:
+                    print(f"\n  Warning: Model may not run well on this system.")
+                    print(f"  Consider a smaller variant (e.g., '{model}:1b' or '{model}:3b').")
+                    print(f"{'='*60}")
+
+                    if not auto_download:
+                        try:
+                            response = input(f"\n  Continue anyway? [y/N]: ").strip().lower()
+                            if response not in ['y', 'yes']:
+                                raise RuntimeError(
+                                    f"Model '{model}' may be too large for this system. "
+                                    f"Try a smaller variant like '{model}:3b' or '{model}:1b'."
+                                )
+                        except (EOFError, KeyboardInterrupt):
+                            raise RuntimeError("Operation cancelled by user.")
+
+                print()
 
     # Input normalization
     if not isinstance(survey_input, pd.Series):

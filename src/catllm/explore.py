@@ -32,6 +32,7 @@ def explore(
     focus=None,
     progress_callback=None,
     chunk_delay: float = 0.0,
+    auto_download: bool = False,
 ):
     """
     Explore categories in text data, returning the raw extracted list.
@@ -60,6 +61,8 @@ def explore(
         progress_callback (callable): Optional callback for progress updates.
         chunk_delay (float): Delay in seconds between API calls to avoid rate
             limits. Default 0.0 (no delay).
+        auto_download (bool): If True, automatically download missing Ollama
+            models without prompting. Default False.
 
     Returns:
         list[str]: Every category string extracted from every chunk across
@@ -97,6 +100,7 @@ def explore(
         progress_callback=progress_callback,
         return_raw=True,
         chunk_delay=chunk_delay,
+        auto_download=auto_download,
     )
 
     if filename:

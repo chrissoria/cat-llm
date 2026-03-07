@@ -5,9 +5,10 @@ All notable changes to CatLLM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.7.0] - 2026-03-07
 
 ### Added
+- **Ollama support for `explore()` and `extract()`**: Local Ollama models now get the same pre-flight validation as `classify()` — checks that Ollama is running, verifies the model is available, offers auto-download for missing models, and warns about system resources. New `auto_download` parameter on both functions.
 - **Single-label classification mode** (`multi_label=False` in `classify()`): Switches from the default multi-label mode (multiple categories can be 1) to single-label mode (exactly one best category gets 1, all others 0). Only the prompt text changes — JSON schema, parsing, validation, ensemble consensus, and DataFrame output format are all unchanged. Works with all input types (text, PDF, image), all prompting strategies (CoT, context prompt, step-back), and batch mode.
 - **Ensemble batch mode (experimental)**: `batch_mode=True` now works with multi-model ensembles. Each model submits its own batch job concurrently via `ThreadPoolExecutor`; results are merged through the existing `aggregate_results` + `build_output_dataframes` pipeline and return the same DataFrame format as synchronous ensemble mode (per-model columns, `_consensus`, `_agreement`). Providers without a batch API (HuggingFace, Perplexity, Ollama) fall back to synchronous calls automatically. Prints an `[CatLLM] NOTE: experimental` warning when used.
   - New internal helpers: `_run_one_batch_job` (extracted from `run_batch_classify`), `_run_one_sync_model` (sync fallback), and `run_batch_ensemble_classify` (orchestrator) in `src/catllm/_batch.py`.
