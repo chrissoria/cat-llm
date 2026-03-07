@@ -711,6 +711,7 @@ def _run_one_batch_job(
             step_back_prompt=step_back_prompt,
             stepback_insights=stepback_insights,
             model_name=model,
+            multi_label=prompt_params.get("multi_label", True),
         )
 
         payload = client._build_payload(
@@ -808,6 +809,7 @@ def _run_one_sync_model(
             step_back_prompt=prompt_params.get("step_back_prompt", False),
             stepback_insights=prompt_params.get("stepback_insights", {}),
             model_name=model,
+            multi_label=prompt_params.get("multi_label", True),
         )
         try:
             raw = client.complete(

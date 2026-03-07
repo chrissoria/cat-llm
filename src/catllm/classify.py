@@ -93,6 +93,9 @@ def classify(
     add_other = "prompt",
     check_verbosity: bool = True,
     json_formatter: bool = False,
+    embeddings: bool = False,
+    category_descriptions: dict = None,
+    multi_label: bool = True,
 ):
     """
     Unified classification function for text, image, and PDF inputs.
@@ -177,6 +180,23 @@ def classify(
             produces invalid output — zero cost on the happy path. On first
             use, the model (~1GB) is downloaded from HuggingFace Hub.
             Requires: pip install cat-llm[formatter]. Default False.
+        embeddings (bool): If True, add embedding-based similarity scores
+            alongside binary 0/1 classifications. Uses a local sentence-
+            transformer model (BAAI/bge-small-en-v1.5, ~130MB) to compute
+            cosine similarity between each input text and each category.
+            Scores are independent per (text, category) pair — no softmax.
+            On first use, the model is downloaded from HuggingFace Hub.
+            Only works with text input (skipped for PDF/image).
+            Requires: pip install cat-llm[embeddings]. Default False.
+        category_descriptions (dict): Optional dict mapping category names
+            to richer text descriptions for embedding similarity. E.g.,
+            {"Past_Support": "References to help received from family"}.
+            Only used when embeddings=True.
+        multi_label (bool): If True (default), allow multiple categories per
+            input (multi-label classification). If False, the prompt instructs
+            the model to pick the single best category (single-label mode).
+            The output format is unchanged — still one 0/1 column per category,
+            but exactly one column will be "1" per row in single-label mode.
 
     Returns:
         pd.DataFrame: Results with classification columns.
@@ -369,8 +389,52 @@ def classify(
             print(f"[CatLLM] JSON formatter unavailable: {e}")
             print("[CatLLM] Continuing without JSON formatter fallback.")
 
+    # =========================================================================
+    # Embedding-based probability scores (opt-in)
+    # =========================================================================
+    _embedding_state = None
+    if embeddings:
+        try:
+            from ._embeddings import ensure_embeddings_available, load_embedding_model
+
+            if ensure_embeddings_available():
+                _embedding_state = {
+                    "model": load_embedding_model(),
+                    "category_descriptions": category_descriptions,
+                }
+            else:
+                embeddings = False
+                print("[CatLLM] Continuing without embedding scores.")
+        except ImportError as e:
+            embeddings = False
+            print(f"[CatLLM] Embeddings unavailable: {e}")
+            print("[CatLLM] Continuing without embedding scores.")
+
+    # Helper: apply embedding scores to a result DataFrame if enabled
+    def _maybe_apply_embeddings(result):
+        if _embedding_state is None:
+            return result
+        from ._embeddings import apply_embedding_scores
+        import pandas as _pd
+        if isinstance(result, _pd.DataFrame):
+            return apply_embedding_scores(
+                result, categories, _embedding_state["model"],
+                _embedding_state["category_descriptions"],
+            )
+        return result
+
     # Map mode to pdf_mode
     pdf_mode = mode if mode in ("image", "text", "both") else "image"
+
+    # Guard: skip embeddings for PDF/image input (embeddings need text)
+    if _embedding_state is not None:
+        from .text_functions_ensemble import _detect_input_type
+        _emb_detected_type = _detect_input_type(input_data)
+        if _emb_detected_type in ("pdf", "image"):
+            print(
+                f"[CatLLM] Embedding scores skipped — not supported for {_emb_detected_type} input."
+            )
+            _embedding_state = None
 
     # =========================================================================
     # Batch mode — bypass classify_ensemble entirely
@@ -425,8 +489,9 @@ def classify(
                 "json_schema": json_schemas[cfg["model"]],
                 "creativity": creativity,
                 "thinking_budget": thinking_budget,
+                "multi_label": multi_label,
             }
-            return run_batch_classify(
+            result = run_batch_classify(
                 items=items,
                 cfg=cfg,
                 categories=categories,
@@ -437,6 +502,7 @@ def classify(
                 batch_timeout=batch_timeout,
                 fail_strategy=fail_strategy,
             )
+            return _maybe_apply_embeddings(result)
 
         # Ensemble batch path: one job per model, run concurrently
         print(
@@ -457,10 +523,11 @@ def classify(
                 "json_schema": json_schemas[cfg["model"]],
                 "creativity": cfg["creativity"] if cfg["creativity"] is not None else creativity,
                 "thinking_budget": thinking_budget,
+                "multi_label": multi_label,
             }
             for cfg in model_configs
         }
-        return run_batch_ensemble_classify(
+        result = run_batch_ensemble_classify(
             items=items,
             model_configs=model_configs,
             categories=categories,
@@ -472,8 +539,9 @@ def classify(
             batch_poll_interval=batch_poll_interval,
             batch_timeout=batch_timeout,
         )
+        return _maybe_apply_embeddings(result)
 
-    return classify_ensemble(
+    result = classify_ensemble(
         survey_input=input_data,
         categories=categories,
         models=models,
@@ -511,4 +579,6 @@ def classify(
         save_directory=save_directory,
         progress_callback=progress_callback,
         formatter_state=_formatter_state,
+        multi_label=multi_label,
     )
+    return _maybe_apply_embeddings(result)

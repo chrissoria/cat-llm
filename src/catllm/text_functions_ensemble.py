@@ -797,6 +797,7 @@ def build_text_classification_prompt(
     step_back_prompt: bool = False,
     stepback_insights: dict = None,
     model_name: str = None,
+    multi_label: bool = True,
 ) -> list:
     """
     Build the classification prompt for a text response.
@@ -818,31 +819,41 @@ def build_text_classification_prompt(
     Returns:
         List of message dicts for the LLM
     """
+    if multi_label:
+        categorize_instruction = 'into the following categories that apply'
+        json_instruction = 'Provide your answer in JSON format where the category number is the key and "1" if present, "0" if not.'
+        cot_step3 = 'assign 1 to matching categories and 0 to non-matching categories'
+    else:
+        categorize_instruction = 'into the single most appropriate category'
+        json_instruction = 'Provide your answer in JSON format where the category number is the key. Assign "1" to the single best matching category and "0" to all others.'
+        cot_step3 = 'assign 1 to the single best matching category and 0 to all others'
+
     if chain_of_thought:
         user_prompt = f"""{survey_question_context}
 
-Categorize this survey response "{response_text}" into the following categories that apply:
+Categorize this survey response "{response_text}" {categorize_instruction}:
 {categories_str}
 
 Let's think step by step:
 1. First, identify the main themes mentioned in the response
 2. Then, match each theme to the relevant categories
-3. Finally, assign 1 to matching categories and 0 to non-matching categories
+3. Finally, {cot_step3}
 
 {examples_text}
 
-Provide your answer in JSON format where the category number is the key and "1" if present, "0" if not."""
+{json_instruction}"""
     else:
         user_prompt = f"""{survey_question_context}
-Categorize this survey response "{response_text}" into the following categories that apply:
+Categorize this survey response "{response_text}" {categorize_instruction}:
 {categories_str}
 {examples_text}
-Provide your answer in JSON format where the category number is the key and "1" if present, "0" if not."""
+{json_instruction}"""
 
     # Add context prompt prefix if enabled
     if context_prompt:
-        context = """You are an expert researcher in survey data categorization.
-Apply multi-label classification and base decisions on explicit and implicit meanings.
+        label_type = "multi-label" if multi_label else "single-label"
+        context = f"""You are an expert researcher in survey data categorization.
+Apply {label_type} classification and base decisions on explicit and implicit meanings.
 When uncertain, prioritize precision over recall.
 
 """
@@ -1190,6 +1201,7 @@ def build_pdf_classification_prompt(
     stepback_insights: dict = None,
     model_name: str = None,
     example_json: str = None,
+    multi_label: bool = True,
 ) -> list:
     """
     Build the classification prompt for a PDF page.
@@ -1226,9 +1238,16 @@ def build_pdf_classification_prompt(
     else:  # image mode
         examine_instruction = "Examine the attached PDF page"
 
+    if multi_label:
+        task_instruction = f'{examine_instruction} and decide, **for each category below**, whether it is PRESENT (1) or NOT PRESENT (0).'
+        cot_step3 = 'assign 1 to matching categories and 0 to non-matching categories'
+    else:
+        task_instruction = f'{examine_instruction} and decide which **single category** below best describes this document page. Assign PRESENT (1) to only the best match and NOT PRESENT (0) to all others.'
+        cot_step3 = 'assign 1 to the single best matching category and 0 to all others'
+
     if chain_of_thought:
         base_text = f"""You are a document-tagging assistant.
-Task: {examine_instruction} and decide, **for each category below**, whether it is PRESENT (1) or NOT PRESENT (0).
+Task: {task_instruction}
 
 {f'Document page is expected to contain: {input_description}' if input_description else ''}
 
@@ -1238,14 +1257,14 @@ Categories:
 Let's analyze step by step:
 1. First, identify the key content elements in the document page
 2. Then, match each element to the relevant categories
-3. Finally, assign 1 to matching categories and 0 to non-matching categories
+3. Finally, {cot_step3}
 
 Output format: Respond with **only** a JSON object whose keys are the quoted category numbers ('1', '2', ...) and whose values are 1 or 0. No additional keys, comments, or text.
 
 {f'Example JSON format: {example_json}' if example_json else ''}"""
     else:
         base_text = f"""You are a document-tagging assistant.
-Task: {examine_instruction} and decide, **for each category below**, whether it is PRESENT (1) or NOT PRESENT (0).
+Task: {task_instruction}
 
 {f'Document page is expected to contain: {input_description}' if input_description else ''}
 
@@ -1262,8 +1281,9 @@ Output format: Respond with **only** a JSON object whose keys are the quoted cat
 
     # Add context prompt prefix if enabled
     if context_prompt:
-        context = """You are an expert document analyst specializing in page categorization.
-Apply multi-label classification based on explicit and implicit content cues.
+        label_type = "multi-label" if multi_label else "single-label"
+        context = f"""You are an expert document analyst specializing in page categorization.
+Apply {label_type} classification based on explicit and implicit content cues.
 When uncertain, prioritize precision over recall.
 
 """
@@ -1416,6 +1436,7 @@ def build_image_classification_prompt(
     stepback_insights: dict = None,
     model_name: str = None,
     example_json: str = None,
+    multi_label: bool = True,
 ) -> list:
     """
     Build the classification prompt for an image.
@@ -1442,9 +1463,16 @@ def build_image_classification_prompt(
         List of message content parts for the LLM (format varies by provider)
     """
     # Build the base text prompt
+    if multi_label:
+        task_instruction = 'Examine the attached image and decide, **for each category below**, whether it is PRESENT (1) or NOT PRESENT (0).'
+        cot_step3 = 'assign 1 to matching categories and 0 to non-matching categories'
+    else:
+        task_instruction = 'Examine the attached image and decide which **single category** below best describes this image. Assign PRESENT (1) to only the best match and NOT PRESENT (0) to all others.'
+        cot_step3 = 'assign 1 to the single best matching category and 0 to all others'
+
     if chain_of_thought:
         base_text = f"""You are an image-tagging assistant.
-Task: Examine the attached image and decide, **for each category below**, whether it is PRESENT (1) or NOT PRESENT (0).
+Task: {task_instruction}
 
 {f'The image is expected to contain: {input_description}' if input_description else ''}
 
@@ -1454,14 +1482,14 @@ Categories:
 Let's analyze step by step:
 1. First, identify the key visual elements in the image
 2. Then, match each element to the relevant categories
-3. Finally, assign 1 to matching categories and 0 to non-matching categories
+3. Finally, {cot_step3}
 
 Output format: Respond with **only** a JSON object whose keys are the quoted category numbers ('1', '2', ...) and whose values are 1 or 0. No additional keys, comments, or text.
 
 {f'Example JSON format: {example_json}' if example_json else ''}"""
     else:
         base_text = f"""You are an image-tagging assistant.
-Task: Examine the attached image and decide, **for each category below**, whether it is PRESENT (1) or NOT PRESENT (0).
+Task: {task_instruction}
 
 {f'The image is expected to contain: {input_description}' if input_description else ''}
 
@@ -1474,8 +1502,9 @@ Output format: Respond with **only** a JSON object whose keys are the quoted cat
 
     # Add context prompt prefix if enabled
     if context_prompt:
-        context = """You are an expert visual analyst specializing in image categorization.
-Apply multi-label classification based on explicit and implicit visual cues.
+        label_type = "multi-label" if multi_label else "single-label"
+        context = f"""You are an expert visual analyst specializing in image categorization.
+Apply {label_type} classification based on explicit and implicit visual cues.
 When uncertain, prioritize precision over recall.
 
 """
@@ -1719,6 +1748,8 @@ def classify_ensemble(
     auto_download: bool = False,
     # JSON formatter fallback
     formatter_state: dict = None,
+    # Label mode
+    multi_label: bool = True,
 ):
     """
     Multi-class classification with support for text AND PDF inputs, single or multiple LLM models.
@@ -2031,10 +2062,16 @@ def classify_ensemble(
     # Build original task prompt for CoVe (if enabled)
     cove_original_task = ""
     if chain_of_verification:
+        if multi_label:
+            cove_categorize = "into the following categories"
+            cove_json = 'Provide your answer in JSON format where the category number is the key and "1" if present, "0" if not.'
+        else:
+            cove_categorize = "into the single most appropriate category"
+            cove_json = 'Provide your answer in JSON format where the category number is the key. Assign "1" to the single best matching category and "0" to all others.'
         cove_original_task = f"""{survey_question_context}
-Categorize survey responses into the following categories:
+Categorize survey responses {cove_categorize}:
 {categories_str}
-Provide your answer in JSON format where the category number is the key and "1" if present, "0" if not."""
+{cove_json}"""
 
     # Formatter fallback helper (only active when formatter_state is provided)
     def _try_formatter_fallback(json_result, raw_reply):
@@ -2132,6 +2169,7 @@ Provide your answer in JSON format where the category number is the key and "1" 
                     stepback_insights=stepback_insights,
                     model_name=cfg["model"],
                     example_json=example_json,
+                    multi_label=multi_label,
                 )
 
                 # Handle Google API separately (different format)
@@ -2188,6 +2226,7 @@ Provide your answer in JSON format where the category number is the key and "1" 
                     stepback_insights=stepback_insights,
                     model_name=cfg["model"],
                     example_json=example_json,
+                    multi_label=multi_label,
                 )
 
                 # Handle Google API separately (different format)
@@ -2248,6 +2287,7 @@ Provide your answer in JSON format where the category number is the key and "1" 
                         step_back_prompt=step_back_prompt,
                         stepback_insights=stepback_insights,
                         model_name=cfg["model"],
+                        multi_label=multi_label,
                     )
                     reply, error = client.complete(
                         messages=messages,
@@ -2277,6 +2317,7 @@ Provide your answer in JSON format where the category number is the key and "1" 
                                 creativity=effective_creativity,
                                 max_retries=max_retries,
                             )
+                            json_result = _try_formatter_fallback(json_result, json_result)
 
             return (cfg["sanitized_name"], json_result, error)
 
