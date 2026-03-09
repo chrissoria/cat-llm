@@ -194,6 +194,7 @@ Supports both **single-model** and **multi-model ensemble** classification for i
 - `multi_label` (bool, default=True): If True, multiple categories can be assigned per input (multi-label). If False, the model picks the single best category (single-label). Output format is unchanged—still one 0/1 column per category.
 - `models` (list, optional): For multi-model ensemble, list of `(model, provider, api_key)` or `(model, provider, api_key, config_dict)` tuples
 - `consensus_threshold` (str or float, default="unanimous"): Agreement threshold for ensemble mode. Options: `"unanimous"` (100%, default — best accuracy), `"majority"` (50%), `"two-thirds"` (67%), or a custom float between 0 and 1.
+- `parallel` (bool, default=None): Controls concurrent vs sequential model execution in ensemble mode. `None` (default) auto-detects: sequential for local models (Ollama), parallel for cloud providers. Set `True` to force parallel or `False` to force sequential. Sequential mode is useful for resource-constrained environments or debugging.
 - `batch_mode` (bool, default=False): *(Experimental)* Submit the entire job as an async batch request instead of making synchronous calls. Supported providers: OpenAI, Anthropic, Google, Mistral, xAI. Reduces API costs by ~50%. Works with both single-model and multi-model ensemble (each model submits its own batch job concurrently; providers without batch API fall back to synchronous calls). Not compatible with PDF/image inputs. The function blocks until the batch completes.
 - `batch_poll_interval` (float, default=30.0): Seconds between status polls when `batch_mode=True`.
 - `batch_timeout` (float, default=86400.0): Maximum seconds to wait for a batch job before raising `BatchJobExpiredError`.
@@ -269,7 +270,7 @@ results = cat.classify(
 
 **Multi-Model Ensemble:**
 
-When you provide the `models` parameter, CatLLM runs classification across multiple models in parallel and combines results using majority voting. This can significantly improve accuracy by reducing individual model biases.
+When you provide the `models` parameter, CatLLM runs classification across multiple models and combines results using majority voting. This can significantly improve accuracy by reducing individual model biases. By default, cloud models run in parallel while local models (Ollama) run sequentially — controlled by the `parallel` parameter.
 
 The output includes:
 - Individual model predictions (e.g., `category_1_gpt_4o`, `category_1_claude`)

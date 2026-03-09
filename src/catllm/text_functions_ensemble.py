@@ -1725,6 +1725,7 @@ def classify_ensemble(
     thinking_budget: int = 0,
     use_json_schema: bool = True,
     max_workers: int = None,
+    parallel: bool = None,
     consensus_threshold: Union[str, float] = "unanimous",
     fail_strategy: str = "partial",
     safety: bool = False,
@@ -2024,9 +2025,17 @@ def classify_ensemble(
         # =================================================================
         items_to_process = survey_input
 
+    # Auto-resolve parallel mode: sequential for all-local (Ollama), parallel otherwise
+    if parallel is None:
+        all_local = all(cfg["provider"] == "ollama" for cfg in model_configs)
+        parallel = not all_local
+
     # Set max workers
     effective_workers = max_workers or min(len(models), 8)
-    print(f"\nParallel workers: {effective_workers}")
+    if parallel:
+        print(f"\nParallel workers: {effective_workers}")
+    else:
+        print(f"\nSequential mode (models run one at a time per row)")
 
     # Warn about CoVe cost with ensemble
     if chain_of_verification:
@@ -2459,19 +2468,25 @@ Categorize survey responses {cove_categorize}:
                 "error": None,
             }
         else:
-            # Parallel classification across models
+            # Classification across models
             model_results = {}
-            with ThreadPoolExecutor(max_workers=effective_workers) as executor:
-                futures = {
-                    executor.submit(classify_single, cfg, item): cfg["sanitized_name"]
-                    for cfg in model_configs
-                }
+            if parallel:
+                with ThreadPoolExecutor(max_workers=effective_workers) as executor:
+                    futures = {
+                        executor.submit(classify_single, cfg, item): cfg["sanitized_name"]
+                        for cfg in model_configs
+                    }
 
-                for future in as_completed(futures):
-                    model_name, json_result, error = future.result()
+                    for future in as_completed(futures):
+                        model_name, json_result, error = future.result()
+                        model_results[model_name] = (json_result, error)
+
+                        # Update progress (for multi-model detailed callbacks only)
+                        completed_calls[0] += 1
+            else:
+                for cfg in model_configs:
+                    model_name, json_result, error = classify_single(cfg, item)
                     model_results[model_name] = (json_result, error)
-
-                    # Update progress (for multi-model detailed callbacks only)
                     completed_calls[0] += 1
 
         # Aggregate results with majority voting (skip for NaN rows)
@@ -2574,21 +2589,37 @@ Categorize survey responses {cove_categorize}:
 
             # Retry failed pairs
             successes_this_round = 0
-            with ThreadPoolExecutor(max_workers=effective_workers) as executor:
-                futures = {
-                    executor.submit(classify_single, cfg, all_results[row_idx]["_original_item"]): (row_idx, cfg)
-                    for row_idx, cfg in failed_pairs
-                }
+            if parallel:
+                with ThreadPoolExecutor(max_workers=effective_workers) as executor:
+                    futures = {
+                        executor.submit(classify_single, cfg, all_results[row_idx]["_original_item"]): (row_idx, cfg)
+                        for row_idx, cfg in failed_pairs
+                    }
 
-                for future in as_completed(futures):
-                    row_idx, cfg = futures[future]
-                    model_name, json_result, error = future.result()
+                    for future in as_completed(futures):
+                        row_idx, cfg = futures[future]
+                        model_name, json_result, error = future.result()
 
-                    # Update the result in place
+                        # Update the result in place
+                        all_results[row_idx]["model_results"][model_name] = (json_result, error)
+
+                        if error is None:
+                            # Verify JSON is valid and has correct schema
+                            try:
+                                parsed = json.loads(json_result)
+                                valid_count = sum(
+                                    1 for k, v in parsed.items()
+                                    if k in expected_keys and str(v).strip() in ("0", "1")
+                                )
+                                if valid_count > 0:
+                                    successes_this_round += 1
+                            except (json.JSONDecodeError, TypeError):
+                                pass
+            else:
+                for row_idx, cfg in failed_pairs:
+                    model_name, json_result, error = classify_single(cfg, all_results[row_idx]["_original_item"])
                     all_results[row_idx]["model_results"][model_name] = (json_result, error)
-
                     if error is None:
-                        # Verify JSON is valid and has correct schema
                         try:
                             parsed = json.loads(json_result)
                             valid_count = sum(

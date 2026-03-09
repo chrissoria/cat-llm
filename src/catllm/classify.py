@@ -83,6 +83,7 @@ def classify(
     survey_question: str = "",
     use_json_schema: bool = True,
     max_workers: int = None,
+    parallel: bool = None,
     fail_strategy: str = "partial",
     max_retries: int = 5,
     batch_retries: int = 2,
@@ -154,6 +155,13 @@ def classify(
         survey_question (str): The survey question (used when categories="auto").
         use_json_schema (bool): Use JSON schema for structured output. Default True.
         max_workers (int): Max parallel workers for API calls. None = auto.
+        parallel (bool): Controls concurrent vs sequential model execution.
+            - None (default): auto-detect. Sequential for local models (Ollama),
+              parallel for cloud providers.
+            - True: force parallel execution.
+            - False: force sequential execution.
+            Sequential mode is useful for resource-constrained environments
+            (e.g., Ollama on limited hardware) or debugging.
         fail_strategy (str): How to handle failures - "partial" (default) or "strict".
         max_retries (int): Max retries per API call. Default 5.
         batch_retries (int): Max retries for batch-level failures. Default 2.
@@ -558,6 +566,7 @@ def classify(
         thinking_budget=thinking_budget,
         use_json_schema=use_json_schema,
         max_workers=max_workers,
+        parallel=parallel,
         fail_strategy=fail_strategy,
         max_retries=max_retries,
         batch_retries=batch_retries,
