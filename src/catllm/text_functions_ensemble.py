@@ -1751,6 +1751,8 @@ def classify_ensemble(
     formatter_state: dict = None,
     # Label mode
     multi_label: bool = True,
+    # Chunked classification
+    categories_per_call: int = None,
 ):
     """
     Multi-class classification with support for text AND PDF inputs, single or multiple LLM models.
@@ -2083,25 +2085,45 @@ Categorize survey responses {cove_categorize}:
 {cove_json}"""
 
     # Formatter fallback helper (only active when formatter_state is provided)
-    def _try_formatter_fallback(json_result, raw_reply):
-        """Try the JSON formatter if extract_json produced invalid output."""
+    def _try_formatter_fallback(json_result, raw_reply, chunk_categories=None):
+        """Try the JSON formatter if extract_json produced invalid output.
+
+        Args:
+            chunk_categories: When called from chunked classification, the
+                actual chunk category list (not the full list). Needed so the
+                formatter sees the correct category names and count.
+        """
         if not formatter_state:
             return json_result
-        is_valid, _ = validate_classification_json(json_result, len(categories))
+        cats = chunk_categories if chunk_categories is not None else categories
+        n = len(cats)
+        is_valid, _ = validate_classification_json(json_result, n)
         if is_valid:
             return json_result
         from ._formatter import run_formatter
         fixed_output = run_formatter(
-            raw_reply, categories,
+            raw_reply, cats,
             formatter_state["model"],
             formatter_state["tokenizer"],
             formatter_state["device"],
         )
         fixed_json = extract_json(fixed_output)
-        fixed_valid, _ = validate_classification_json(fixed_json, len(categories))
+        fixed_valid, _ = validate_classification_json(fixed_json, n)
         if fixed_valid:
             return fixed_json
         return json_result
+
+    # When chunking is active, extend categories with unified "Other" so
+    # aggregate_results and build_output_dataframes create the column.
+    # Save original list for the actual chunked LLM calls (which add their
+    # own per-chunk "Other" internally).
+    _original_categories = categories
+    _add_unified_other = False
+    if categories_per_call is not None:
+        from ._category_analysis import has_other_category as _has_other
+        if not _has_other(categories):
+            categories = list(categories) + ["Other"]
+            _add_unified_other = True
 
     # Classification function for single model + single item (text, PDF page, or image)
     def classify_single(cfg: dict, item) -> tuple:
@@ -2137,6 +2159,60 @@ Categorize survey responses {cove_categorize}:
         # Test hook for debugging batch retries (only active when _TEST_FORCE_FAILURE = True)
         if _test_should_force_failure(item_identifier, cfg["sanitized_name"]):
             return (cfg["sanitized_name"], '{"1":"e"}', "TEST: Forced first-attempt failure")
+
+        # =================================================================
+        # CHUNKED PATH: split categories into smaller per-call chunks
+        # =================================================================
+        if categories_per_call is not None:
+            from ._chunked import run_chunked_classification
+            try:
+                client = UnifiedLLMClient(
+                    provider=cfg["provider"],
+                    api_key=cfg["api_key"],
+                    model=cfg["model"]
+                )
+                json_result, error = run_chunked_classification(
+                    client=client,
+                    cfg=cfg,
+                    item=item,
+                    categories=_original_categories,
+                    categories_str=categories_str,
+                    example_json=example_json,
+                    json_schema=json_schemas[cfg["model"]],
+                    cove_original_task=cove_original_task,
+                    effective_creativity=effective_creativity,
+                    use_json_schema=use_json_schema,
+                    survey_question=survey_question,
+                    survey_question_context=survey_question_context,
+                    examples_text=examples_text,
+                    chain_of_thought=chain_of_thought,
+                    context_prompt=context_prompt,
+                    step_back_prompt=step_back_prompt,
+                    stepback_insights=stepback_insights,
+                    chain_of_verification=chain_of_verification,
+                    thinking_budget=thinking_budget,
+                    max_retries=max_retries,
+                    multi_label=multi_label,
+                    categories_per_call=categories_per_call,
+                    add_unified_other=_add_unified_other,
+                    formatter_fallback_fn=_try_formatter_fallback,
+                    is_pdf_mode=is_pdf_mode,
+                    is_image_mode=is_image_mode,
+                    pdf_mode=pdf_mode,
+                    pdf_dpi=pdf_dpi,
+                    input_description=input_description,
+                    build_text_prompt_fn=build_text_classification_prompt,
+                    build_pdf_prompt_fn=build_pdf_classification_prompt,
+                    build_image_prompt_fn=build_image_classification_prompt,
+                    google_multimodal_fn=_call_google_multimodal,
+                    prepare_page_data_fn=_prepare_page_data,
+                    prepare_image_data_fn=_prepare_image_data,
+                    build_cove_prompts_fn=build_cove_prompts,
+                    run_cove_fn=run_chain_of_verification,
+                )
+                return (cfg["sanitized_name"], json_result, error)
+            except Exception as e:
+                return (cfg["sanitized_name"], '{"1":"e"}', str(e))
 
         try:
             client = UnifiedLLMClient(

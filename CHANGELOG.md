@@ -5,6 +5,14 @@ All notable changes to CatLLM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.0] - 2026-03-10
+
+### Added
+- **Chunked category classification** (`categories_per_call` parameter in `classify()`): Splits large category lists into smaller chunks, runs a separate LLM call per chunk with local 1..N numbering, and merges results back into global numbering. Reduces prompt complexity per call and can improve accuracy for large category sets (20+). Each chunk automatically gets a temporary "Other" catch-all category to give the LLM an escape hatch for ambiguous responses; the "Other" is dropped before merging. A unified "Other" column is added to the output when all real categories are 0 but at least one chunk flagged "Other". Not supported with `batch_mode=True`. Works with all input types (text, PDF, image), all providers, ensemble mode, and all prompting strategies.
+  - New internal module: `src/catllm/_chunked.py` with `run_chunked_classification()` and `_run_single_chunk_call()`.
+
+---
+
 ## [2.7.0] - 2026-03-07
 
 ### Added

@@ -5,6 +5,7 @@ This module provides unified classification for text, image, and PDF inputs,
 supporting both single-model and multi-model (ensemble) classification.
 """
 
+import math
 import warnings
 from typing import Union, Callable
 
@@ -97,6 +98,7 @@ def classify(
     embeddings: bool = False,
     category_descriptions: dict = None,
     multi_label: bool = True,
+    categories_per_call: int = None,
 ):
     """
     Unified classification function for text, image, and PDF inputs.
@@ -205,6 +207,13 @@ def classify(
             the model to pick the single best category (single-label mode).
             The output format is unchanged — still one 0/1 column per category,
             but exactly one column will be "1" per row in single-label mode.
+        categories_per_call (int): Maximum number of categories to send per
+            LLM call. When set, the category list is split into chunks of this
+            size, each chunk gets its own LLM call with local 1..N numbering,
+            and results are merged back into global numbering. This reduces
+            prompt complexity per call and can improve accuracy for large
+            category sets (e.g., 20+). Default None (all categories in one call).
+            Not supported with batch_mode=True.
 
     Returns:
         pd.DataFrame: Results with classification columns.
@@ -311,6 +320,29 @@ def classify(
                     )
             except Exception:
                 pass  # Non-critical — don't block classification
+
+    # =========================================================================
+    # Validate categories_per_call
+    # =========================================================================
+    if categories_per_call is not None:
+        if not isinstance(categories_per_call, int) or categories_per_call < 1:
+            raise ValueError(
+                f"categories_per_call must be a positive integer, got {categories_per_call!r}"
+            )
+        if batch_mode:
+            raise ValueError(
+                "categories_per_call is not supported with batch_mode=True. "
+                "Set batch_mode=False to use categories_per_call."
+            )
+        if categories and categories != "auto":
+            if categories_per_call >= len(categories):
+                categories_per_call = None  # no-op, all categories fit in one call
+            else:
+                num_chunks = math.ceil(len(categories) / categories_per_call)
+                print(
+                    f"[CatLLM] categories_per_call={categories_per_call}: "
+                    f"splitting {len(categories)} categories into {num_chunks} chunks"
+                )
 
     # =========================================================================
     # Evidence-based warnings for prompting strategies
@@ -589,5 +621,6 @@ def classify(
         progress_callback=progress_callback,
         formatter_state=_formatter_state,
         multi_label=multi_label,
+        categories_per_call=categories_per_call,
     )
     return _maybe_apply_embeddings(result)
