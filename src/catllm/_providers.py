@@ -27,6 +27,8 @@ __all__ = [
     "get_ollama_model_size_estimate",
     "pull_ollama_model",
     "OLLAMA_MODEL_SIZES",
+    # Claude Code utilities
+    "check_claude_cli_available",
 ]
 
 
@@ -123,6 +125,11 @@ PROVIDER_CONFIG = {
     "ollama": {
         "endpoint": "http://localhost:11434/v1/chat/completions",
         "auth_header": None,  # No auth required for local Ollama
+        "auth_prefix": "",
+    },
+    "claude-code": {
+        "endpoint": None,  # Uses CLI subprocess, not HTTP
+        "auth_header": None,
         "auth_prefix": "",
     },
 }
@@ -402,6 +409,76 @@ class UnifiedLLMClient:
                 return parts[0].get("text", "")
         return ""
 
+    def _call_claude_cli(
+        self,
+        messages: list,
+        max_retries: int = 3,
+        initial_delay: float = 2.0,
+    ) -> tuple[str, str | None]:
+        """
+        Call the Claude CLI (claude -p) as a subprocess.
+
+        Args:
+            messages: List of message dicts with 'role' and 'content'
+            max_retries: Maximum retry attempts
+            initial_delay: Initial delay for exponential backoff
+
+        Returns:
+            tuple: (response_text, error_message)
+        """
+        import subprocess
+
+        # Extract system and user messages
+        system_parts = []
+        user_parts = []
+        for msg in messages:
+            if msg["role"] == "system":
+                system_parts.append(msg["content"])
+            elif msg["role"] in ("user", "assistant"):
+                user_parts.append(msg["content"])
+
+        system_prompt = "\n\n".join(system_parts) if system_parts else None
+        user_prompt = "\n\n".join(user_parts)
+
+        # Build command
+        cmd = ["claude", "-p", "--output-format", "text", "--model", self.model]
+        if system_prompt:
+            cmd.extend(["--system-prompt", system_prompt])
+        cmd.append(user_prompt)
+
+        for attempt in range(max_retries):
+            try:
+                result = subprocess.run(
+                    cmd,
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                )
+                if result.returncode == 0:
+                    return result.stdout.strip(), None
+                else:
+                    error_msg = result.stderr.strip() or f"CLI exited with code {result.returncode}"
+                    if attempt < max_retries - 1:
+                        wait_time = initial_delay * (2 ** attempt)
+                        print(f"Claude CLI error: {error_msg}. Retrying in {wait_time}s...")
+                        time.sleep(wait_time)
+                    else:
+                        return None, f"Claude CLI failed after {max_retries} attempts: {error_msg}"
+            except subprocess.TimeoutExpired:
+                if attempt < max_retries - 1:
+                    wait_time = initial_delay * (2 ** attempt)
+                    print(f"Claude CLI timeout. Retrying in {wait_time}s...")
+                    time.sleep(wait_time)
+                else:
+                    return None, "Claude CLI timeout after retries"
+            except FileNotFoundError:
+                return None, (
+                    "Claude CLI not found. Install it: "
+                    "https://docs.anthropic.com/en/docs/claude-code"
+                )
+
+        return None, "Max retries exceeded"
+
     def complete(
         self,
         messages: list,
@@ -432,6 +509,9 @@ class UnifiedLLMClient:
             tuple: (response_text, error_message)
                    error_message is None on success
         """
+        if self.provider == "claude-code":
+            return self._call_claude_cli(messages, max_retries=max_retries, initial_delay=initial_delay)
+
         endpoint = self._get_endpoint()
         headers = self._get_headers()
         payload = self._build_payload(messages, json_schema, creativity, thinking_budget=thinking_budget, force_json=force_json)
@@ -503,6 +583,10 @@ class UnifiedLLMClient:
 def _detect_model_source(user_model, model_source):
     """Auto-detect model source from model name if not explicitly provided."""
     model_source = model_source.lower()
+
+    # Explicit provider pass-through (no auto-detection needed)
+    if model_source == "claude-code":
+        return "claude-code"
 
     if model_source is None or model_source == "auto":
         user_model_lower = user_model.lower()
@@ -952,3 +1036,13 @@ def pull_ollama_model(model: str, host: str = "localhost", port: int = 11434, au
     except requests.exceptions.RequestException as e:
         print(f"\n  Error pulling model: {e}")
         return False
+
+
+# =============================================================================
+# Claude Code CLI Functions
+# =============================================================================
+
+def check_claude_cli_available():
+    """Check if the Claude CLI (claude) is installed and available on PATH."""
+    import shutil
+    return shutil.which("claude") is not None

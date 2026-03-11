@@ -2,106 +2,99 @@ Classify text data in a CSV or Excel file using cat-llm.
 
 Instructions:
 
-## Step 0 — Parse natural language input
-Read $ARGUMENTS as a natural-language request. Extract whatever the user provided — any combination of:
-- **file** — a file path or name (e.g. "xy.csv", "the survey file")
-- **column** — a column name (e.g. "on the response column", "col: feedback")
-- **categories** — category names (e.g. "positive, negative, neutral", "for sentiment")
-- **description** — data context (e.g. "customer feedback about our product")
-- **output** — output file path (e.g. "save to results.csv")
-- **model location** — cloud, local, or Claude Code (e.g. "using ollama", "no API key")
-
-Store whatever you found. For anything not mentioned, ask in later steps.
-If the user provided enough to skip steps, do so — be conversational, not rigid.
-
-Examples of valid inputs:
-- `survey.csv` — just a file, ask everything else
-- `classify xy.csv on the response column for positive, negative, neutral sentiment` — file, column, and categories provided
-- `feedback.csv --output results.csv` — file and output path
-- (empty) — no arguments, ask for file
-
-Also accept explicit flags: --categories, --model, --col, --output (same as before).
-
 ## Step 1 — Find the file
-Skip if a file was identified in Step 0.
 
+First, parse $ARGUMENTS for any file path or name the user provided. If found, use it directly.
+
+Otherwise:
 - Run `find . \( -name "*.csv" -o -name "*.xlsx" -o -name "*.xls" \) -not -path "./.git/*" | head -20`
 - Use AskUserQuestion to ask: "Which file would you like to classify?"
-  List each discovered file as an option (relative path). Add "Other" as the last option.
-- If "Other": ask "Describe the file you're looking for:" and search by name/directory, confirm the match before proceeding.
+  List each discovered file as an option (relative path).
 - If the file is .xlsx/.xls with multiple sheets, run `python3 -c "import pandas as pd; print(pd.ExcelFile('PATH').sheet_names)"` and ask which sheet to use if more than one exists.
 
-## Step 2 — Column and model location (same screen)
+## Step 2 — Show data and ask what they want to do
+
 Read the file with pandas. Show column names, row count, and 3 sample rows.
 
-Use AskUserQuestion with two questions on the same screen:
+Then probe the environment for API keys:
+```python
+from dotenv import load_dotenv; import os; load_dotenv(override=True)
+keys = {}
+for name in ["OPENAI_API_KEY", "ANTHROPIC_API_KEY", "GOOGLE_API_KEY", "MISTRAL_API_KEY", "XAI_API_KEY", "HF_TOKEN"]:
+    val = os.getenv(name)
+    if val:
+        keys[name] = val[:8] + "..."
+print(keys if keys else "No API keys found")
+```
 
-Question 1 — header: "Text column", question: "Which column contains the text to classify?"
-  Auto-detect the most likely text column (longest average string length) and mark it "(Recommended)".
-  List every column as an option. Add "Other" as the last option.
-  (Skip if column was identified in Step 0 or --col was passed.)
+Now present a single open-ended prompt. Include what you know:
 
-Question 2 — header: "Model location", question: "Where would you like to run the model?"
-  Options:
-  - "Cloud API (Recommended)" — core cat-llm pipeline, empirically validated, requires an API key
-  - "Local model (Ollama)" — core cat-llm pipeline, empirically validated, runs on your machine
-  - "Claude Code (no API key)" — native Claude Code mode, no setup needed, best for quick/casual use
-  (Skip if model location was identified in Step 0.)
+"Here's your file: **{filename}** — {N} rows, {M} columns.
+Columns: {list}
 
-Store the choice as `model_location` ("cloud", "local", or "claude_code").
+{If API keys found: "I found API keys in your environment: {key names}. I can use these for cloud classification."}
+{If no keys found: "No API keys detected. I can classify directly (up to 200 rows) or you can provide a key."}
+
+**What would you like to do with this data?** Tell me as much as you can — which column to classify, what categories, any context about the data. I'll figure out the rest."
+
+Wait for the user's free-text response.
+
+## Step 3 — Parse the response and fill gaps
+
+From $ARGUMENTS (Step 1) and the user's Step 2 response, extract everything you can:
+- **column** — which column to classify
+- **categories** — explicit list, or "auto-discover", or a description of what they want (e.g. "sentiment")
+- **description** — data context
+- **model_location** — "cloud", "local", or "claude_code" (infer from context: "no API key" → claude_code, "ollama" → local, otherwise cloud if keys detected)
+- **model** — specific model name
+- **output** — output file path
+- **survey_question** — what question respondents answered
+
+**Auto-detect what you can:**
+- **column**: If not specified, pick the column with the longest average string length.
+- **model_location**: If API keys were found and user didn't specify, default to "cloud". If no keys and ≤200 rows, default to "claude_code". If no keys and >200 rows, ask.
+- **model**: If cloud and not specified, default to the best model for the detected API key (OpenAI → "gpt-5", Anthropic → "claude-sonnet-4-6", Google → "gemini-2.0-flash").
+- **categories**: If user said something like "sentiment" or "topics", interpret as categories. "sentiment" → ["Positive", "Negative", "Neutral", "Mixed"]. For vague requests like "classify it" or "categorize these", treat as auto-discover.
+
+**Only ask follow-ups for truly missing required info.** Batch remaining questions into a single AskUserQuestion call (max 4 questions). Common follow-ups:
+
+- If column is ambiguous (multiple text columns, none obvious): ask which column
+- If categories are missing and not "auto-discover": ask for categories or offer auto-discover
+- If no API keys and >200 rows and user didn't specify model location: ask cloud vs local (claude_code is capped at 200)
+
+If the user's response gave you everything, skip straight to the appropriate path.
+
+Also accept explicit flags anywhere in the input: --categories, --model, --col, --output.
 
 ---
 
 # PATH A: Cloud or Local (core cat-llm pipeline)
-Follow Steps 3A–8A when `model_location` is "cloud" or "local".
+Follow when `model_location` is "cloud" or "local".
 
-## Step 3A — Model and API key (same screen)
-Use AskUserQuestion with two questions on the same screen:
+## Step 4A — Resolve model and API key (if not already known)
 
-Question 1 — header: "Model", question: "Which cloud model?" (skip if local was selected)
-  Options:
-  - "gpt-5" (Recommended) — OpenAI
-  - "claude-sonnet-4-6" — Anthropic
-  - "gemini-2.0-flash" — Google
-  - "Other"
-  Store as `user_model`. Always set `model_source="auto"` — the library resolves the provider from the model name automatically. Only set `model_source="ollama"` for local models.
+**Cloud:** Set `model_source="auto"`.
+  - If API key was auto-detected, store as `user_api_key`. Tell the user which key you're using (e.g. "Using your OpenAI key").
+  - If no key detected, use AskUserQuestion:
+    Options:
+    - "I'll type it now"
+    - "Where do I get one?" — show: OpenAI → platform.openai.com/api-keys | Anthropic → console.anthropic.com/settings/keys | Google → aistudio.google.com/apikey
 
-Question 2 — header: "API key", question: "Enter your API key:"
-  Options:
-  - "I have it in a .env file — use it" (Recommended)
-  - "I'll type it now"
-  - "Where do I get one?" — show: OpenAI → platform.openai.com/api-keys | Anthropic → console.anthropic.com/settings/keys | Google → aistudio.google.com/apikey
-
-  IMPORTANT: If "I have it in a .env file", do NOT pass api_key=None. Instead run:
+  IMPORTANT: When using auto-detected keys, load them properly:
   ```python
   from dotenv import load_dotenv; import os; load_dotenv(override=True)
-  print(os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY") or os.getenv("GOOGLE_API_KEY") or "")
+  user_api_key = os.getenv("OPENAI_API_KEY") or os.getenv("ANTHROPIC_API_KEY") or os.getenv("GOOGLE_API_KEY") or ""
   ```
-  and store the result as `user_api_key`. If empty, warn the user the key was not found.
 
-  If local model: set `user_api_key = None`, `model_source = "ollama"`.
-  If "Other" cloud model: ask for model name as free text first.
+**Local (Ollama):** Set `model_source = "ollama"`, `user_api_key = None`.
+  Run `ollama list`, list discovered models as options (up to 6) plus "Other".
+  Store selection as `user_model`.
 
-  For Ollama: run `ollama list`, list discovered models as options (up to 6) plus "Other".
+## Step 5A — Categories (if not already known)
 
-## Step 4A — Data context (optional, helps accuracy)
-Skip if description was provided in Step 0.
+If categories were already extracted from the user's input, skip to Step 6A.
 
-Ask as free text (optional, press Enter to skip):
-"Briefly describe your data (e.g. 'Open-ended survey responses about housing decisions'):"
-Store as `description`.
-
-## Step 5A — Categories
-If categories were provided in Step 0 or --categories was passed, use them directly and skip to Step 6A.
-
-Use AskUserQuestion to ask: "How would you like to define categories?"
-Options:
-- "Auto-discover from the data" (Recommended) — run extract() first to find themes
-- "I'll type them now"
-
-If "I'll type them now": ask "Enter categories, comma-separated:" (free text). Parse into a list. Skip to Step 6A.
-
-If "Auto-discover":
+If the user said "auto-discover" or gave a vague request:
   a. Ask as plain free text (required — keep asking until non-empty):
      "What survey question do respondents answer? (e.g. 'Why did you move to this neighborhood?')"
      Store as `survey_question`.
@@ -145,7 +138,7 @@ result = cat.extract(
     iterations=8,                  # default — do not change
     divisions=12,                  # default — do not change
     creativity=None,               # default — do not change
-    user_model="gpt-5",            # from step 3A
+    user_model="USER_MODEL",       # from step 4A
     model_source="auto",           # "ollama" if local; otherwise always "auto"
 )
 
@@ -167,6 +160,8 @@ print(top_categories)
      Round 2+ — remaining categories in the same pattern.
      If "Other" is selected for any category, immediately ask: "Enter the new name for category N:" (free text).
      Collect all responses into the final `categories` list.
+
+If the user typed categories directly (comma-separated or a clear list), parse them and skip to Step 6A.
 
 ## Step 6A — Pre-flight checks
 Use AskUserQuestion with up to three questions on the same screen:
@@ -210,10 +205,10 @@ input_data = df["TEXT_COL"]
 result = cat.classify(
     input_data,
     categories,               # final list after pre-flight checks (verbose if user accepted)
-    api_key="USER_API_KEY",   # from step 3A — explicit string, never None for cloud
+    api_key="USER_API_KEY",   # from step 4A — explicit string, never None for cloud
     survey_question="...",    # from step 5Aa, or "" if categories were typed manually
-    description="...",        # from step 4A, or "" if skipped
-    user_model="gpt-5",       # from step 3A — DO NOT use 'model' or 'model_name'
+    description="...",        # from step 2/3, or "" if not provided
+    user_model="USER_MODEL",  # from step 4A — DO NOT use 'model' or 'model_name'
     model_source="auto",      # "ollama" if local; otherwise always "auto"
     add_other=False,          # already handled interactively in step 6A
     check_verbosity=False,    # already handled interactively in step 6A
@@ -225,39 +220,29 @@ print(result.to_string())
 
 ## Step 8A — Output
 Display the result table and category distribution (value counts).
-If --output was passed or output path was provided in Step 0, save using: `result.to_csv("OUTPUT_PATH", index=False)` and confirm.
+If output path was provided, save using: `result.to_csv("OUTPUT_PATH", index=False)` and confirm.
 If an error occurs, show the full traceback and suggest a specific fix.
 
 ---
 
 # PATH B: Claude Code (native classification)
-Follow Steps 3B–8B when `model_location` is "claude_code".
+Follow when `model_location` is "claude_code".
 You ARE the classifier — do not call any external API or use catllm Python functions.
 
-## Step 3B — Scale check
+## Step 3B — Row cap check
 Run Python to count non-null rows in the selected text column.
 
-- If rows <= 200: proceed silently.
-- If 200 < rows <= 500: warn the user:
-  "This file has {N} rows. Claude Code classification works best under 200 rows. For larger datasets, the Cloud API or Ollama paths are faster and more reliable."
+- If rows <= 200: proceed. Show token warning:
+  "Note: Claude Code mode uses your token allowance. Each row is classified directly by Claude Code — no API key needed, but tokens are consumed."
+- If rows > 200: **hard cap — do not proceed.** Tell the user:
+  "This file has {N} rows, which exceeds the 200-row limit for Claude Code classification. Please use Cloud API or Ollama for larger datasets."
   Use AskUserQuestion:
-  - "Continue anyway" — proceed
-  - "Switch to Cloud API" — go back to Step 3A with `model_location = "cloud"`
-- If rows > 500: strongly recommend switching:
-  "This file has {N} rows, which exceeds the practical limit for Claude Code classification. I strongly recommend using Cloud API or Ollama."
-  Use AskUserQuestion:
-  - "Continue anyway (not recommended)"
-  - "Switch to Cloud API" (Recommended) — go back to Step 3A with `model_location = "cloud"`
+  - "Switch to Cloud API" (Recommended) — go back to Step 4A with `model_location = "cloud"`
+  - "Switch to Ollama" — go back to Step 4A with `model_location = "local"`
 
-## Step 4B — Data context
-Skip if description was provided in Step 0.
+## Step 4B — Categories (if not already known)
 
-Ask as free text (optional, press Enter to skip):
-"Briefly describe your data (e.g. 'Open-ended survey responses about housing decisions'):"
-Store as `description`.
-
-## Step 5B — Categories
-If categories were provided in Step 0 or --categories was passed, show them and confirm:
+If categories were already extracted from the user's input, show them and confirm:
   "I'll classify using these categories: {list}. Sound good?"
   Use AskUserQuestion:
   - "Yes, proceed" (Recommended)
@@ -269,7 +254,7 @@ Options:
 - "Auto-discover from the data" (Recommended) — Claude Code reads samples and suggests themes
 - "I'll type them now"
 
-If "I'll type them now": ask "Enter categories, comma-separated:" (free text). Parse into a list. Skip to Step 6B.
+If "I'll type them now": ask "Enter categories, comma-separated:" (free text). Parse into a list. Skip to Step 5B.
 
 If "Auto-discover":
   a. Read the first 30 non-null rows from the text column using Python:
@@ -282,7 +267,7 @@ If "Auto-discover":
   ```
 
   b. You (Claude Code) analyze the printed responses and identify 5-10 recurring themes.
-     Consider the data description from Step 4B if provided.
+     Consider the data description if provided.
      Present the discovered categories to the user as a numbered list.
 
   c. Use AskUserQuestion to ask:
@@ -300,7 +285,7 @@ If "Auto-discover":
      If "Other" is selected for any category, immediately ask: "Enter the new name for category N:" (free text).
      Collect all responses into the final `categories` list.
 
-## Step 6B — Pre-flight checks
+## Step 5B — Pre-flight checks
 Use AskUserQuestion with up to two questions on the same screen:
 
 Question A — "Catch-all" (only show if no category contains the word "other", case-insensitive):
@@ -321,10 +306,10 @@ Question B — "Accuracy boost" (always show):
   Show all verbose categories to the user and ask for confirmation. If confirmed, replace `categories`
   with the verbose list before classification.
 
-## Step 7B — Classify (Claude Code as the model)
+## Step 6B — Classify (Claude Code as the model)
 Process the data in batches of 20 rows.
 
-### 7B-a — Load all texts
+### 6B-a — Load all texts
 ```python
 import pandas as pd, json, os, tempfile
 
@@ -347,7 +332,7 @@ print(f"Categories: {len(categories)}")
 print(f"Results file: {results_file}")
 ```
 
-### 7B-b — For each batch of 20 rows
+### 6B-b — For each batch of 20 rows
 For batch_start in range(0, n, 20):
   batch_end = min(batch_start + 20, n)
 
@@ -393,7 +378,7 @@ For batch_start in range(0, n, 20):
 
   4. Repeat for all batches. Show progress after each batch.
 
-### 7B-c — Assemble output DataFrame
+### 6B-c — Assemble output DataFrame
 After all batches are complete:
 ```python
 import pandas as pd, json
@@ -421,7 +406,7 @@ print(f"\nShape: {result_df.shape}")
 
 Store the final DataFrame as `result_df`.
 
-## Step 8B — Output
+## Step 7B — Output
 Display the result table and category distribution:
 ```python
 print("\nCategory distribution:")
@@ -430,15 +415,14 @@ for col in result_df.columns[2:]:  # skip survey_input and processing_status
     print(result_df[col].value_counts().to_string())
 ```
 
-If --output was passed or output path was provided in Step 0, save using: `result_df.to_csv("OUTPUT_PATH", index=False)` and confirm.
+If output path was provided, save using: `result_df.to_csv("OUTPUT_PATH", index=False)` and confirm.
 If no output path, ask user if they want to save the results and where.
 
 ## Important notes for Path B (Claude Code)
 - You ARE the classifier. Do not call any external API or use catllm Python functions.
 - Classify carefully and consistently. Apply the same standard across all rows.
-- Use the data description (Step 4B) and verbose category descriptions (Step 6B) to guide decisions.
+- Use the data description and verbose category descriptions to guide decisions.
 - If a response is ambiguous, prefer marking 0 (not a match) over 1.
 - Process every row — do not skip or summarize.
-- Be conversational. If the user's initial prompt gave you most of what you need, skip redundant questions.
 
 allowed-tools: Bash(python3*), Bash(find*), Bash(ollama*), Read

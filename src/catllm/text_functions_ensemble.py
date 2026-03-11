@@ -61,6 +61,7 @@ from .text_functions import (
     check_ollama_running,
     check_ollama_model,
     pull_ollama_model,
+    check_claude_cli_available,
     _get_stepback_insight,
 )
 
@@ -334,6 +335,16 @@ def prepare_model_configs(models: list, auto_download: bool = False) -> list:
                         f"Ollama model '{model}' not available. "
                         f"Run: ollama pull {model}"
                     )
+        elif detected_provider == "claude-code":
+            if not check_claude_cli_available():
+                raise ConnectionError(
+                    "\n" + "="*60 + "\n"
+                    "  CLAUDE CLI NOT FOUND\n"
+                    "="*60 + "\n\n"
+                    "The claude CLI must be installed to use claude-code as a provider.\n"
+                    "Install: https://docs.anthropic.com/en/docs/claude-code\n"
+                    + "="*60
+                )
         else:
             # Validate API key exists for cloud providers
             if not api_key:

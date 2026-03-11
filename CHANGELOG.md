@@ -5,6 +5,20 @@ All notable changes to CatLLM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.8.2] - 2026-03-11
+
+### Added
+- **`claude-code` provider backend**: Added `claude-code` as a provider in `_providers.py`. Each LLM call shells out to `claude -p` (print mode), enabling the full catllm pipeline (retries, `extract_json()`, `categories_per_call`, threading) powered by the user's Claude Code token allowance with no API key. Use via `cat.classify(..., model_source="claude-code", user_model="sonnet")` from a standalone terminal or Python script. Not usable from within a Claude Code session (nested sessions blocked by CLI).
+- **`check_claude_cli_available()`** utility function in `_providers.py` (re-exported via `text_functions.py`).
+
+### Changed
+- **`/catllm:classify` conversational redesign**: Replaced the rigid step-by-step questionnaire with a conversational-first flow. After finding the file, shows data preview and a single open-ended prompt ("What would you like to do with this data?"). Parses column, categories, model preference, and context from the user's free-text response. Only asks follow-ups for missing required parameters.
+- **Smart API key auto-detection**: The classify skill now probes the environment for all known API keys (OpenAI, Anthropic, Google, Mistral, xAI, HuggingFace) at startup. If found, mentions them proactively and defaults to cloud. If none found and ≤200 rows, defaults to Claude Code native mode.
+- **Claude Code (Path B) hard-capped at 200 rows**: Native classification mode now enforces a strict 200-row limit instead of allowing users to proceed with a warning.
+- API key validation in `text_functions.py` now skips `claude-code` provider (like Ollama).
+
+---
+
 ## [2.8.1] - 2026-03-10
 
 ### Added

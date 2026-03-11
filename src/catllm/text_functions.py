@@ -21,6 +21,7 @@ __all__ = [
     "check_system_resources",
     "get_ollama_model_size_estimate",
     "pull_ollama_model",
+    "check_claude_cli_available",
     "build_json_schema",
     "extract_json",
     "validate_classification_json",
@@ -68,6 +69,7 @@ from ._providers import (
     check_system_resources,
     get_ollama_model_size_estimate,
     pull_ollama_model,
+    check_claude_cli_available,
     OLLAMA_MODEL_SIZES,
 )
 
@@ -366,7 +368,7 @@ def explore_corpus(
     provider = detect_provider(model, provider)
 
     # Validate api_key
-    if provider != "ollama" and not api_key:
+    if provider not in ("ollama", "claude-code") and not api_key:
         raise ValueError(f"api_key is required for provider '{provider}'")
 
     print(f"Exploring categories for question: '{survey_question}'")
@@ -550,7 +552,7 @@ def explore_common_categories(
     provider = detect_provider(model, provider)
 
     # Validate api_key
-    if provider != "ollama" and not api_key:
+    if provider not in ("ollama", "claude-code") and not api_key:
         raise ValueError(f"api_key is required for provider '{provider}'")
 
     # Ollama-specific checks
@@ -936,7 +938,7 @@ def multi_class(
     provider = detect_provider(model, provider)
 
     # Validate api_key requirement
-    if provider != "ollama" and not api_key:
+    if provider not in ("ollama", "claude-code") and not api_key:
         raise ValueError(f"api_key is required for provider '{provider}'")
 
     # Handle categories="auto" - auto-detect categories from the data
