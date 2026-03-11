@@ -8,8 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [2.8.1] - 2026-03-10
 
 ### Added
-- **`/catllm:classify-cc` Claude Code skill**: New slash command that uses Claude Code itself as the classifier — no API key or external setup needed. Accepts natural-language input (e.g. `/catllm:classify-cc survey.csv on the response column for positive, negative, neutral sentiment`), auto-discovers categories from data samples, and produces the same DataFrame output format as the API-based pipeline. Best for quick/casual classification of datasets under 200 rows.
-- **Claude Code model option in `/catllm:classify`**: Added "Claude Code (no API key)" as a third model location option alongside Cloud API and Ollama. Selecting it redirects to `/catllm:classify-cc`. Cloud and Ollama options now labeled as "core cat-llm pipeline, empirically validated" to distinguish from the native Claude Code mode.
+- **Claude Code classification mode in `/catllm:classify`**: Added "Claude Code (no API key)" as a third model location option alongside Cloud API and Ollama. When selected, Claude Code itself acts as the classifier — no API key or external setup needed. Supports natural-language input (e.g. `/catllm:classify survey.csv on the response column for positive, negative, neutral sentiment`), auto-discovers categories by reading data samples directly, and produces the same DataFrame output format as the API-based pipeline. Best for quick/casual classification of datasets under 200 rows. Cloud and Ollama options labeled as "core cat-llm pipeline, empirically validated" to distinguish from the native Claude Code mode.
 
 ---
 
