@@ -171,7 +171,7 @@ def extract(
         return explore_image_categories(
             image_input=input_data,
             api_key=api_key,
-            image_description=description or "",
+            image_description=resolved_survey_question,
             max_categories=max_categories,
             categories_per_chunk=categories_per_chunk,
             divisions=divisions,
@@ -191,7 +191,7 @@ def extract(
         return explore_pdf_categories(
             pdf_input=input_data,
             api_key=api_key,
-            pdf_description=description or "",
+            pdf_description=resolved_survey_question,
             max_categories=max_categories,
             categories_per_chunk=categories_per_chunk,
             divisions=divisions,

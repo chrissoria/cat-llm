@@ -555,18 +555,21 @@ def _parse_batch_results(
     raw_results: str,
     custom_id_map: dict,
     client: "UnifiedLLMClient",
+    parse_mode: str = "json",
 ) -> dict:
     """
-    Parse the downloaded JSONL results back into per-item classification strings.
+    Parse the downloaded JSONL results back into per-item strings.
 
     Args:
         provider: Provider name
         raw_results: Raw JSONL text from the batch results download
         custom_id_map: Dict mapping custom_id string → original item index
         client: UnifiedLLMClient instance (used to call _parse_response())
+        parse_mode: "json" (default) runs extract_json() on responses,
+            "text" returns raw text as-is (for summarization)
 
     Returns:
-        Dict mapping item_index → (json_str, error_or_None)
+        Dict mapping item_index → (result_str, error_or_None)
         Missing items (job dropped them) get (None, "Missing from batch results").
     """
     parsed_results = {}
@@ -650,8 +653,11 @@ def _parse_batch_results(
         if idx is None:
             continue
 
-        json_str = extract_json(raw_text)
-        parsed_results[idx] = (json_str, None)
+        if parse_mode == "text":
+            parsed_results[idx] = (raw_text, None)
+        else:
+            json_str = extract_json(raw_text)
+            parsed_results[idx] = (json_str, None)
 
     return parsed_results
 
@@ -1015,3 +1021,368 @@ def run_batch_ensemble_classify(
         })
 
     return build_output_dataframes(all_results, model_configs, categories, filename, save_directory)
+
+
+# =============================================================================
+# Batch summarization
+# =============================================================================
+
+def _run_one_batch_summarize_job(
+    cfg: dict,
+    items: list,
+    prompt_params: dict,
+    batch_poll_interval: float = 30.0,
+    batch_timeout: float = 86400.0,
+) -> dict:
+    """
+    Submit, poll, download, and parse a batch summarization job for one model.
+    Returns {item_index: (summary_text_or_None, error_or_None)}.
+    """
+    from .text_functions_ensemble import build_text_summarization_prompt, build_summary_json_schema
+
+    provider = cfg["provider"]
+    api_key = cfg["api_key"]
+    model = cfg["model"]
+
+    input_description = prompt_params.get("input_description", "")
+    summary_instructions = prompt_params.get("summary_instructions", "")
+    max_length = prompt_params.get("max_length")
+    focus = prompt_params.get("focus")
+    chain_of_thought = prompt_params.get("chain_of_thought", False)
+    context_prompt = prompt_params.get("context_prompt", False)
+    step_back_prompt = prompt_params.get("step_back_prompt", False)
+    stepback_insights = prompt_params.get("stepback_insights", {})
+    creativity = prompt_params.get("creativity")
+
+    include_additional = provider != "google"
+    json_schema = build_summary_json_schema(include_additional)
+
+    client = UnifiedLLMClient(provider=provider, api_key=api_key, model=model)
+
+    print(f"\n[batch] Building {len(items)} summarization request(s) for {model} ({provider})...")
+
+    custom_id_map = {}
+    jsonl_lines = []
+    requests_list = []
+
+    for idx, item in enumerate(items):
+        custom_id = f"item-{idx}"
+        custom_id_map[custom_id] = idx
+
+        text = str(item) if item is not None else ""
+
+        messages = build_text_summarization_prompt(
+            response_text=text,
+            input_description=input_description,
+            summary_instructions=summary_instructions,
+            max_length=max_length,
+            focus=focus,
+            chain_of_thought=chain_of_thought,
+            context_prompt=context_prompt,
+            step_back_prompt=step_back_prompt,
+            stepback_insights=stepback_insights,
+            model_name=model,
+        )
+
+        payload = client._build_payload(
+            messages=messages,
+            json_schema=json_schema,
+            creativity=creativity,
+        )
+
+        line = _build_jsonl_line(provider, custom_id, payload, model)
+        jsonl_lines.append(line)
+        if provider in ("anthropic", "xai", "google"):
+            requests_list.append(line)
+
+    jsonl_bytes = b"\n".join(json.dumps(line).encode("utf-8") for line in jsonl_lines)
+
+    # Upload file (OpenAI, Mistral only)
+    file_id = None
+    if provider in ("openai", "mistral"):
+        print(f"[batch] Uploading JSONL ({len(jsonl_bytes)/1024:.1f} KB) to {provider}...")
+        file_id = _upload_jsonl(provider, api_key, jsonl_bytes)
+        print(f"[batch] File uploaded: {file_id}")
+
+    # Create batch job
+    print(f"[batch] Creating batch job for {model}...")
+    job_id = _create_batch_job(
+        provider=provider,
+        api_key=api_key,
+        model=model,
+        file_id=file_id,
+        requests_list=requests_list if provider in ("anthropic", "xai", "google") else None,
+    )
+    print(f"[batch] Job created: {job_id}")
+    print(f"[batch] Polling every {batch_poll_interval}s (timeout={batch_timeout/3600:.1f}h)...")
+
+    # Poll until complete
+    status_data = _poll_batch_job(
+        provider=provider,
+        api_key=api_key,
+        job_id=job_id,
+        interval=batch_poll_interval,
+        timeout=batch_timeout,
+    )
+    print(f"[batch] Job complete for {model}.")
+
+    # Download results
+    print(f"[batch] Downloading results for {model}...")
+    raw_results = _download_batch_results(
+        provider=provider,
+        api_key=api_key,
+        job_id=job_id,
+        status_data=status_data,
+    )
+
+    # Parse results — use text mode since summaries are JSON-wrapped
+    # but we still want extract_json since output is {"summary": "..."}
+    return _parse_batch_results(
+        provider=provider,
+        raw_results=raw_results,
+        custom_id_map=custom_id_map,
+        client=client,
+        parse_mode="json",
+    )
+
+
+def _run_one_sync_summarize_model(
+    cfg: dict,
+    items: list,
+    prompt_params: dict,
+) -> dict:
+    """
+    Summarize all items synchronously for one model (fallback for unsupported batch providers).
+    Returns {item_index: (json_str_or_None, error_or_None)}.
+    """
+    from .text_functions_ensemble import build_text_summarization_prompt, build_summary_json_schema
+
+    provider = cfg["provider"]
+    api_key = cfg["api_key"]
+    model = cfg["model"]
+    creativity = prompt_params.get("creativity")
+
+    include_additional = provider != "google"
+    json_schema = build_summary_json_schema(include_additional)
+
+    client = UnifiedLLMClient(provider=provider, api_key=api_key, model=model)
+    item_results = {}
+
+    print(f"\n[batch] Synchronous fallback for {model} ({provider}): {len(items)} item(s)...")
+
+    for idx, item in enumerate(items):
+        messages = build_text_summarization_prompt(
+            response_text=str(item) if item is not None else "",
+            input_description=prompt_params.get("input_description", ""),
+            summary_instructions=prompt_params.get("summary_instructions", ""),
+            max_length=prompt_params.get("max_length"),
+            focus=prompt_params.get("focus"),
+            chain_of_thought=prompt_params.get("chain_of_thought", False),
+            context_prompt=prompt_params.get("context_prompt", False),
+            step_back_prompt=prompt_params.get("step_back_prompt", False),
+            stepback_insights=prompt_params.get("stepback_insights", {}),
+            model_name=model,
+        )
+        try:
+            raw, _err = client.complete(
+                messages=messages,
+                json_schema=json_schema,
+                creativity=creativity,
+            )
+            item_results[idx] = (extract_json(raw), None)
+        except Exception as e:
+            item_results[idx] = (None, str(e))
+
+    return item_results
+
+
+def run_batch_summarize(
+    items: list,
+    cfg: dict,
+    prompt_params: dict,
+    filename: str = None,
+    save_directory: str = None,
+    batch_poll_interval: float = 30.0,
+    batch_timeout: float = 86400.0,
+    fail_strategy: str = "partial",
+) -> "pd.DataFrame":
+    """
+    Run batch summarization for a single model.
+
+    Returns a DataFrame with survey_input, summary, processing_status columns.
+    """
+    import math
+    import pandas as pd
+    from .text_functions_ensemble import extract_summary_from_json
+
+    item_results = _run_one_batch_summarize_job(
+        cfg=cfg,
+        items=items,
+        prompt_params=prompt_params,
+        batch_poll_interval=batch_poll_interval,
+        batch_timeout=batch_timeout,
+    )
+
+    rows = []
+    for idx, item in enumerate(items):
+        json_str, error = item_results.get(idx, (None, "Missing from batch results"))
+
+        text = str(item) if item is not None else ""
+        is_skipped = item is None or (isinstance(item, float) and math.isnan(item))
+
+        if is_skipped:
+            rows.append({"survey_input": text, "summary": "", "processing_status": "skipped"})
+            continue
+
+        if error:
+            rows.append({"survey_input": text, "summary": "", "processing_status": "error"})
+            continue
+
+        if fail_strategy == "strict" and error:
+            rows.append({"survey_input": text, "summary": "", "processing_status": "error"})
+            continue
+
+        is_valid, summary_text = extract_summary_from_json(json_str)
+        if is_valid and summary_text:
+            rows.append({"survey_input": text, "summary": summary_text, "processing_status": "success"})
+        else:
+            rows.append({"survey_input": text, "summary": "", "processing_status": "error"})
+
+    df = pd.DataFrame(rows)
+
+    if filename:
+        import os
+        save_path = os.path.join(save_directory, filename) if save_directory else filename
+        if save_directory:
+            os.makedirs(save_directory, exist_ok=True)
+        df.to_csv(save_path, index=False)
+        print(f"\nResults saved to: {save_path}")
+
+    return df
+
+
+def run_batch_ensemble_summarize(
+    items: list,
+    model_configs: list,
+    prompt_params_per_model: dict,
+    fail_strategy: str = "partial",
+    filename: str = None,
+    save_directory: str = None,
+    batch_poll_interval: float = 30.0,
+    batch_timeout: float = 86400.0,
+    max_retries: int = 3,
+) -> "pd.DataFrame":
+    """
+    Run batch summarization for multiple models concurrently, then synthesize.
+
+    Each model submits its own batch job. After all complete, summaries are
+    synthesized into a consensus using _synthesize_summaries().
+    """
+    import math
+    import pandas as pd
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    from .text_functions_ensemble import extract_summary_from_json, _synthesize_summaries
+
+    batch_cfgs = [c for c in model_configs if c["provider"] not in UNSUPPORTED_BATCH_PROVIDERS]
+    sync_cfgs  = [c for c in model_configs if c["provider"] in UNSUPPORTED_BATCH_PROVIDERS]
+
+    if batch_cfgs:
+        print(
+            f"\n[batch ensemble] {len(batch_cfgs)} model(s) will use batch API: "
+            f"{', '.join(c['model'] for c in batch_cfgs)}"
+        )
+    if sync_cfgs:
+        print(
+            f"[batch ensemble] {len(sync_cfgs)} model(s) will use synchronous fallback: "
+            f"{', '.join(c['model'] for c in sync_cfgs)}"
+        )
+
+    all_model_results = {}
+
+    def _run_cfg(cfg):
+        model_key = cfg["sanitized_name"]
+        pp = prompt_params_per_model[cfg["model"]]
+        if cfg["provider"] in UNSUPPORTED_BATCH_PROVIDERS:
+            return model_key, _run_one_sync_summarize_model(cfg, items, pp)
+        else:
+            return model_key, _run_one_batch_summarize_job(cfg, items, pp, batch_poll_interval, batch_timeout)
+
+    with ThreadPoolExecutor(max_workers=len(model_configs)) as executor:
+        futures = {executor.submit(_run_cfg, cfg): cfg for cfg in model_configs}
+        for future in as_completed(futures):
+            model_key, result = future.result()
+            all_model_results[model_key] = result
+
+    model_names = [cfg["sanitized_name"] for cfg in model_configs]
+
+    rows = []
+    for idx, item in enumerate(items):
+        text = str(item) if item is not None else ""
+        is_skipped = item is None or (isinstance(item, float) and math.isnan(item))
+
+        if is_skipped:
+            row = {"survey_input": text, "summary": "", "processing_status": "skipped"}
+            for mn in model_names:
+                row[f"summary_{mn}"] = ""
+            row["failed_models"] = ""
+            rows.append(row)
+            continue
+
+        summaries = {}
+        errors = []
+        for cfg in model_configs:
+            mn = cfg["sanitized_name"]
+            json_str, error = all_model_results[mn].get(idx, (None, "Missing from batch results"))
+            if error:
+                summaries[mn] = ""
+                errors.append(mn)
+            else:
+                is_valid, summary_text = extract_summary_from_json(json_str)
+                summaries[mn] = summary_text if is_valid else ""
+                if not is_valid or not summary_text:
+                    errors.append(mn)
+
+        # fail_strategy="strict": blank everything if any model failed
+        if fail_strategy == "strict" and errors:
+            summaries = {k: "" for k in summaries}
+
+        row = {"survey_input": text}
+        for mn in model_names:
+            row[f"summary_{mn}"] = summaries.get(mn, "")
+
+        # Synthesize consensus
+        valid_summaries = {k: v for k, v in summaries.items() if v}
+        if valid_summaries:
+            synthesis_cfg = model_configs[0]
+            consensus = _synthesize_summaries(
+                summaries=valid_summaries,
+                original_text=text,
+                synthesis_config=synthesis_cfg,
+                max_retries=max_retries,
+            )
+            row["summary"] = consensus
+        else:
+            row["summary"] = ""
+
+        row["failed_models"] = ",".join(errors) if errors else ""
+
+        if all(not s for s in summaries.values()):
+            row["processing_status"] = "error"
+        elif any(not s for s in summaries.values()):
+            row["processing_status"] = "partial"
+        else:
+            row["processing_status"] = "success"
+
+        rows.append(row)
+
+    df = pd.DataFrame(rows)
+
+    if filename:
+        import os
+        save_path = os.path.join(save_directory, filename) if save_directory else filename
+        if save_directory:
+            os.makedirs(save_directory, exist_ok=True)
+        df.to_csv(save_path, index=False)
+        print(f"\nResults saved to: {save_path}")
+
+    return df

@@ -187,7 +187,13 @@ Supports both **single-model** and **multi-model ensemble** classification for i
 - `user_model` (str, default="gpt-4o"): Model to use
 - `mode` (str, default="image"): PDF processing mode - "image", "text", or "both"
 - `creativity` (float, optional): Temperature setting (0.0-1.0)
-- `chain_of_thought` (bool, default=False): Enable step-by-step reasoning
+- `survey_question` (str, default=""): The survey question respondents were asked. Provides important context for classification.
+- `safety` (bool, default=False): Save progress after each row. If the process fails midway, you won't lose your work. Requires `filename`.
+- `chain_of_thought` (bool, default=False): Enable step-by-step reasoning within a single prompt. Low cost increase.
+- `context_prompt` (bool, default=False): Add expert analyst role to the prompt. Minimal cost increase.
+- `step_back_prompt` (bool, default=False): Ask the model to consider broader conceptual background before classifying. Moderate cost increase.
+- `chain_of_verification` (bool, default=False): Multi-prompt verification loop where the model checks its own work. High cost increase (3-5x).
+- `example1`–`example6` (str, optional): Few-shot examples to guide classification (up to 6).
 - `filename` (str, optional): Output filename for CSV
 - `save_directory` (str, optional): Directory to save results
 - `model_source` (str, default="auto"): Provider - "auto", "openai", "anthropic", "google", "mistral", "perplexity", "huggingface", "xai"
@@ -201,9 +207,16 @@ Supports both **single-model** and **multi-model ensemble** classification for i
 - `batch_timeout` (float, default=86400.0): Maximum seconds to wait for a batch job before raising `BatchJobExpiredError`.
 - `embeddings` (bool, default=False): Add embedding-based similarity scores alongside binary 0/1 classifications. Adds `category_N_similarity` columns (0–1 float) using a local sentence-transformer model (`BAAI/bge-small-en-v1.5`, ~130MB). Text input only (skipped for PDF/image). Requires `pip install cat-llm[embeddings]`.
 - `category_descriptions` (dict, optional): Richer text descriptions per category for embedding similarity (e.g., `{"Past_Support": "References to help received from family"}`). Only used when `embeddings=True`.
+- `embedding_tiebreaker` (bool, default=False): When ensemble consensus produces a tie (equal votes for 0 and 1), use embedding centroid similarity to break the tie. Requires `pip install cat-llm[embeddings]`.
+- `min_centroid_size` (int, default=3): Minimum number of confirmed-positive responses needed to build a reliable centroid for `embedding_tiebreaker`. If fewer positives exist, falls back to raw similarity against the category text.
 - `json_formatter` (bool, default=False): Use a local fine-tuned model to fix malformed JSON output before marking responses as failed. The formatter runs only when `extract_json()` produces invalid output—zero cost on the happy path. On first use, the model (~1GB) is downloaded from HuggingFace Hub. Requires `pip install cat-llm[formatter]`.
 - `add_other` (str or bool, default="prompt"): Controls auto-addition of an "Other" catch-all category. `"prompt"` asks the user, `True` adds silently, `False` never adds.
 - `check_verbosity` (bool, default=True): Check whether categories have descriptions and examples (1 API call). Set to False to skip.
+- `row_delay` (float, default=0.0): Seconds to wait between processing each row. Useful for rate-limited APIs (e.g., Google free tier at 5 RPM).
+- `max_retries` (int, default=5): Maximum number of retries for failed API calls per row.
+- `retry_delay` (float, default=1.0): Base delay in seconds between retries (uses exponential backoff).
+- `fail_strategy` (str, default="partial"): How to handle rows that fail after all retries. `"partial"` returns results with failed rows marked; `"strict"` raises an error on any failure.
+- `pdf_dpi` (int, default=150): DPI resolution for rendering PDF pages as images. Higher values improve quality but increase processing time and cost.
 - `thinking_budget` (int, default=0): Token budget for model reasoning/thinking. Set to 0 to disable. Behavior varies by provider:
 
 | Provider | `thinking_budget=0` | `thinking_budget > 0` (e.g., 8192) |
@@ -262,7 +275,7 @@ results = cat.classify(
     categories=["Positive", "Negative", "Neutral"],
     models=[
         ("gpt-4o", "openai", "sk-..."),
-        ("claude-sonnet-4-5-20250929", "anthropic", "sk-ant-..."),
+        ("claude-sonnet-4-20250514", "anthropic", "sk-ant-..."),
         ("gemini-2.5-flash", "google", "AIza..."),
     ],
     consensus_threshold="unanimous",
@@ -290,16 +303,22 @@ Unified category extraction function for text, image, and PDF inputs. Automatica
 - `input_data`: The data to explore (text list, image paths, or PDF paths)
 - `api_key` (str): API key for the LLM service
 - `input_type` (str, default="text"): Type of input - "text", "image", or "pdf"
-- `description` (str): Description of the input data
-- `max_categories` (int, default=12): Maximum number of categories to return
+- `survey_question` (str, default=""): The survey question or description of the data. Provides context for category discovery.
+- `description` (str, optional): Deprecated alias for `survey_question`. Use `survey_question` instead.
+- `max_categories` (int, default=12): Maximum number of final categories to return
 - `categories_per_chunk` (int, default=10): Categories to extract per chunk
 - `divisions` (int, default=12): Number of chunks to divide data into
 - `iterations` (int, default=8): Number of extraction passes over the data
 - `user_model` (str, default="gpt-4o"): Model to use
+- `model_source` (str, default="auto"): Provider - "auto", "openai", "anthropic", "google", etc.
+- `creativity` (float, optional): Temperature setting (0.0-1.0). `None` uses model default.
 - `specificity` (str, default="broad"): "broad" or "specific" category granularity
 - `research_question` (str, optional): Research context to guide extraction
 - `focus` (str, optional): Focus instruction for category extraction (e.g., "emotional responses")
+- `mode` (str, default="text"): Processing mode for non-text inputs - "text", "image", or "both"
 - `filename` (str, optional): Output filename for CSV
+- `random_state` (int, optional): Random seed for reproducibility of chunk sampling
+- `chunk_delay` (float, default=0.0): Seconds to wait between processing each chunk. Useful for rate-limited APIs.
 
 > **Default parameter rationale:** The defaults of `divisions=12` and `iterations=8` were determined through empirical analysis. We ran a 6x6 grid search over [1, 4, 8, 12, 16, 20] for both parameters, repeating each combination 10 times and measuring pairwise Jaro-Winkler consistency across runs. Consistency peaked at 12 divisions and 8 iterations, with values beyond this point offering no meaningful improvement.
 
@@ -317,7 +336,7 @@ import catllm as cat
 # Extract categories from survey responses
 results = cat.extract(
     input_data=df['responses'],
-    description="Why did you move?",
+    survey_question="Why did you move?",
     api_key=api_key,
     max_categories=10,
     focus="decisions to relocate"  # Optional focus
@@ -342,13 +361,15 @@ This is useful for analyzing which categories are robust (consistently discovere
 - `categories_per_chunk` (int, default=10): Categories to extract per chunk
 - `divisions` (int, default=12): Number of chunks to divide data into
 - `user_model` (str, default="gpt-4o"): Model to use
-- `creativity` (float, optional): Temperature setting (0.0-1.0)
+- `model_source` (str, default="auto"): Provider - "auto", "openai", "anthropic", "google", etc.
+- `creativity` (float, optional): Temperature setting (0.0-1.0). `None` uses model default.
 - `specificity` (str, default="broad"): "broad" or "specific" category granularity
 - `research_question` (str, optional): Research context to guide extraction
 - `focus` (str, optional): Focus instruction (e.g., "decisions to relocate")
 - `iterations` (int, default=8): Number of passes over the data
 - `random_state` (int, optional): Random seed for reproducibility
 - `filename` (str, optional): Output CSV filename (one category per row)
+- `chunk_delay` (float, default=0.0): Seconds to wait between processing each chunk. Useful for rate-limited APIs.
 
 **Returns:**
 - `list[str]`: Every category extracted from every chunk across every iteration. Length ≈ `iterations × divisions × categories_per_chunk`.
@@ -394,6 +415,10 @@ Supports both **single-model** and **multi-model ensemble** summarization. In mu
 - `focus` (str): What to focus on (e.g., "main arguments", "emotional content")
 - `user_model` (str, default="gpt-4o"): Model to use
 - `model_source` (str, default="auto"): Provider - "auto", "openai", "anthropic", "google", etc.
+- `creativity` (float, optional): Temperature setting (0.0-1.0). `None` uses model default.
+- `chain_of_thought` (bool, default=True): Enable step-by-step reasoning. On by default for summarization.
+- `context_prompt` (bool, default=False): Add expert analyst role to the prompt.
+- `step_back_prompt` (bool, default=False): Ask the model to consider broader context before summarizing.
 - `mode` (str, default="image"): PDF processing mode:
   - "image": Render pages as images (best for visual documents)
   - "text": Extract text only (faster, good for text-heavy PDFs)
@@ -401,6 +426,15 @@ Supports both **single-model** and **multi-model ensemble** summarization. In mu
 - `filename` (str): Output CSV filename
 - `save_directory` (str): Directory to save results
 - `models` (list): For multi-model mode, list of `(model, provider, api_key)` tuples
+- `safety` (bool, default=False): If True, saves progress to CSV after each item. Requires `filename`.
+- `max_retries` (int, default=5): Max retries per API call.
+- `batch_retries` (int, default=2): Number of batch retry passes for failed items.
+- `retry_delay` (float, default=1.0): Delay between retries in seconds.
+- `row_delay` (float, default=0.0): Delay in seconds between processing each row. Useful to avoid rate limits.
+- `fail_strategy` (str, default="partial"): How to handle failures — `"partial"` keeps successful results, `"strict"` blanks the row if any model fails.
+- `batch_mode` (bool, default=False): If True, use async batch API (50% cost savings). Supported providers: openai, anthropic, google, mistral, xai. Not compatible with PDF input.
+- `batch_poll_interval` (float, default=30): Seconds between batch job status checks.
+- `batch_timeout` (float, default=86400): Max seconds to wait for batch completion (default 24h).
 
 **Returns:**
 - `pandas.DataFrame`: Results with summary columns:
@@ -440,12 +474,31 @@ results = cat.summarize(
     api_key=api_key
 )
 
+# With safety saves and row delay
+results = cat.summarize(
+    input_data=df['responses'],
+    description="Customer feedback",
+    api_key=api_key,
+    safety=True,
+    filename="results.csv",
+    row_delay=1.0,
+)
+
+# Batch mode (50% cost savings)
+results = cat.summarize(
+    input_data=df['responses'],
+    description="Customer feedback",
+    api_key=api_key,
+    batch_mode=True,
+    filename="batch_results.csv",
+)
+
 # Multi-model with synthesis
 results = cat.summarize(
     input_data=df['responses'],
     models=[
         ("gpt-4o", "openai", "sk-..."),
-        ("claude-sonnet-4-5-20250929", "anthropic", "sk-ant-..."),
+        ("claude-sonnet-4-20250514", "anthropic", "sk-ant-..."),
     ],
 )
 ```

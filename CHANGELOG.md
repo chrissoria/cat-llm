@@ -5,6 +5,40 @@ All notable changes to CatLLM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [2.10.0] - 2026-03-15
+
+### Added
+- **Robustness and batch features for `summarize()`**: Added `safety`, `max_retries`, `batch_retries`, `retry_delay`, `row_delay`, `fail_strategy`, `batch_mode`, `batch_poll_interval`, and `batch_timeout` parameters — achieving full parity with `classify()`.
+  - **Safety incremental saves**: `safety=True` saves partial results to CSV after each row. New `_save_partial_summarize_results()` helper in `text_functions_ensemble.py`.
+  - **Row delay**: `row_delay` pauses between processing rows for rate limit management.
+  - **Fail strategy**: `fail_strategy="strict"` blanks the entire row if any model fails; `"partial"` (default) keeps successful results.
+  - **Batch mode**: `batch_mode=True` submits summarization as async batch jobs for 50% cost savings. Supports single-model (`run_batch_summarize()`) and multi-model ensemble (`run_batch_ensemble_summarize()`) modes. PDF input raises an error (batch is text-only).
+- **`_parse_batch_results()` parse_mode parameter**: Added `parse_mode="json"|"text"` to `_parse_batch_results()` in `_batch.py`. When `"text"`, skips `extract_json()` and returns raw text — needed for summarization batch results.
+- **New batch summarization functions** in `_batch.py`: `_run_one_batch_summarize_job()`, `_run_one_sync_summarize_model()`, `run_batch_summarize()`, `run_batch_ensemble_summarize()`.
+- **Example notebooks**:
+  - `Summarizing Text and PDF Data.ipynb` — text/PDF summarization with all features
+  - `Classifying Text with Local Models (Ollama).ipynb` — local model classification
+  - `Ensemble Classification with Cloud and Local Models.ipynb` — ensemble patterns, temperature ensembles, parallel vs sequential execution, embedding tiebreaker
+  - `Exploring Categories with explore().ipynb` — raw category extraction and saturation analysis
+  - `Extracting Categories with extract().ipynb` — refined category extraction and classify workflow
+
+### Fixed
+- **`extract()` image/PDF dispatch bug**: `survey_question` was silently ignored for `input_type="image"` and `input_type="pdf"` — the code passed `description or ""` instead of the resolved survey question. Now correctly uses `resolved_survey_question` for all input types.
+
+### Removed
+- **Logprobs-based confidence scores** (`_confidence.py`): Removed the experimental logprobs feature due to unreliable behavior across providers. The module was never integrated into the public API.
+
+---
+
+## [2.9.0] - 2026-03-12
+
+### Added
+- **Embedding centroid tiebreaker** (`embedding_tiebreaker` parameter in `classify()`): Resolves true consensus ties (equal votes for 0 and 1) using embedding centroids built from unanimously-agreed rows. Compares tied texts to positive and negative centroids via cosine similarity. Adds `category_N_resolved_by` columns to output. Requires `pip install cat-llm[embeddings]`. Text input only, multi-model ensemble only, not supported in batch mode.
+  - New parameter: `min_centroid_size` (int, default 3) — minimum unanimous rows needed to build centroids.
+  - New internal module: `src/catllm/_tiebreaker.py`.
+
+---
+
 ## [2.8.2] - 2026-03-11
 
 ### Added
@@ -441,6 +475,17 @@ Most code will work without changes. Key differences:
 
 | Version | Date | Highlights |
 |---------|------|------------|
+| **2.10.0** | **2026-03-15** | **Summarize robustness & batch parity, 5 example notebooks, remove logprobs** |
+| **2.9.0** | **2026-03-12** | **Embedding centroid tiebreaker for ensemble consensus ties** |
+| **2.8.2** | **2026-03-11** | **Claude-code provider backend, redesigned /catllm:classify flow** |
+| **2.8.1** | **2026-03-10** | **Claude Code classification mode in /catllm:classify** |
+| **2.8.0** | **2026-03-10** | **Chunked category classification (categories_per_call)** |
+| **2.7.0** | **2026-03-07** | **Sequential ensemble, Ollama for explore/extract, single-label, batch ensemble, embeddings, json_formatter** |
+| **2.6.0** | **2026-03-05** | **Batch mode for classify (50% cost savings)** |
+| **2.5.0** | **2026-02-26** | **Auto-add Other category, category verbosity check, prompting warnings** |
+| **2.4.1** | **2026-02-19** | **Fix NaN row handling in classify** |
+| **2.4.0** | **2026-02-11** | **Schema validation fixes, failed model output as NA** |
+| **2.3.4** | **2026-02-11** | **HuggingFace thinking, OpenAI reasoning model detection** |
 | **2.3.3** | **2026-02-11** | **Fix thinking support in classify pipeline (was applied to wrong module)** |
 | **2.3.2** | **2026-02-10** | **Thinking fixes for Google, OpenAI, Anthropic (in _providers.py only)** |
 | **2.3.1** | **2026-02-10** | **Empirically optimized extraction defaults (divisions=12, iterations=8)** |
@@ -466,6 +511,17 @@ Most code will work without changes. Key differences:
 
 ---
 
+[2.10.0]: https://github.com/chrissoria/cat-llm/compare/v2.9.0...v2.10.0
+[2.9.0]: https://github.com/chrissoria/cat-llm/compare/v2.8.2...v2.9.0
+[2.8.2]: https://github.com/chrissoria/cat-llm/compare/v2.8.1...v2.8.2
+[2.8.1]: https://github.com/chrissoria/cat-llm/compare/v2.8.0...v2.8.1
+[2.8.0]: https://github.com/chrissoria/cat-llm/compare/v2.7.0...v2.8.0
+[2.7.0]: https://github.com/chrissoria/cat-llm/compare/v2.6.0...v2.7.0
+[2.6.0]: https://github.com/chrissoria/cat-llm/compare/v2.5.0...v2.6.0
+[2.5.0]: https://github.com/chrissoria/cat-llm/compare/v2.4.1...v2.5.0
+[2.4.1]: https://github.com/chrissoria/cat-llm/compare/v2.4.0...v2.4.1
+[2.4.0]: https://github.com/chrissoria/cat-llm/compare/v2.3.4...v2.4.0
+[2.3.4]: https://github.com/chrissoria/cat-llm/compare/v2.3.3...v2.3.4
 [2.3.3]: https://github.com/chrissoria/cat-llm/compare/v2.3.2...v2.3.3
 [2.3.2]: https://github.com/chrissoria/cat-llm/compare/v2.3.1...v2.3.2
 [2.3.1]: https://github.com/chrissoria/cat-llm/compare/v2.3.0...v2.3.1

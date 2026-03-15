@@ -3012,6 +3012,48 @@ multi_class_ensemble = classify_ensemble
 
 
 # =============================================================================
+# Summarization helpers
+# =============================================================================
+
+def _save_partial_summarize_results(all_results, model_configs, model_names, is_pdf_mode, filename, save_directory):
+    """Save partial summarization results to CSV for safety/incremental saves."""
+    rows = []
+    for entry in all_results:
+        item = entry["survey_input"]
+        if is_pdf_mode and isinstance(item, tuple) and len(item) == 3:
+            pdf_path, page_index, page_label = item
+            row = {
+                "survey_input": page_label,
+                "pdf_path": pdf_path,
+                "page_index": page_index,
+            }
+        else:
+            row = {"survey_input": item}
+
+        for model_name, json_str in entry["model_results"].items():
+            is_valid, summary_text = extract_summary_from_json(json_str)
+            if len(model_configs) > 1:
+                row[f"summary_{model_name}"] = summary_text if is_valid else ""
+            else:
+                row["summary"] = summary_text if is_valid else ""
+
+        if entry["errors"]:
+            row["processing_status"] = "error" if all(
+                not extract_summary_from_json(v)[1] for v in entry["model_results"].values()
+            ) else "partial"
+        else:
+            row["processing_status"] = "success"
+
+        rows.append(row)
+
+    df = pd.DataFrame(rows)
+    save_path = os.path.join(save_directory, filename) if save_directory else filename
+    if save_directory:
+        os.makedirs(save_directory, exist_ok=True)
+    df.to_csv(save_path, index=False)
+
+
+# =============================================================================
 # Summarization Ensemble Function
 # =============================================================================
 
@@ -3033,6 +3075,8 @@ def summarize_ensemble(
     max_retries: int = 5,
     batch_retries: int = 2,
     retry_delay: float = 1.0,
+    row_delay: float = 0.0,
+    fail_strategy: str = "partial",
     safety: bool = False,
     filename: str = None,
     save_directory: str = None,
@@ -3070,7 +3114,9 @@ def summarize_ensemble(
         max_retries: Max retries per API call
         batch_retries: Number of batch retry passes for failed items
         retry_delay: Delay between retries in seconds
-        safety: Save progress after each item
+        row_delay: Delay in seconds between processing each row (default 0.0)
+        fail_strategy: How to handle failures - "partial" (default) or "strict"
+        safety: Save progress after each item (requires filename)
         filename: Output CSV filename
         save_directory: Directory to save results
         progress_callback: Optional callback for progress updates
@@ -3113,6 +3159,10 @@ def summarize_ensemble(
         ...     ],
         ... )
     """
+    # Safety validation
+    if safety and filename is None:
+        raise TypeError("filename is required when using safety=True.")
+
     # Detect input type: Text vs PDF
     input_type = _detect_input_type(survey_input)
     is_pdf_mode = (input_type == 'pdf')
@@ -3352,9 +3402,17 @@ def summarize_ensemble(
         }
         all_results.append(result_entry)
 
+        # Safety: incremental save after each item
+        if safety:
+            _save_partial_summarize_results(all_results, model_configs, model_names, is_pdf_mode, filename, save_directory)
+
         # Progress callback
         if progress_callback:
             progress_callback(idx + 1, total_items)
+
+        # Row delay
+        if row_delay > 0 and idx < len(items_to_process) - 1:
+            time.sleep(row_delay)
 
     # Batch retries for failed pairs
     for retry_pass in range(batch_retries):
@@ -3387,6 +3445,10 @@ def summarize_ensemble(
         failed_pairs = still_failed
         print(f"  -> {retry_success}/{len(failed_pairs) + retry_success} pairs succeeded on retry")
 
+        # Safety: save after each batch retry pass
+        if safety:
+            _save_partial_summarize_results(all_results, model_configs, model_names, is_pdf_mode, filename, save_directory)
+
     # Build output DataFrame
     print("\nBuilding output DataFrame...")
 
@@ -3408,12 +3470,17 @@ def summarize_ensemble(
 
         # Extract summaries from each model
         summaries = {}
+        has_errors = bool(entry["errors"])
         for model_name, json_str in entry["model_results"].items():
             is_valid, summary_text = extract_summary_from_json(json_str)
             if is_valid:
                 summaries[model_name] = summary_text
             else:
                 summaries[model_name] = ""
+
+        # fail_strategy="strict": blank out results if any model failed
+        if fail_strategy == "strict" and has_errors:
+            summaries = {k: "" for k in summaries}
 
         # For multi-model: synthesize consensus
         if len(model_configs) > 1:
