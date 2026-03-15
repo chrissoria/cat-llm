@@ -55,10 +55,6 @@ def classify(
     step_back_prompt=False,
     context_prompt=False,
     thinking_budget=0,
-    # TODO: Auto-restructure examples — accept raw (response, labels) tuples or
-    # dicts and automatically format them into the JSON string format the prompt
-    # expects (e.g. "Response: '<text>' -> {"1": 0, "2": 1, ...}") so callers
-    # don't need to know the internal prompt structure.
     example1=None,
     example2=None,
     example3=None,
@@ -286,8 +282,6 @@ def classify(
                 )
 
     # Check category verbosity (1 API call)
-    # TODO: Offer to auto-generate verbose versions of bare categories using
-    # the LLM (description + examples) and let the user accept/edit them.
     if check_verbosity and categories and categories != "auto":
         # Extract API key and provider from first model entry
         first_entry = models[0]

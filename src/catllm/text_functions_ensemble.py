@@ -3080,9 +3080,13 @@ def summarize_ensemble(
     safety: bool = False,
     filename: str = None,
     save_directory: str = None,
+    thinking_budget: int = 0,
     progress_callback: Optional[Callable] = None,
     # Multi-model parameters
     models: list = None,
+    max_workers: int = None,
+    parallel: bool = None,
+    auto_download: bool = False,
 ) -> pd.DataFrame:
     """
     Summarize text or PDF inputs using LLMs with optional multi-model ensemble.
@@ -3116,11 +3120,15 @@ def summarize_ensemble(
         retry_delay: Delay between retries in seconds
         row_delay: Delay in seconds between processing each row (default 0.0)
         fail_strategy: How to handle failures - "partial" (default) or "strict"
+        thinking_budget: Token budget for extended thinking/reasoning (default 0)
         safety: Save progress after each item (requires filename)
         filename: Output CSV filename
         save_directory: Directory to save results
         progress_callback: Optional callback for progress updates
         models: For multi-model mode, list of (model, provider, api_key) tuples
+        max_workers: Maximum parallel workers (default: min(len(models), 8))
+        parallel: Controls concurrent vs sequential execution (None=auto-detect)
+        auto_download: Auto-download missing Ollama models (default False)
 
     Returns:
         DataFrame with columns:
@@ -3208,7 +3216,7 @@ def summarize_ensemble(
 
     # Validate and prepare model configs
     print(f"Validating {len(models)} model configuration(s)...")
-    model_configs = prepare_model_configs(models)
+    model_configs = prepare_model_configs(models, auto_download=auto_download)
 
     if not model_configs:
         raise ValueError("No valid model configurations found.")
@@ -3292,6 +3300,9 @@ def summarize_ensemble(
 
                 json_schema = json_schemas[model_name]
 
+                # Resolve thinking_budget for this provider
+                effective_thinking = thinking_budget if cfg["provider"] in ("google", "openai", "anthropic", "huggingface", "huggingface-together") else None
+
                 # Handle Google multimodal differently
                 if cfg["provider"] == "google" and pdf_mode != "text":
                     response = _call_google_multimodal(
@@ -3299,7 +3310,7 @@ def summarize_ensemble(
                         messages=messages,
                         json_schema=json_schema,
                         creativity=creativity,
-                        thinking_budget=0,
+                        thinking_budget=effective_thinking or 0,
                         max_retries=max_retries,
                     )
                 else:
@@ -3307,6 +3318,7 @@ def summarize_ensemble(
                         messages=messages,
                         json_schema=json_schema,
                         creativity=creativity,
+                        thinking_budget=effective_thinking,
                         max_retries=max_retries,
                     )
 
@@ -3349,10 +3361,14 @@ def summarize_ensemble(
 
                 json_schema = json_schemas[model_name]
 
+                # Resolve thinking_budget for this provider
+                effective_thinking = thinking_budget if cfg["provider"] in ("google", "openai", "anthropic", "huggingface", "huggingface-together") else None
+
                 response, _err = client.complete(
                     messages=messages,
                     json_schema=json_schema,
                     creativity=creativity,
+                    thinking_budget=effective_thinking,
                     max_retries=max_retries,
                 )
 
@@ -3369,8 +3385,13 @@ def summarize_ensemble(
     progress_desc = "Summarizing PDF pages" if is_pdf_mode else "Summarizing texts"
     print(f"\n{progress_desc}...")
 
+    # Auto-resolve parallel mode: sequential for all-local (Ollama), parallel otherwise
+    if parallel is None:
+        all_local = all(cfg["provider"] == "ollama" for cfg in model_configs)
+        parallel = not all_local
+
     # Determine number of workers
-    max_workers = min(len(model_configs), 4)
+    effective_workers = max_workers or min(len(model_configs), 8)
 
     # Progress tracking
     total_items = len(items_to_process)
@@ -3379,15 +3400,23 @@ def summarize_ensemble(
         item_results = {}
         item_errors = {}
 
-        # Process with each model (in parallel if multiple models)
-        with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            futures = {
-                executor.submit(summarize_single_item, item, idx, cfg): cfg["sanitized_name"]
-                for cfg in model_configs
-            }
+        # Process with each model (in parallel if enabled, sequential otherwise)
+        if parallel and len(model_configs) > 1:
+            with ThreadPoolExecutor(max_workers=effective_workers) as executor:
+                futures = {
+                    executor.submit(summarize_single_item, item, idx, cfg): cfg["sanitized_name"]
+                    for cfg in model_configs
+                }
 
-            for future in as_completed(futures):
-                model_name, json_result, error = future.result()
+                for future in as_completed(futures):
+                    model_name, json_result, error = future.result()
+                    item_results[model_name] = json_result
+                    if error and error != "skipped":
+                        item_errors[model_name] = error
+                        failed_pairs.append((idx, model_name))
+        else:
+            for cfg in model_configs:
+                model_name, json_result, error = summarize_single_item(item, idx, cfg)
                 item_results[model_name] = json_result
                 if error and error != "skipped":
                     item_errors[model_name] = error

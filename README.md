@@ -212,10 +212,18 @@ Supports both **single-model** and **multi-model ensemble** classification for i
 - `json_formatter` (bool, default=False): Use a local fine-tuned model to fix malformed JSON output before marking responses as failed. The formatter runs only when `extract_json()` produces invalid output—zero cost on the happy path. On first use, the model (~1GB) is downloaded from HuggingFace Hub. Requires `pip install cat-llm[formatter]`.
 - `add_other` (str or bool, default="prompt"): Controls auto-addition of an "Other" catch-all category. `"prompt"` asks the user, `True` adds silently, `False` never adds.
 - `check_verbosity` (bool, default=True): Check whether categories have descriptions and examples (1 API call). Set to False to skip.
+- `use_json_schema` (bool, default=True): Use structured JSON schema for LLM output. Set to False for providers that don't support it well.
+- `max_categories` (int, default=12): Maximum categories for auto-extraction when `categories="auto"`.
+- `categories_per_chunk` (int, default=10): Categories to extract per chunk during auto-extraction.
+- `divisions` (int, default=10): Number of chunks to divide data into during auto-extraction.
+- `research_question` (str, optional): Research context to guide classification.
 - `row_delay` (float, default=0.0): Seconds to wait between processing each row. Useful for rate-limited APIs (e.g., Google free tier at 5 RPM).
 - `max_retries` (int, default=5): Maximum number of retries for failed API calls per row.
 - `retry_delay` (float, default=1.0): Base delay in seconds between retries (uses exponential backoff).
 - `fail_strategy` (str, default="partial"): How to handle rows that fail after all retries. `"partial"` returns results with failed rows marked; `"strict"` raises an error on any failure.
+- `max_workers` (int, default=None): Maximum parallel workers for API calls. `None` auto-selects.
+- `auto_download` (bool, default=False): Automatically download missing Ollama models without prompting.
+- `progress_callback` (callable, optional): Callback function for progress updates. Called as `progress_callback(current_step, total_steps)`.
 - `pdf_dpi` (int, default=150): DPI resolution for rendering PDF pages as images. Higher values improve quality but increase processing time and cost.
 - `thinking_budget` (int, default=0): Token budget for model reasoning/thinking. Set to 0 to disable. Behavior varies by provider:
 
@@ -319,6 +327,8 @@ Unified category extraction function for text, image, and PDF inputs. Automatica
 - `filename` (str, optional): Output filename for CSV
 - `random_state` (int, optional): Random seed for reproducibility of chunk sampling
 - `chunk_delay` (float, default=0.0): Seconds to wait between processing each chunk. Useful for rate-limited APIs.
+- `auto_download` (bool, default=False): Automatically download missing Ollama models without prompting.
+- `progress_callback` (callable, optional): Callback function for progress updates.
 
 > **Default parameter rationale:** The defaults of `divisions=12` and `iterations=8` were determined through empirical analysis. We ran a 6x6 grid search over [1, 4, 8, 12, 16, 20] for both parameters, repeating each combination 10 times and measuring pairwise Jaro-Winkler consistency across runs. Consistency peaked at 12 divisions and 8 iterations, with values beyond this point offering no meaningful improvement.
 
@@ -358,6 +368,7 @@ This is useful for analyzing which categories are robust (consistently discovere
 - `input_data`: List of text responses or pandas Series
 - `api_key` (str): API key for the LLM service
 - `description` (str): The survey question or description of the data
+- `max_categories` (int, default=12): Maximum categories passed through to the extraction prompt.
 - `categories_per_chunk` (int, default=10): Categories to extract per chunk
 - `divisions` (int, default=12): Number of chunks to divide data into
 - `user_model` (str, default="gpt-4o"): Model to use
@@ -370,6 +381,8 @@ This is useful for analyzing which categories are robust (consistently discovere
 - `random_state` (int, optional): Random seed for reproducibility
 - `filename` (str, optional): Output CSV filename (one category per row)
 - `chunk_delay` (float, default=0.0): Seconds to wait between processing each chunk. Useful for rate-limited APIs.
+- `auto_download` (bool, default=False): Automatically download missing Ollama models without prompting.
+- `progress_callback` (callable, optional): Callback function for progress updates.
 
 **Returns:**
 - `list[str]`: Every category extracted from every chunk across every iteration. Length ≈ `iterations × divisions × categories_per_chunk`.
@@ -416,6 +429,7 @@ Supports both **single-model** and **multi-model ensemble** summarization. In mu
 - `user_model` (str, default="gpt-4o"): Model to use
 - `model_source` (str, default="auto"): Provider - "auto", "openai", "anthropic", "google", etc.
 - `creativity` (float, optional): Temperature setting (0.0-1.0). `None` uses model default.
+- `thinking_budget` (int, default=0): Token budget for extended thinking/reasoning. See `classify()` for provider-specific behavior.
 - `chain_of_thought` (bool, default=True): Enable step-by-step reasoning. On by default for summarization.
 - `context_prompt` (bool, default=False): Add expert analyst role to the prompt.
 - `step_back_prompt` (bool, default=False): Ask the model to consider broader context before summarizing.
@@ -425,7 +439,12 @@ Supports both **single-model** and **multi-model ensemble** summarization. In mu
   - "both": Send both image and extracted text (most comprehensive)
 - `filename` (str): Output CSV filename
 - `save_directory` (str): Directory to save results
+- `pdf_dpi` (int, default=150): DPI resolution for rendering PDF pages as images.
 - `models` (list): For multi-model mode, list of `(model, provider, api_key)` tuples
+- `parallel` (bool, default=None): Controls concurrent vs sequential model execution. `None` auto-detects (sequential for Ollama, parallel for cloud).
+- `max_workers` (int, default=None): Maximum parallel workers for API calls.
+- `auto_download` (bool, default=False): Automatically download missing Ollama models without prompting.
+- `progress_callback` (callable, optional): Callback function for progress updates.
 - `safety` (bool, default=False): If True, saves progress to CSV after each item. Requires `filename`.
 - `max_retries` (int, default=5): Max retries per API call.
 - `batch_retries` (int, default=2): Number of batch retry passes for failed items.

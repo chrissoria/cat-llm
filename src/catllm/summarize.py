@@ -36,7 +36,9 @@ def summarize(
     user_model: str = "gpt-4o",
     model_source: str = "auto",
     mode: str = "image",
+    pdf_dpi: int = 150,
     creativity: float = None,
+    thinking_budget: int = 0,
     chain_of_thought: bool = True,
     context_prompt: bool = False,
     step_back_prompt: bool = False,
@@ -44,6 +46,9 @@ def summarize(
     save_directory: str = None,
     progress_callback=None,
     models: list = None,
+    max_workers: int = None,
+    parallel: bool = None,
+    auto_download: bool = False,
     # Robustness parameters
     safety: bool = False,
     max_retries: int = 5,
@@ -78,7 +83,11 @@ def summarize(
             - "image" (default): Render pages as images
             - "text": Extract text only
             - "both": Send both image and extracted text
+        pdf_dpi (int): DPI for PDF page rendering (default 150)
         creativity (float): Temperature setting (None uses provider default)
+        thinking_budget (int): Token budget for extended thinking/reasoning.
+            Provider-specific: Google (thinkingConfig), OpenAI (reasoning_effort),
+            Anthropic (extended thinking). Default 0 (disabled).
         chain_of_thought (bool): Enable step-by-step reasoning (default True)
         context_prompt (bool): Add expert context prefix
         step_back_prompt (bool): Enable step-back prompting
@@ -86,6 +95,12 @@ def summarize(
         save_directory (str): Directory to save results
         progress_callback: Optional callback for progress updates
         models (list): For multi-model mode, list of (model, provider, api_key) tuples
+        max_workers (int): Max parallel workers for API calls. None = auto.
+        parallel (bool): Controls concurrent vs sequential model execution.
+            - None (default): auto-detect (sequential for all-Ollama, parallel otherwise)
+            - True: force parallel execution
+            - False: force sequential execution
+        auto_download (bool): Auto-download missing Ollama models. Default False.
         safety (bool): If True, saves progress after each item. Requires filename.
         max_retries (int): Max retries per API call. Default 5.
         batch_retries (int): Max retries for batch-level failures. Default 2.
@@ -253,7 +268,9 @@ def summarize(
         user_model=user_model,
         model_source=model_source,
         pdf_mode=pdf_mode,
+        pdf_dpi=pdf_dpi,
         creativity=creativity,
+        thinking_budget=thinking_budget,
         chain_of_thought=chain_of_thought,
         context_prompt=context_prompt,
         step_back_prompt=step_back_prompt,
@@ -267,4 +284,7 @@ def summarize(
         save_directory=save_directory,
         progress_callback=progress_callback,
         models=models,
+        max_workers=max_workers,
+        parallel=parallel,
+        auto_download=auto_download,
     )

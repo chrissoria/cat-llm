@@ -199,10 +199,6 @@ def has_other_category(
 
 # =============================================================================
 # Category Verbosity Check
-# TODO: Add a function that auto-generates verbose category definitions
-# (description + examples) from bare labels, letting the user review/edit.
-# TODO: Consider caching verbosity results per category list to avoid
-# redundant API calls across repeated classify() invocations.
 # =============================================================================
 
 def check_category_verbosity(
