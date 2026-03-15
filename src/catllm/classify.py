@@ -97,6 +97,8 @@ def classify(
     json_formatter: bool = False,
     embeddings: bool = False,
     category_descriptions: dict = None,
+    embedding_tiebreaker: bool = False,
+    min_centroid_size: int = 3,
     multi_label: bool = True,
     categories_per_call: int = None,
 ):
@@ -202,6 +204,15 @@ def classify(
             to richer text descriptions for embedding similarity. E.g.,
             {"Past_Support": "References to help received from family"}.
             Only used when embeddings=True.
+        embedding_tiebreaker (bool): If True, use embedding centroids to
+            resolve true ties in ensemble consensus. Builds per-category
+            centroids from unanimously-agreed rows and compares tied texts
+            to those centroids. Only applies to multi-model ensemble mode
+            with text input. Requires: pip install cat-llm[embeddings].
+            Default False.
+        min_centroid_size (int): Minimum number of unanimously-agreed rows
+            needed to build a centroid for a category. Categories with fewer
+            confident rows fall back to vote-based consensus. Default 3.
         multi_label (bool): If True (default), allow multiple categories per
             input (multi-label classification). If False, the prompt instructs
             the model to pick the single best category (single-label mode).
@@ -477,6 +488,48 @@ def classify(
             _embedding_state = None
 
     # =========================================================================
+    # Embedding tiebreaker setup (opt-in)
+    # =========================================================================
+    _embedding_tiebreaker_state = None
+    if embedding_tiebreaker:
+        # Guards: skip for single-model, PDF/image, batch mode
+        is_single_model = models is not None and len(models) == 1
+        if is_single_model:
+            print("[CatLLM] Embedding tiebreaker skipped — not applicable for single-model mode.")
+        else:
+            # Check input type
+            from .text_functions_ensemble import _detect_input_type
+            _tb_detected_type = _detect_input_type(input_data)
+            if _tb_detected_type in ("pdf", "image"):
+                print(
+                    f"[CatLLM] Embedding tiebreaker skipped — not supported for {_tb_detected_type} input."
+                )
+            else:
+                try:
+                    from ._embeddings import ensure_embeddings_available, load_embedding_model
+
+                    # Reuse embedding model if embeddings=True already loaded it
+                    if _embedding_state is not None:
+                        tb_model = _embedding_state["model"]
+                    elif ensure_embeddings_available():
+                        tb_model = load_embedding_model()
+                    else:
+                        tb_model = None
+                        print("[CatLLM] Continuing without embedding tiebreaker.")
+
+                    if tb_model is not None:
+                        # Resolve threshold to numeric for the tiebreaker
+                        from .text_functions_ensemble import _resolve_consensus_threshold
+                        _embedding_tiebreaker_state = {
+                            "model": tb_model,
+                            "threshold": _resolve_consensus_threshold(consensus_threshold),
+                            "min_centroid_size": min_centroid_size,
+                        }
+                except ImportError as e:
+                    print(f"[CatLLM] Embedding tiebreaker unavailable: {e}")
+                    print("[CatLLM] Continuing without embedding tiebreaker.")
+
+    # =========================================================================
     # Batch mode — bypass classify_ensemble entirely
     # =========================================================================
     if batch_mode:
@@ -491,6 +544,14 @@ def classify(
                 f"batch_mode=True only supports text input, but detected input type is '{detected_type}'. "
                 "Set batch_mode=False for PDF/image classification."
             )
+
+        # Warn if embedding_tiebreaker was provided (not supported in batch mode yet)
+        if _embedding_tiebreaker_state is not None:
+            print(
+                "[CatLLM] WARNING: embedding_tiebreaker is not supported in batch_mode. "
+                "The tiebreaker will be skipped for this run."
+            )
+            _embedding_tiebreaker_state = None
 
         # Warn if progress_callback was provided (incompatible with batch)
         if progress_callback is not None:
@@ -622,5 +683,6 @@ def classify(
         formatter_state=_formatter_state,
         multi_label=multi_label,
         categories_per_call=categories_per_call,
+        embedding_tiebreaker_state=_embedding_tiebreaker_state,
     )
     return _maybe_apply_embeddings(result)

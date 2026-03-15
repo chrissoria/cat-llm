@@ -1764,6 +1764,8 @@ def classify_ensemble(
     multi_label: bool = True,
     # Chunked classification
     categories_per_call: int = None,
+    # Embedding tiebreaker
+    embedding_tiebreaker_state: dict = None,
 ):
     """
     Multi-class classification with support for text AND PDF inputs, single or multiple LLM models.
@@ -2775,6 +2777,18 @@ Categorize survey responses {cove_categorize}:
                 print(f"    {model_name}: {count} failed rows")
         print()
 
+    # Embedding tiebreaker: resolve true ties using centroids
+    if embedding_tiebreaker_state is not None and len(model_configs) > 1:
+        from ._tiebreaker import resolve_ties_with_centroids
+
+        resolve_ties_with_centroids(
+            all_results,
+            categories,
+            embedding_tiebreaker_state["model"],
+            embedding_tiebreaker_state["threshold"],
+            embedding_tiebreaker_state.get("min_centroid_size", 3),
+        )
+
     # Build output DataFrames
     print("Building output DataFrames...")
     return build_output_dataframes(
@@ -2833,6 +2847,16 @@ def build_output_dataframes(
     for i in range(1, num_categories + 1):
         combined_data[f"category_{i}_consensus"] = []
         combined_data[f"category_{i}_agreement"] = []
+
+    # Check if tiebreaker data exists
+    has_tiebreaker = any(
+        "tiebreaker_resolved" in result.get("aggregated", {})
+        for result in all_results
+        if not result.get("skipped")
+    )
+    if has_tiebreaker:
+        for i in range(1, num_categories + 1):
+            combined_data[f"category_{i}_resolved_by"] = []
 
     # Populate data
     for result in all_results:
@@ -2896,11 +2920,20 @@ def build_output_dataframes(
 
             combined_data[f"category_{i}_agreement"].append(agreement_val)
 
+        # Resolved-by metadata (tiebreaker)
+        if has_tiebreaker:
+            tiebreaker_data = aggregated.get("tiebreaker_resolved", {})
+            for i in range(1, num_categories + 1):
+                key = str(i)
+                combined_data[f"category_{i}_resolved_by"].append(
+                    tiebreaker_data.get(key, "")
+                )
+
     # Create combined DataFrame
     combined_df = pd.DataFrame(combined_data)
 
     # Convert category columns to Int64 (nullable integer)
-    cat_cols = [c for c in combined_df.columns if c.startswith("category_") and not c.endswith("_agreement")]
+    cat_cols = [c for c in combined_df.columns if c.startswith("category_") and not c.endswith("_agreement") and not c.endswith("_resolved_by")]
     for col in cat_cols:
         combined_df[col] = pd.to_numeric(combined_df[col], errors='coerce').astype('Int64')
 
@@ -2912,7 +2945,7 @@ def build_output_dataframes(
     # Add image columns if present
     if has_image_metadata:
         consensus_cols += ["image_path"]
-    consensus_cols += [c for c in combined_df.columns if "_consensus" in c or "_agreement" in c]
+    consensus_cols += [c for c in combined_df.columns if "_consensus" in c or "_agreement" in c or "_resolved_by" in c]
     consensus_df = combined_df[consensus_cols].copy()
 
     # Create per-model DataFrames
@@ -2937,8 +2970,8 @@ def build_output_dataframes(
         model_name = model_names[0]
         simplified_df = combined_df.copy()
 
-        # Remove consensus/agreement/failed_models columns (redundant for single model)
-        cols_to_drop = [c for c in simplified_df.columns if "_consensus" in c or "_agreement" in c]
+        # Remove consensus/agreement/resolved_by/failed_models columns (redundant for single model)
+        cols_to_drop = [c for c in simplified_df.columns if "_consensus" in c or "_agreement" in c or "_resolved_by" in c]
         if "failed_models" in simplified_df.columns:
             cols_to_drop.append("failed_models")
         simplified_df = simplified_df.drop(columns=cols_to_drop)
