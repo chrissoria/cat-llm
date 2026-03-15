@@ -32,20 +32,6 @@ examples/test_output/
 # Test data
 examples/test_data/
 
-# Development/test scripts (not needed by end users)
-examples/test_all_providers_classify.py
-examples/test_all_providers_image_classify.py
-examples/test_all_providers_pdf.py
-examples/test_haiku_temp_ensemble.py
-examples/test_multi_class_local.ipynb
-examples/test_multi_class_local.py
-examples/test_web_research_local.ipynb
-examples/test_cerad_local.ipynb
-examples/test_image_multi_class_local.ipynb
-examples/test_pdf_multi_class_local.ipynb
-examples/test_pdf_multi_class_local.py
-examples/test_classify_local.py
-
 # Diagram generation scripts
 images/generate_classify_diagram.py
 
