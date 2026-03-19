@@ -232,7 +232,7 @@ def _catllm_do_classify():
             col_to_cat[cc] = base
     else:
         # Single model: columns are positional (category_1, category_2, ...)
-        meta = {"survey_input", "processing_status", "failed_models",
+        meta = {"input_data", "processing_status", "failed_models",
                 "pdf_path", "page_index", "image_path"}
         cat_cols = [c for c in cols if c not in meta
                     and not c.endswith("_agreement")]

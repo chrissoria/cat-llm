@@ -183,7 +183,7 @@ def _catllm_do_summarize():
     if summ_col not in result_df.columns:
         # Fall back to first non-input column
         for col in result_df.columns:
-            if col not in ("survey_input", "processing_status", "failed_models",
+            if col not in ("input_data", "processing_status", "failed_models",
                            "pdf_path", "page_index"):
                 summ_col = col
                 break

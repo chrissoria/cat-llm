@@ -5,38 +5,37 @@ build-backend = "hatchling.build"
 [project]
 name = "cat-llm"
 dynamic = ["version"]
-description = 'A tool for categorizing text data and images using LLMs and vision models'
+description = "The CatLLM ecosystem — LLM-powered classification for text, images, and PDFs across domains."
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.9"
 license = "GPL-3.0-or-later"
-keywords = ["llm","categorizer","survey data", "image classification", "structured output", "text classification"]
+keywords = ["llm", "classification", "text analysis", "survey", "social media", "academic", "cognitive assessment"]
 authors = [
   { name = "Chris Soria", email = "chrissoria@berkeley.edu" },
 ]
 classifiers = [
   "Development Status :: 4 - Beta",
   "Programming Language :: Python",
-  "Programming Language :: Python :: 3.8",
   "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Programming Language :: Python :: 3.12",
   "Programming Language :: Python :: Implementation :: CPython",
-  "Programming Language :: Python :: Implementation :: PyPy",
 ]
 dependencies = [
-  "pandas",
-  "tqdm",
-  "requests",
-  "openai",
-  "anthropic",
-  "perplexityai"
+  "cat-stack>=0.1.0",
+  "cat-survey>=0.1.0",
+  "cat-vader>=1.13.0",
+  "cat-ademic>=0.1.1",
+  "cat-cog>=0.1.0",
+  "cat-pol>=0.1.0",
+  "cat-web>=0.1.0",
 ]
 
 [project.optional-dependencies]
-pdf = ["PyMuPDF>=1.23.0"]
-formatter = ["torch>=2.0.0", "transformers>=4.40.0", "accelerate>=0.27.0"]
-embeddings = ["sentence-transformers>=2.2.0"]
+pdf = ["cat-stack[pdf]"]
+embeddings = ["cat-stack[embeddings]"]
+formatter = ["cat-stack[formatter]"]
 
 [project.urls]
 Documentation = "https://github.com/chrissoria/cat-llm#readme"
@@ -46,41 +45,10 @@ Source = "https://github.com/chrissoria/cat-llm"
 [tool.hatch.version]
 path = "src/catllm/__about__.py"
 
-[tool.hatch.envs.types]
-extra-dependencies = [
-  "mypy>=1.0.0",
-]
-[tool.hatch.envs.types.scripts]
-check = "mypy --install-types --non-interactive {args:src/catllm tests}"
-
 [tool.hatch.build.targets.wheel]
-packages = ["src/catllm"]  # Keep the src/ prefix for wheel
-include = [
-    "src/catllm/**/*.py",
-    "src/catllm/images/*",
-]
+packages = ["src/catllm"]
 
 [tool.hatch.build.targets.sdist]
 include = [
     "src/catllm/**/*.py",
-    "src/catllm/images/*",
-]
-
-[tool.coverage.run]
-source_pkgs = ["catllm", "tests"]
-branch = true
-parallel = true
-omit = [
-  "src/catllm/__about__.py",
-]
-
-[tool.coverage.paths]
-catllm = ["src/catllm", "*/cat-llm/src/catllm"]
-tests = ["tests", "*/cat-llm/tests"]
-
-[tool.coverage.report]
-exclude_lines = [
-  "no cov",
-  "if __name__ == .__main__.:",
-  "if TYPE_CHECKING:",
 ]

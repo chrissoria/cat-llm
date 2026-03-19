@@ -2,7 +2,7 @@
 
 # cat-llm
 
-CatLLM: A Reproducible LLM Pipeline for Coding Open-Ended Survey Responses
+CatLLM: A Reproducible LLM Pipeline for Classifying Open-Ended Text Across Domains
 
 [![PyPI - Version](https://img.shields.io/pypi/v/cat-llm.svg)](https://pypi.org/project/cat-llm)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/cat-llm.svg)](https://pypi.org/project/cat-llm)
@@ -11,19 +11,50 @@ CatLLM: A Reproducible LLM Pipeline for Coding Open-Ended Survey Responses
 
 ## The Problem
 
-If you work with open-ended survey data, you know the pain: hundreds or thousands of free-text responses that need to be categorized before you can do any quantitative analysis. The traditional approach is manual coding—either doing it yourself or hiring research assistants. It's slow, expensive, and doesn't scale.
+If you work with open-ended text data — survey responses, social media posts, academic papers, policy documents — you know the pain: hundreds or thousands of free-text entries that need to be categorized before you can do any quantitative analysis. The traditional approach is manual coding — either doing it yourself or hiring research assistants. It's slow, expensive, and doesn't scale.
 
 ## The Solution
 
-CatLLM is a Python package designed specifically for survey research that uses LLMs to automate the categorization of open-ended responses. It handles both:
+CatLLM is an ecosystem of Python packages that use LLMs to automate the categorization of open-ended text across domains. It handles:
 
 - **Category Assignment**: Classify responses into your predefined categories (multi-label supported)
 - **Category Extraction**: Automatically discover and extract categories from your data when you don't have a predefined scheme
 - **Category Exploration**: Analyze category stability and saturation through repeated raw extraction
+- **Summarization**: Generate concise summaries of text or PDF documents
 
 With leading models like GPT-5, Gemini, and Qwen 3, CatLLM achieves **98% accuracy compared to human consensus** on classification tasks.
 
 **Try the web app:** [https://huggingface.co/spaces/CatLLM/survey-classifier](https://huggingface.co/spaces/CatLLM/survey-classifier)
+
+-----
+
+## Ecosystem
+
+`cat-llm` is a **meta-package** (like tidyverse for R) that installs the full family of domain-specific classification packages. Each package can also be installed individually for a lighter footprint.
+
+| Package | Domain | Install | Import |
+|---------|--------|---------|--------|
+| **cat-llm** | Everything (meta-package) | `pip install cat-llm` | `import catllm` |
+| **cat-stack** | General-purpose base | `pip install cat-stack` | `import cat_stack` |
+| **cat-survey** | Survey responses | `pip install cat-survey` | `import cat_survey` |
+| **cat-vader** | Social media | `pip install cat-vader` | `import catvader` |
+| **cat-ademic** | Academic papers | `pip install cat-ademic` | `import catademic` |
+| **cat-pol** | Political text | `pip install cat-pol` | `import cat_pol` |
+| **cat-cog** | Cognitive assessment | `pip install cat-cog` | `import cat_cog` |
+| **cat-web** | Web content | `pip install cat-web` | `import catweb` |
+
+**Dependency graph:**
+
+```
+cat-stack                           ← general base + shared infra
+    ↑
+cat-survey  cat-vader  cat-ademic   ← domain packages (each depends on cat-stack)
+cat-pol     cat-cog    cat-web
+    ↑           ↑          ↑
+             cat-llm                ← meta-package (depends on all of the above)
+```
+
+Every domain package exposes the same four core functions — `classify()`, `extract()`, `explore()`, `summarize()` — with domain-specific parameters added on top. Learn once, apply anywhere.
 
 -----
 
@@ -32,6 +63,7 @@ With leading models like GPT-5, Gemini, and Qwen 3, CatLLM achieves **98% accura
 - [Installation](#installation)
   - [R Package](#r-package)
 - [Quick Start](#quick-start)
+- [Domain Packages](#domain-packages)
 - [Best Practices for Classification](#best-practices-for-classification)
 - [Configuration](#configuration)
 - [Supported Models](#supported-models)
@@ -51,30 +83,28 @@ With leading models like GPT-5, Gemini, and Qwen 3, CatLLM achieves **98% accura
 
 ## Installation
 
+Install the full ecosystem:
 ```console
 pip install cat-llm
 ```
 
-For PDF support:
+Or install only the domain you need (lighter footprint):
 ```console
-pip install cat-llm[pdf]
+pip install cat-survey    # survey responses — pulls in cat-stack automatically
+pip install cat-vader     # social media
+pip install cat-ademic    # academic papers
+pip install cat-pol       # political text
+pip install cat-cog       # cognitive assessment (CERAD scoring)
+pip install cat-web       # web content classification
+pip install cat-stack     # general-purpose base only, no domain framing
 ```
 
-For embedding-based similarity scores:
+Optional extras (apply to both `cat-llm` and `cat-stack`):
 ```console
-pip install cat-llm[embeddings]
+pip install cat-llm[pdf]          # PDF support
+pip install cat-llm[embeddings]   # Embedding-based similarity scores
+pip install cat-llm[formatter]    # Local JSON formatter fallback
 ```
-
-For the local JSON formatter fallback:
-```console
-pip install cat-llm[formatter]
-```
-
-> **Note:** Web data collection (`build_dataset_from_web`) has been moved to its own package due to its different focus. Install it separately:
-> ```console
-> pip install llm-web-research
-> ```
-> See [llm-web-research](https://github.com/chrissoria/llm-web-research) for details.
 
 ### R Package
 
@@ -94,17 +124,235 @@ All three core functions — `classify()`, `extract()`, and `explore()` — are 
 
 ## Quick Start
 
-**This package is designed for building datasets at scale**, not one-off queries. While you can categorize individual responses, its primary purpose is batch processing entire survey columns or image collections into structured research datasets.
-
-Simply provide your survey responses and category list—the package handles the rest and outputs clean data ready for statistical analysis. It works with single or multiple categories per response and automatically skips missing data to save API costs.
-
-Also supports **image and PDF classification** using the same methodology: extract features, count objects, identify categories, or determine presence of elements based on your research questions.
+**This package is designed for building datasets at scale**, not one-off queries. While you can categorize individual responses, its primary purpose is batch processing entire text columns, image collections, or PDF corpora into structured research datasets.
 
 All outputs are formatted for immediate statistical analysis and can be exported directly to CSV.
 
 *Not to be confused with CAT-LLM for Chinese article‐style transfer ([Tao et al. 2024](https://arxiv.org/html/2401.05707v1)).*
 
+### Option A — via meta-package
 
+Install `cat-llm` and access every domain through a single import:
+
+```python
+import catllm
+
+# Domain-neutral classification (from cat-stack)
+results = catllm.classify(
+    input_data=df['responses'],
+    categories=["Positive", "Negative", "Neutral"],
+    description="Customer feedback",
+    api_key=api_key
+)
+
+# Survey classification — adds survey-tuned prompts
+results = catllm.classify_survey(
+    input_data=df['responses'],
+    categories=["Job change", "Family reasons", "Cost of living"],
+    survey_question="Why did you move to a new city?",
+    api_key=api_key
+)
+
+# Academic paper classification — adds journal/field context
+results = catllm.classify_academic(
+    input_data=["paper1.pdf", "paper2.pdf"],
+    categories=["Empirical", "Theoretical", "Review"],
+    journal_issn="0894-4393",
+    api_key=api_key
+)
+
+# Social media classification — adds platform context
+results = catllm.classify_social(
+    input_data=df['posts'],
+    categories=["Misinformation", "Opinion", "News"],
+    platform="Reddit",
+    api_key=api_key
+)
+
+# Political text classification — adds policy framing
+results = catllm.classify_policy(
+    input_data=df['speeches'],
+    categories=["Economy", "Healthcare", "Immigration"],
+    document_context="Congressional floor speeches",
+    api_key=api_key
+)
+
+# Cognitive assessment scoring
+scores = catllm.cerad_drawn_score(
+    shape="diamond",
+    image_input=df['drawing_paths'],
+    api_key=api_key
+)
+```
+
+### Option B — direct install (lighter footprint)
+
+Install only the domain package you need:
+
+```python
+# pip install cat-ademic
+import catademic as cat
+
+results = cat.classify(
+    input_data=["paper1.pdf", "paper2.pdf"],
+    categories=["Empirical", "Theoretical", "Review"],
+    journal_issn="0894-4393",
+    api_key=api_key
+)
+```
+
+```python
+# pip install cat-vader
+import catvader as cat
+
+results = cat.classify(
+    input_data=df['posts'],
+    categories=["Misinformation", "Opinion", "News"],
+    platform="Reddit",
+    api_key=api_key
+)
+```
+
+```python
+# pip install cat-stack (general-purpose, no domain framing)
+import cat_stack as cat
+
+results = cat.classify(
+    input_data=df['text_column'],
+    categories=["Category A", "Category B", "Category C"],
+    description="My text data",
+    api_key=api_key
+)
+```
+
+-----
+
+## Domain Packages
+
+Each domain package wraps `cat-stack`'s classification engine with domain-tuned prompts and domain-specific parameters. The base `classify()`, `extract()`, `explore()`, and `summarize()` parameters all work — domain packages add parameters on top.
+
+### cat-survey — Survey Responses
+
+The survey package provides survey-tuned prompts, few-shot example support, and R/Stata wrappers. This was the original heart of `cat-llm`.
+
+- Key parameter: `survey_question=` — provides the survey question respondents were asked
+- Supports few-shot examples (`example1`–`example6`) for guiding classification
+- R and Stata wrappers available for multi-language workflows
+
+```python
+import cat_survey as cat
+
+results = cat.classify(
+    input_data=df['responses'],
+    categories=["Job change", "Family reasons", "Cost of living"],
+    survey_question="Why did you move to a new city?",
+    example1="I got a new job in Seattle|Job change",
+    api_key=api_key
+)
+```
+
+### cat-vader — Social Media
+
+Platform-aware classification with social media metadata injection (platform, handle, hashtags, engagement metrics).
+
+- Key parameter: `platform=` — injects platform-specific context (Reddit, Twitter/X, forums)
+- Handles nested comment structures and threaded conversations
+
+```python
+import catvader as cat
+
+results = cat.classify(
+    input_data=df['posts'],
+    categories=["Misinformation", "Opinion", "News sharing"],
+    platform="Reddit",
+    api_key=api_key
+)
+```
+
+### cat-ademic — Academic Papers
+
+PDF-first classification for academic and long-form documents, with OpenAlex integration for fetching papers by journal, field, or topic.
+
+- Key parameter: `journal_issn=` — adds journal context for more accurate classification
+- `find_journal()` helper for looking up journal metadata via OpenAlex
+- Per-page and whole-document classification modes
+
+```python
+import catademic as cat
+
+results = cat.classify(
+    input_data=["paper1.pdf", "paper2.pdf"],
+    categories=["Empirical", "Theoretical", "Review"],
+    journal_issn="0894-4393",
+    api_key=api_key
+)
+```
+
+### cat-pol — Political Text
+
+Domain-tuned prompts for political science categories — manifestos, speeches, legislation, news.
+
+- Key parameter: `document_context=` — frames the political text type for better classification
+- Designed for policy area coding, ideology classification, actor identification
+
+```python
+import cat_pol
+
+results = cat_pol.classify(
+    input_data=df['speeches'],
+    categories=["Economy", "Healthcare", "Immigration", "Defense"],
+    document_context="State of the Union addresses",
+    api_key=api_key
+)
+```
+
+### cat-cog — Cognitive Assessment
+
+LLM-powered evaluation of drawn images for neuropsychological testing, including CERAD scoring.
+
+- Key function: `cerad_drawn_score()` — scores drawings of circles, diamonds, rectangles, and cubes
+- Designed for clinical research and cognitive screening studies
+
+```python
+import cat_cog
+
+scores = cat_cog.cerad_drawn_score(
+    shape="diamond",
+    image_input=df['drawing_paths'],
+    api_key=api_key
+)
+```
+
+### cat-web — Web Content
+
+Web content classification and fact-checking. Thin wrapper on cat-stack for URL-based classification.
+
+```python
+import catweb as cat
+
+results = cat.classify(
+    input_data=df['urls'],
+    categories=["News", "Blog", "E-commerce", "Academic"],
+    api_key=api_key
+)
+```
+
+### cat-stack — General-Purpose Base
+
+The domain-neutral classification engine that all other packages build on. Use this directly when your text doesn't fit neatly into a specific domain.
+
+```python
+import cat_stack as cat
+
+results = cat.classify(
+    input_data=df['text_column'],
+    categories=["Category A", "Category B", "Category C"],
+    description="My text data",
+    api_key=api_key
+)
+```
+
+-----
 
 ## Best Practices for Classification
 
@@ -169,6 +417,8 @@ Most providers require adding a payment method and purchasing credits. Store you
 
 
 ## API Reference
+
+> **Note:** The functions documented below are the **domain-neutral** versions from `cat-stack`. They work with any text, image, or PDF data without domain-specific framing. Domain packages (`cat-survey`, `cat-vader`, `cat-ademic`, etc.) accept all the same parameters and add domain-specific ones on top (e.g., `survey_question=`, `platform=`, `journal_issn=`). See [Domain Packages](#domain-packages) for details.
 
 ### `classify()`
 

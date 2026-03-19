@@ -18,6 +18,7 @@ pip install cat-llm
 #   cat-survey    survey response classification & extraction
 #   cat-vader     social media (Reddit, Twitter/X, forums)
 #   cat-ademic    academic papers, PDFs, citations
+#   cat-search    web content classification & fact-checking
 #   cat-pol       political text (manifestos, speeches, legislation)
 #   cat-cog       cognitive assessment & visual scoring (CERAD, drawing tests)
 ```
@@ -28,7 +29,7 @@ pip install cat-llm
 cat-stack                                      ← general base + shared infra (like rlang)
                                                     independently useful; no domain assumptions
     ↑
-cat-survey  cat-vader  cat-ademic  cat-pol  cat-cog  ← domain packages, each depends on cat-stack
+cat-survey  cat-vader  cat-ademic  cat-search  cat-pol  cat-cog  ← domain packages, each depends on cat-stack
     ↑           ↑          ↑          ↑        ↑
                          cat-llm                     ← pure meta-package, keeps the brand
                                                       (depends on all domain packages + cat-stack)
@@ -38,6 +39,7 @@ Every package is independently installable:
 ```
 pip install cat-stack    # general classification engine, no domain framing
 pip install cat-survey   # survey-specific, pulls in cat-stack automatically
+pip install cat-search   # web classification + fact-checking, pulls in cat-stack
 pip install cat-cog      # cognitive assessment, pulls in cat-stack automatically
 pip install cat-llm      # everything
 ```
@@ -53,7 +55,7 @@ infrastructure layer AND independently useful for researchers who just have a te
 column and don't fit neatly into a domain.
 
 **Scope:**
-- `classify()`, `extract()`, `explore()`, `summarize()` for text, image, and PDF input
+- `classify()`, `extract()`, `explore()`, `summarize()` for text, image, PDF, and URL input
 - `UnifiedLLMClient`, `PROVIDER_CONFIG`, `detect_provider` — all provider infrastructure
 - `_batch.py` — async batch API logic
 - Image and PDF processing: `image_functions.py`, `pdf_functions.py`
@@ -61,8 +63,7 @@ column and don't fit neatly into a domain.
 - No survey framing, no social media framing, no cognitive-test assumptions
 - Namespace: `import cat_stack`
 
-**Status:** Does not exist yet. Code lives inside `cat-llm/src/catllm/` and needs to be
-extracted. This is the prerequisite for all other phases.
+**Status:** ✅ Created. Repo at `cat-stack/`, namespace `cat_stack`, v0.1.0. PyPI pending.
 
 ---
 
@@ -77,8 +78,7 @@ own package. Keeps the paper methodology, R/Stata wrappers, and survey-specific 
 - R and Stata wrappers
 - HuggingFace Space: `CatLLM/survey-classifier`
 
-**Status:** Code exists inside `cat-llm`. Needs to be extracted into its own repo
-and published, then wired back into `cat-llm` as a dependency.
+**Status:** ✅ Created as thin wrapper on cat-stack, v0.1.0. PyPI pending.
 
 ---
 
@@ -91,8 +91,7 @@ Social media text classification with platform-aware context injection.
 - Reddit thread classification (nested comment structure)
 - HuggingFace Space: `CatLLM/CatVader`
 
-**Status:** Separate repo and PyPI package. Needs to be updated to depend on
-`cat-stack` instead of carrying its own provider copy, then wired into `cat-llm`.
+**Status:** ✅ Refactored to thin wrapper on cat-stack, v1.13.0. PyPI pending.
 
 ---
 
@@ -106,8 +105,7 @@ Classification and extraction for academic and long-form documents.
 - Citation and abstract extraction
 - Designed for systematic reviews, coding codebooks, content analysis of papers
 
-**Status:** Separate repo and PyPI package (v0.1.1). Has OpenAlex integration. Needs to
-be updated to depend on `cat-stack` instead of carrying its own provider copy.
+**Status:** ✅ Refactored to thin wrapper on cat-stack, v0.1.1. PyPI pending.
 
 ---
 
@@ -122,8 +120,28 @@ for neuropsychological testing.
 - Designed for clinical research, cognitive screening studies
 - Builds on cat-stack's image classification infrastructure
 
-**Status:** Code exists inside `cat-llm` (`CERAD_functions.py`, `circle_classifier.py`).
-Needs to be extracted into its own repo and published.
+**Status:** ✅ Created as thin wrapper on cat-stack, v0.1.0. Fine-tuned vision models
+deferred to v0.2.0. PyPI pending.
+
+---
+
+### `cat-search` *(refactor from llm-web-research)*
+Web content classification and precision fact-checking. Thin wrapper on cat-stack
+for URL-based classification, plus standalone web research functions.
+
+**Scope:**
+- `classify()` / `extract()` / `explore()` — thin wrappers that pass URLs to
+  cat-stack (which handles fetching via its URL input type). Adds web-specific
+  context injection (source domain, fetch timestamp, etc.)
+- `web_research()` — fast single-step web search + LLM extraction (existing, kept as-is)
+- `precise_web_research()` — Funnel of Verification (FoVe) pipeline for high-accuracy
+  fact-checking with confidence thresholds (existing, kept as-is)
+- `tavily_search()` — Tavily API integration (existing, kept as-is)
+- Designed for dataset building at scale
+
+**Status:** Existing code in `llm-web-research` repo. Needs to be renamed to `cat-search`,
+add `cat-stack` as dependency, and add thin wrapper `classify()` / `extract()` / `explore()`
+that leverage cat-stack's URL input type.
 
 ---
 
@@ -183,11 +201,15 @@ cat-ademic/                     ← academic/PDF (depends on cat-stack)
 cat-cog/                        ← cognitive assessment (depends on cat-stack)
 │   CERAD scoring, circle classifier, drawing test evaluation
 
+cat-search/                     ← web research (depends on cat-stack)
+│   classify(), extract(), explore() via URL input type
+│   web_research(), precise_web_research(), tavily_search()
+
 cat-pol/                        ← political text (depends on cat-stack)
 │   classify(), extract() with political science prompt library
 
 cat-llm/                        ← pure meta-package, keeps the brand
-│   depends on: cat-stack, cat-survey, cat-vader, cat-ademic, cat-cog, cat-pol
+│   depends on: cat-stack, cat-survey, cat-vader, cat-ademic, cat-search, cat-cog, cat-pol
 │   src/catllm/__init__.py re-exports all sub-package public APIs
 │   No domain logic lives here
 ```
@@ -212,21 +234,30 @@ cat-llm/                        ← pure meta-package, keeps the brand
 - Created `cat-cog` with CERAD scoring as thin wrapper on `cat-stack` (v0.1.0).
 - Created `cat-survey` with survey framing as thin wrapper on `cat-stack` (v0.1.0).
 
-### Phase 4 — Slim `cat-llm` to meta-package *(next)*
-- Replace `src/catllm/` source with a thin `__init__.py` that re-exports
-  domain-suffixed aliases from all sub-packages (e.g. `classify_survey`,
-  `classify_social`, `classify_academic`, `cerad_drawn_score`).
+### Phase 4 — Slim `cat-llm` to meta-package ✅
+- Replaced `src/catllm/` source with thin `__init__.py` re-exporting
+  domain-suffixed aliases (classify_survey, classify_social, classify_academic,
+  cerad_drawn_score) from all sub-packages.
 - Neutral `classify()` / `extract()` / `explore()` / `summarize()` point to `cat-stack`.
-- Update `pyproject.toml` to list sub-packages as dependencies, remove direct
-  source dependencies (httpx, tiktoken, etc.).
-- Remove duplicated source files (all logic now lives in sub-packages).
+- Updated `pyproject.toml` to list sub-packages as dependencies.
+- Removed all duplicated source files (all logic lives in sub-packages).
 - Cut CERAD from cat-llm (now in cat-cog).
-- Version bump `cat-llm`; update README.
-- Publish all packages to PyPI.
+- Version bumped cat-llm to v3.0.0.
+- Publish all packages to PyPI (pending).
 
-### Phase 5 — `cat-pol` (when ready)
-- Develop domain-tuned prompt library for political science.
-- Publish and wire into `cat-llm` as `classify_political()` / `extract_political()`.
+### Phase 5 — URL input type + `cat-search` + `cat-pol` *(next)*
+- Add URL as a new input type to `cat-stack` (alongside text, image, PDF).
+  - `_web_fetch.py` — fetch HTML from URLs, extract text content.
+  - URL auto-detection in input type router (detect `http://` / `https://` strings).
+  - All domain packages inherit URL support for free via `**kwargs` passthrough.
+- Rename `llm-web-research` → `cat-search`. Add `cat-stack` dependency.
+  - Keep existing functions (`web_research`, `precise_web_research`, `tavily_search`).
+  - Add thin wrapper `classify()` / `extract()` / `explore()` that leverage
+    cat-stack's URL input type with web-specific context injection.
+  - Wire into `cat-llm` as `classify_web()` / `extract_web()` / `web_research()` /
+    `precise_web_research()`.
+- Wire `cat-pol` into `cat-llm` as `classify_political()` / `extract_political()`.
+- Publish and update all packages.
 
 ---
 
@@ -274,6 +305,18 @@ catllm.classify_academic(...)
 catllm.extract_academic(...)
 catllm.explore_academic(...)
 
+# Web research (from cat-search)
+catllm.classify_web(...)
+catllm.extract_web(...)
+catllm.explore_web(...)
+catllm.web_research(...)
+catllm.precise_web_research(...)
+
+# Political text (from cat-pol)
+catllm.classify_political(...)
+catllm.extract_political(...)
+catllm.explore_political(...)
+
 # Cognitive assessment (from cat-cog)
 catllm.cerad_drawn_score(...)
 ```
@@ -291,6 +334,13 @@ from catvader import explore as explore_social
 from catademic import classify as classify_academic
 from catademic import extract as extract_academic
 from catademic import explore as explore_academic
+from cat_search import classify as classify_web
+from cat_search import extract as extract_web
+from cat_search import explore as explore_web
+from cat_search import web_research, precise_web_research
+from cat_pol import classify as classify_political
+from cat_pol import extract as extract_political
+from cat_pol import explore as explore_political
 from cat_cog import cerad_drawn_score
 ```
 
@@ -311,7 +361,9 @@ dependencies = [
     "cat-survey~=1.0",
     "cat-vader~=1.0",
     "cat-ademic~=1.0",
+    "cat-search~=1.0",
     "cat-cog~=1.0",
+    "cat-pol~=1.0",
 ]
 ```
 

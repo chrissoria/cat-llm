@@ -5,6 +5,20 @@ All notable changes to CatLLM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.0.0] - 2026-03-19
+
+### Changed
+- **cat-llm is now a meta-package**: All domain logic has been moved to sub-packages (`cat-stack`, `cat-survey`, `cat-vader`, `cat-ademic`, `cat-pol`, `cat-cog`, `cat-web`). Installing `cat-llm` pulls in the full ecosystem. Individual packages can be installed separately for a lighter footprint.
+- **README rewritten for ecosystem**: Updated README to describe the multi-package architecture, added ecosystem table and dependency diagram, dual Quick Start (meta-package vs direct install), and a new Domain Packages section with examples for each package.
+- **Broadened framing**: Package description updated from survey-only to multi-domain (survey, social media, academic, political, cognitive assessment, web content).
+- **`__init__.py` is now purely aliases**: Re-exports domain-suffixed functions (`classify_survey`, `classify_social`, `classify_academic`, `classify_policy`, `classify_web`, `cerad_drawn_score`) from sub-packages, plus domain-neutral `classify`/`extract`/`explore`/`summarize` from `cat-stack`.
+- **`pyproject.toml` dependencies**: Replaced all direct Python dependencies with sub-package dependencies (`cat-stack>=0.1.0`, `cat-survey>=0.1.0`, etc.). Optional extras (`[pdf]`, `[embeddings]`, `[formatter]`) now delegate to `cat-stack`.
+
+### Removed
+- All source modules removed from `src/catllm/` (logic now lives in sub-packages). Only `__init__.py` and `__about__.py` remain.
+
+---
+
 ## [2.10.0] - 2026-03-15
 
 ### Added
