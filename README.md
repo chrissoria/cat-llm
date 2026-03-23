@@ -20,7 +20,8 @@ CatLLM is an ecosystem of Python packages that use LLMs to automate the categori
 - **Category Assignment**: Classify responses into your predefined categories (multi-label supported)
 - **Category Extraction**: Automatically discover and extract categories from your data when you don't have a predefined scheme
 - **Category Exploration**: Analyze category stability and saturation through repeated raw extraction
-- **Summarization**: Generate concise summaries of text or PDF documents
+- **Summarization**: Generate concise summaries of text or PDF documents (paragraph, bullets, one-liner, structured, or full report)
+- **Prompt Optimization**: Automatically tune classification prompts using user feedback for higher accuracy
 
 With leading models like GPT-5, Gemini, and Qwen 3, CatLLM achieves **98% accuracy compared to human consensus** on classification tasks.
 
@@ -54,7 +55,7 @@ cat-pol     cat-cog    cat-web
              cat-llm                ← meta-package (depends on all of the above)
 ```
 
-Every domain package exposes the same four core functions — `classify()`, `extract()`, `explore()`, `summarize()` — with domain-specific parameters added on top. Learn once, apply anywhere.
+Every domain package exposes the same five core functions — `classify()`, `extract()`, `explore()`, `summarize()`, `prompt_tune()` — with domain-specific parameters added on top. Learn once, apply anywhere.
 
 -----
 
@@ -69,6 +70,7 @@ Every domain package exposes the same four core functions — `classify()`, `ext
 - [Supported Models](#supported-models)
 - [API Reference](#api-reference)
   - [classify()](#classify) - Unified function for text, image, and PDF (auto-detects input type)
+  - [prompt_tune()](#prompt_tune) - Automatic prompt optimization via user feedback
   - [extract()](#extract) - Unified function for category extraction
   - [explore()](#explore) - Raw category extraction for saturation analysis
   - [summarize()](#summarize) - Unified function for text and PDF summarization
@@ -169,12 +171,22 @@ results = catllm.classify_social(
     api_key=api_key
 )
 
-# Political text classification — adds policy framing
+# Political text classification — with built-in data sources
 results = catllm.classify_policy(
-    input_data=df['speeches'],
-    categories=["Economy", "Healthcare", "Immigration"],
-    document_context="Congressional floor speeches",
+    source="city_san_diego",
+    categories=["Housing", "Public Safety", "Finance"],
+    doc_type="ordinance",
+    since="2022-01-01",
+    n=50,
     api_key=api_key
+)
+
+# Prompt optimization — correct a small sample, get optimized prompts
+result = catllm.prompt_tune(
+    input_data=df['responses'],
+    categories=["Positive", "Negative", "Neutral"],
+    api_key=api_key,
+    sample_size=15,
 )
 
 # Cognitive assessment scoring
@@ -229,7 +241,7 @@ results = cat.classify(
 
 ## Domain Packages
 
-Each domain package wraps `cat-stack`'s classification engine with domain-tuned prompts and domain-specific parameters. The base `classify()`, `extract()`, `explore()`, and `summarize()` parameters all work — domain packages add parameters on top.
+Each domain package wraps `cat-stack`'s classification engine with domain-tuned prompts and domain-specific parameters. The base `classify()`, `extract()`, `explore()`, `summarize()`, and `prompt_tune()` parameters all work — domain packages add parameters on top.
 
 ### cat-survey — Survey Responses
 
@@ -290,20 +302,45 @@ results = cat.classify(
 
 ### cat-pol — Political Text
 
-Domain-tuned prompts for political science categories — manifestos, speeches, legislation, news.
+Domain-tuned prompts for political science — legislation, speeches, executive orders, social media. Includes **15 built-in political data sources** on HuggingFace (municipal ordinances from 11 California cities, federal public laws, executive orders, presidential speeches, and Trump's Truth Social posts).
 
+- Key parameter: `source=` — pull data directly from built-in political datasets
 - Key parameter: `document_context=` — frames the political text type for better classification
-- Designed for policy area coding, ideology classification, actor identification
+- Built-in sources updated weekly via automated scrapers
+- Designed for policy area coding, ideology classification, cross-city comparison
 
 ```python
-import cat_pol
+import cat_pol as pol
 
-results = cat_pol.classify(
-    input_data=df['speeches'],
-    categories=["Economy", "Healthcare", "Immigration", "Defense"],
-    document_context="State of the Union addresses",
-    api_key=api_key
+# Classify ordinances from a built-in source
+results = pol.classify(
+    source="city_san_diego",
+    categories=["Housing", "Public Safety", "Infrastructure", "Finance"],
+    doc_type="ordinance",
+    since="2022-01-01",
+    n=50,
+    api_key=api_key,
 )
+
+# Optimize prompts with user feedback
+result = pol.prompt_tune(
+    source="city_san_diego",
+    categories=["Pro-Business", "Pro-Regulation", "Tax Increase"],
+    api_key=api_key,
+    sample_size=15,
+)
+
+# Summarize executive orders as bullet points
+summaries = pol.summarize(
+    source="federal_executive_orders",
+    n=10,
+    format="bullets",
+    api_key=api_key,
+)
+
+# Fetch raw data (no API key needed)
+df = pol.fetch_source("social_trump_truth", since="2024-01-01")
+pol.list_sources()  # see all 15 sources
 ```
 
 ### cat-cog — Cognitive Assessment
