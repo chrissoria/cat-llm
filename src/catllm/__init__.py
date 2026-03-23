@@ -108,6 +108,9 @@ from cat_pol import classify as classify_policy
 from cat_pol import extract as extract_policy
 from cat_pol import explore as explore_policy
 from cat_pol import summarize as summarize_policy
+from cat_pol import prompt_tune as prompt_tune_policy
+from cat_pol import list_sources as list_policy_sources
+from cat_pol import fetch_source as fetch_policy_source
 
 # =============================================================================
 # Web content (cat-web)
@@ -150,6 +153,9 @@ __all__ = [
     "extract_policy",
     "explore_policy",
     "summarize_policy",
+    "prompt_tune_policy",
+    "list_policy_sources",
+    "fetch_policy_source",
     # Web content (cat-web)
     "classify_web",
     "extract_web",
