@@ -1,12 +1,8 @@
 streamlit>=1.32.0
-cat-llm[pdf]>=2.3.4
-mistralai
-pydantic==2.10.6
-huggingface_hub<0.27.0
+cat-llm[pdf]>=3.0.0
 pandas
 openpyxl
 requests
-regex
 reportlab
 matplotlib
 Pillow

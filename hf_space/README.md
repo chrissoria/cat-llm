@@ -1,5 +1,5 @@
 ---
-title: CatLLM - Survey Response Classifier
+title: CatLLM
 emoji: 🐱
 colorFrom: yellow
 colorTo: yellow
@@ -8,36 +8,30 @@ sdk_version: "1.32.0"
 app_file: app.py
 pinned: false
 license: mit
-short_description: Classify survey responses using LLMs
+short_description: LLM-powered classification, extraction, and summarization
 ---
 
-# CatLLM - Survey Response Classifier
+# CatLLM
 
-A web interface for the [catllm](https://github.com/chrissoria/cat-llm) Python package. Classify survey responses into custom categories using various LLM providers.
+A unified web interface for the [catllm](https://github.com/chrissoria/cat-llm) ecosystem. Classify, extract categories, explore, and summarize text across 7 domains using LLMs.
+
+## Domains
+
+- **General** — domain-neutral text analysis
+- **Survey** — survey response classification
+- **Social Media** — Threads, Bluesky, Reddit, Mastodon, YouTube
+- **Academic** — OpenAlex paper analysis
+- **Policy** — legislative/policy document classification
+- **Web** — URL content classification
+- **Cognitive** — CERAD drawing scoring
 
 ## How to Use
 
-1. **Upload Your Data**: Upload a CSV or Excel file containing survey responses
-2. **Select Column**: Choose the column containing the text responses to classify
-3. **Define Categories**: Enter your classification categories (e.g., "Positive", "Negative", "Neutral")
-4. **Choose a Model**: Select your preferred LLM (free models available!)
-5. **Click Classify**: View and download results with category assignments
+1. Select a **Domain** and **Function** in the sidebar
+2. Upload data or use the example dataset
+3. Configure options and select a model
+4. Click the action button and view results
 
-## Supported Models
+## Links
 
-| Provider | Models |
-|----------|--------|
-| **OpenAI** | gpt-4o, gpt-4o-mini |
-| **Anthropic** | claude-3-5-sonnet, claude-3-haiku |
-| **Google** | gemini-1.5-pro, gemini-1.5-flash |
-| **Mistral** | mistral-large-latest |
-
-## Privacy
-
-Your API key is **never stored**. It is only used for the current classification request and is not logged or saved.
-
-## Learn More
-
-- [catllm on PyPI](https://pypi.org/project/cat-llm/)
-- [GitHub Repository](https://github.com/chrissoria/cat-llm)
-- [Documentation](https://github.com/chrissoria/cat-llm#readme)
+- [PyPI](https://pypi.org/project/cat-llm/) | [GitHub](https://github.com/chrissoria/cat-llm)
