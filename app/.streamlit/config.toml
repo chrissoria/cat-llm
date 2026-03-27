@@ -1,0 +1,15 @@
+[theme]
+# Primary accent color - orange from the cat logo
+primaryColor = "#E8A33C"
+
+# Background color - warm off-white
+backgroundColor = "#FEFCF9"
+
+# Secondary background - warm beige for cards/sidebars
+secondaryBackgroundColor = "#F5EFE6"
+
+# Text color - dark charcoal
+textColor = "#1A1A1A"
+
+# Font - clean sans-serif
+font = "sans serif"
