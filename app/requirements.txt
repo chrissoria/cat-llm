@@ -3,6 +3,7 @@ cat-llm[pdf]>=3.0.0
 pandas
 openpyxl
 requests
+regex
 reportlab
 matplotlib
 Pillow
