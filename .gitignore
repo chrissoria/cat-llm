@@ -21,6 +21,12 @@ __pycache__/
 # Build artifacts
 dist/
 
+# Desktop app build artifacts
+app/desktop/build/
+app/desktop/dist/
+*.dmg
+*.spec.bak
+
 # Playwright MCP
 .playwright-mcp/
 

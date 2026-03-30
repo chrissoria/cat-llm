@@ -83,6 +83,8 @@ def render(domain_id, domain_panel):
                 "code": code,
                 "task_type": "extract",
             }
+            from components.history import save_run
+            save_run(st.session_state.results, st.session_state.get("settings"))
             st.success(f"Extracted {len(categories)} categories in {processing_time:.1f}s")
             st.rerun()
 

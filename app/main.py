@@ -30,6 +30,8 @@ from components.results_display import (
 )
 from session import init_session_state, reset_all
 from domains.registry import get_domain_ids, get_domain_label, get_functions
+from components.settings import show_settings_dialog, init_settings
+from components.history import render_history_sidebar
 
 # Domain panel modules
 from domains import general, survey, social_media, academic, policy, web, cognitive
@@ -66,6 +68,7 @@ FUNCTION_PAGES = {
 # ---------------------------------------------------------------------------
 inject_css()
 init_session_state()
+init_settings()
 
 # ---------------------------------------------------------------------------
 # Sidebar: domain selector, function selector, API keys
@@ -118,9 +121,20 @@ st.sidebar.markdown("---")
 render_api_keys_sidebar()
 
 st.sidebar.markdown("---")
-if st.sidebar.button("Reset All", use_container_width=True):
-    reset_all()
-    st.rerun()
+
+# History section
+with st.sidebar.expander("History"):
+    render_history_sidebar()
+
+st.sidebar.markdown("---")
+col_reset, col_settings = st.sidebar.columns(2)
+with col_reset:
+    if st.button("Reset All", use_container_width=True):
+        reset_all()
+        st.rerun()
+with col_settings:
+    if st.button("\u2699 Settings", use_container_width=True):
+        show_settings_dialog()
 
 
 # ---------------------------------------------------------------------------

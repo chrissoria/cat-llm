@@ -1,0 +1,21 @@
+test_that("domain-suffixed aliases are callable", {
+  expect_true(is.function(classify_survey))
+  expect_true(is.function(extract_survey))
+  expect_true(is.function(explore_survey))
+  expect_true(is.function(classify_social))
+  expect_true(is.function(extract_social))
+  expect_true(is.function(explore_social))
+  expect_true(is.function(classify_academic))
+  expect_true(is.function(extract_academic))
+  expect_true(is.function(explore_academic))
+  expect_true(is.function(summarize_academic))
+  expect_true(is.function(cerad_drawn_score))
+})
+
+test_that("base functions are re-exported from cat.stack", {
+  expect_true(is.function(classify))
+  expect_true(is.function(extract))
+  expect_true(is.function(explore))
+  expect_true(is.function(summarize))
+  expect_true(is.function(install_cat_stack))
+})

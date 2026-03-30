@@ -97,7 +97,7 @@ end
 python:
 def _catllm_do_summarize():
     from sfi import Data, Macro, SFIToolkit
-    import catllm
+    import cat_stack
 
     # --- read Stata parameters ---
     varname    = Macro.getLocal("_catllm_var")
@@ -172,9 +172,9 @@ def _catllm_do_summarize():
         kwargs["models"] = models
 
     try:
-        result_df = catllm.summarize(**kwargs)
+        result_df = cat_stack.summarize(**kwargs)
     except Exception as e:
-        SFIToolkit.errprintln("{err}catllm.summarize() failed: " + str(e))
+        SFIToolkit.errprintln("{err}cat_stack.summarize() failed: " + str(e))
         return
 
     # --- write summaries back to Stata ---

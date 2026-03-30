@@ -4,6 +4,7 @@ Session state initialization and reset helpers.
 
 import streamlit as st
 from config import MAX_CATEGORIES, INITIAL_CATEGORIES
+from components.key_store import load_keys
 
 
 def init_session_state():
@@ -12,8 +13,8 @@ def init_session_state():
         # Navigation
         "domain": "general",
         "function": "classify",
-        # API keys (persisted across domain/function switches)
-        "api_keys": {},
+        # API keys — loaded from disk on first run
+        "api_keys": load_keys(),
         # Classify state
         "categories": [""] * MAX_CATEGORIES,
         "category_count": INITIAL_CATEGORIES,

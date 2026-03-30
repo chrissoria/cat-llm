@@ -1,0 +1,17 @@
+Package: cat.stack
+Title: General-Purpose LLM Text Classification Engine
+Version: 0.1.0
+Authors@R: person("Chris", "Soria", role = c("aut", "cre"),
+                  email = "chris.soria@nyu.edu")
+Description: R interface to the Python cat-stack package. General-purpose text,
+    image, and PDF classification using LLMs with no domain assumptions. The base
+    engine for the CatLLM ecosystem.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Imports:
+    reticulate (>= 1.28)
+Suggests:
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3

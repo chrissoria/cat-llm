@@ -114,7 +114,7 @@ end
 python:
 def _catllm_do_classify():
     from sfi import Data, Macro, SFIToolkit
-    import catllm
+    import cat_stack
 
     # --- read Stata parameters ---
     varname    = Macro.getLocal("_catllm_var")
@@ -211,9 +211,9 @@ def _catllm_do_classify():
         kwargs["creativity"] = creativity
 
     try:
-        result_df = catllm.classify(**kwargs)
+        result_df = cat_stack.classify(**kwargs)
     except Exception as e:
-        SFIToolkit.errprintln("{err}catllm.classify() failed: " + str(e))
+        SFIToolkit.errprintln("{err}cat_stack.classify() failed: " + str(e))
         return
 
     # --- determine classification per row ---

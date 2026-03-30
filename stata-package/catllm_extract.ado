@@ -80,7 +80,7 @@ end
 python:
 def _catllm_do_extract():
     from sfi import Data, Macro, Scalar, Matrix, SFIToolkit
-    import catllm
+    import cat_stack
 
     # --- read Stata parameters ---
     varname   = Macro.getLocal("_catllm_var")
@@ -142,9 +142,9 @@ def _catllm_do_extract():
         kwargs["random_state"] = random_state
 
     try:
-        result = catllm.extract(**kwargs)
+        result = cat_stack.extract(**kwargs)
     except Exception as e:
-        SFIToolkit.errprintln("{err}catllm.extract() failed: " + str(e))
+        SFIToolkit.errprintln("{err}cat_stack.extract() failed: " + str(e))
         return
 
     # --- store results in r() ---

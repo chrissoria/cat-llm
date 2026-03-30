@@ -1,0 +1,29 @@
+Package: cat.llm
+Title: LLM-Powered Text Classification for Social Science
+Version: 3.0.0
+Authors@R: person("Chris", "Soria", email = "chrissoria@berkeley.edu",
+                  role = c("aut", "cre"))
+Description: Meta-package that installs and loads the full CatLLM ecosystem
+    for LLM-powered text classification across domains. Installing cat.llm
+    brings in cat.stack (general-purpose engine), cat.survey (survey responses),
+    cat.vader (social media), cat.ademic (academic papers), and cat.cog
+    (cognitive assessment). Like the tidyverse, you can install the full
+    ecosystem or individual domain packages.
+License: MIT + file LICENSE
+URL: https://github.com/chrissoria/cat-llm
+BugReports: https://github.com/chrissoria/cat-llm/issues
+Depends:
+    R (>= 3.5.0)
+Imports:
+    cat.stack (>= 0.1.0),
+    cat.survey (>= 0.1.0),
+    cat.vader (>= 0.1.0),
+    cat.ademic (>= 0.1.0),
+    cat.cog (>= 0.1.0),
+    reticulate (>= 1.28)
+Suggests:
+    testthat (>= 3.0.0)
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Config/testthat/edition: 3

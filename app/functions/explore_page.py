@@ -73,6 +73,8 @@ print(result)
 """,
                 "task_type": "explore",
             }
+            from components.history import save_run
+            save_run(st.session_state.results, st.session_state.get("settings"))
             st.success(f"Discovered {len(categories) if isinstance(categories, list) else 0} categories")
             st.rerun()
 

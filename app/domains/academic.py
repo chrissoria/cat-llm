@@ -54,7 +54,9 @@ def render_domain_panel(function_id):
             paper_limit = st.number_input("Max Papers", min_value=1, max_value=500, value=50, key="acad_limit")
             result["domain_kwargs"]["paper_limit"] = paper_limit
         with col2:
-            polite_email = st.text_input("Email (polite pool)", placeholder="your@email.com", key="acad_email")
+            saved_email = st.session_state.get("api_keys", {}).get("openalex_email", "")
+            polite_email = st.text_input("Email (polite pool)", value=saved_email,
+                                         placeholder="your@email.com", key="acad_email")
             if polite_email:
                 result["domain_kwargs"]["polite_email"] = polite_email
 

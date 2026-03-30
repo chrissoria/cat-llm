@@ -1,0 +1,285 @@
+*! catllm_classify_academic -- Classify academic text using catademic
+*! Version 1.0.0
+
+program define catllm_classify_academic, rclass
+    version 16
+
+    syntax varname(string) [if] [in],                           ///
+        Categories(string asis) APIkey(string)                  ///
+        [                                                       ///
+            GENerate(name)                                      ///
+            Model(string)                                       ///
+            Provider(string)                                    ///
+            Description(string asis)                            ///
+            JOURNALname(string)                                 ///
+            JOURNALissn(string)                                 ///
+            JOURNALfield(string)                                ///
+            TOPICname(string asis)                               ///
+            PAPERlimit(integer 50)                              ///
+            POLITEemail(string)                                 ///
+            DATEfrom(string)                                    ///
+            DATEto(string)                                      ///
+            CREativity(real -1)                                 ///
+            CHAINofthought                                      ///
+            THINKing(integer 0)                                 ///
+            STEPback                                            ///
+            CONText                                             ///
+            CONSensus(string)                                   ///
+            MODels(string asis)                                 ///
+            MAXWorkers(integer 0)                               ///
+            MAXRetries(integer 5)                               ///
+            RETRYdelay(real 1.0)                                ///
+            ROWdelay(real 0.0)                                  ///
+            FAILstrategy(string)                                ///
+            NOJSONschema                                        ///
+            REPLACE                                             ///
+        ]
+
+    * ----- defaults -----
+    if "`generate'" == "" local generate "_catllm_class"
+    if "`model'"    == "" local model "gpt-4o"
+    if "`provider'" == "" local provider "auto"
+    if "`consensus'" == "" local consensus "majority"
+    if "`failstrategy'" == "" local failstrategy "partial"
+
+    * ----- validate -----
+    confirm string variable `varlist'
+
+    if "`replace'" == "" {
+        confirm new variable `generate'
+    }
+    else {
+        capture confirm variable `generate'
+        if !_rc {
+            drop `generate'
+        }
+    }
+
+    * ----- mark sample -----
+    marksample touse, strok
+    quietly count if `touse'
+    local nobs = r(N)
+    if `nobs' == 0 {
+        di as error "no observations"
+        exit 2000
+    }
+    di as txt "Classifying `nobs' observations (academic domain)..."
+
+    * ----- create result variable -----
+    quietly gen str244 `generate' = ""
+
+    * ----- store parameters for Python -----
+    local _catllm_var      "`varlist'"
+    local _catllm_gen      "`generate'"
+    local _catllm_cats     `"`categories'"'
+    local _catllm_key      "`apikey'"
+    local _catllm_model    "`model'"
+    local _catllm_provider "`provider'"
+    local _catllm_desc     `"`description'"'
+    local _catllm_jname    "`journalname'"
+    local _catllm_jissn    "`journalissn'"
+    local _catllm_jfield   "`journalfield'"
+    local _catllm_topic    `"`topicname'"'
+    local _catllm_plimit   "`paperlimit'"
+    local _catllm_polite   "`politeemail'"
+    local _catllm_datefrom "`datefrom'"
+    local _catllm_dateto   "`dateto'"
+    local _catllm_touse    "`touse'"
+    local _catllm_nobs     "`nobs'"
+    local _catllm_cot      "`chainofthought'"
+    local _catllm_think    "`thinking'"
+    local _catllm_stepback "`stepback'"
+    local _catllm_context  "`context'"
+    local _catllm_consensus "`consensus'"
+    local _catllm_models   `"`models'"'
+    local _catllm_workers  "`maxworkers'"
+    local _catllm_retries  "`maxretries'"
+    local _catllm_rdelay   "`retrydelay'"
+    local _catllm_rowdelay "`rowdelay'"
+    local _catllm_failstr  "`failstrategy'"
+    local _catllm_nojson   "`nojsonschema'"
+
+    if `creativity' == -1 {
+        local _catllm_creat ""
+    }
+    else {
+        local _catllm_creat "`creativity'"
+    }
+
+    * ----- call Python -----
+    python: _catllm_do_classify_academic()
+
+    * ----- return results -----
+    quietly count if `generate' != "" & `touse'
+    local classified = r(N)
+    return scalar N = `nobs'
+    return scalar N_classified = `classified'
+    return local variable "`generate'"
+    return local model "`model'"
+    return local provider "`provider'"
+
+    di as txt ""
+    di as txt "Classification complete (academic domain)."
+    di as txt "  Observations: `nobs'"
+    di as txt "  Classified:   `classified'"
+    di as txt "  Variable:     {res}`generate'"
+end
+
+python:
+def _catllm_do_classify_academic():
+    from sfi import Data, Macro, SFIToolkit
+    import catademic
+
+    # --- read Stata parameters ---
+    varname    = Macro.getLocal("_catllm_var")
+    genname    = Macro.getLocal("_catllm_gen")
+    cats_str   = Macro.getLocal("_catllm_cats")
+    api_key    = Macro.getLocal("_catllm_key")
+    model      = Macro.getLocal("_catllm_model")
+    provider   = Macro.getLocal("_catllm_provider")
+    desc       = Macro.getLocal("_catllm_desc")
+    j_name     = Macro.getLocal("_catllm_jname")
+    j_issn     = Macro.getLocal("_catllm_jissn")
+    j_field    = Macro.getLocal("_catllm_jfield")
+    topic      = Macro.getLocal("_catllm_topic")
+    p_limit    = int(Macro.getLocal("_catllm_plimit") or "50")
+    polite     = Macro.getLocal("_catllm_polite")
+    date_from  = Macro.getLocal("_catllm_datefrom")
+    date_to    = Macro.getLocal("_catllm_dateto")
+    touse      = Macro.getLocal("_catllm_touse")
+    cot        = Macro.getLocal("_catllm_cot") != ""
+    think      = int(Macro.getLocal("_catllm_think") or "0")
+    stepback   = Macro.getLocal("_catllm_stepback") != ""
+    context    = Macro.getLocal("_catllm_context") != ""
+    consensus  = Macro.getLocal("_catllm_consensus")
+    models_str = Macro.getLocal("_catllm_models")
+    workers    = int(Macro.getLocal("_catllm_workers") or "0")
+    retries    = int(Macro.getLocal("_catllm_retries") or "5")
+    rdelay     = float(Macro.getLocal("_catllm_rdelay") or "1.0")
+    rowdelay   = float(Macro.getLocal("_catllm_rowdelay") or "0.0")
+    failstr    = Macro.getLocal("_catllm_failstr")
+    nojson     = Macro.getLocal("_catllm_nojson") != ""
+    creat_str  = Macro.getLocal("_catllm_creat")
+
+    creativity = float(creat_str) if creat_str else None
+
+    # --- parse categories ---
+    import shlex
+    try:
+        categories = shlex.split(cats_str)
+    except ValueError:
+        categories = cats_str.split()
+
+    # --- parse models for ensemble ---
+    models = None
+    if models_str:
+        models = []
+        for entry in models_str.split(";"):
+            parts = entry.strip().split()
+            if len(parts) >= 3:
+                models.append(tuple(parts[:3]))
+            elif len(parts) == 2:
+                models.append((parts[0], parts[1], api_key))
+
+    # --- read text data from Stata ---
+    var_idx   = Data.getVarIndex(varname)
+    gen_idx   = Data.getVarIndex(genname)
+    touse_idx = Data.getVarIndex(touse)
+    n         = Data.getObsTotal()
+
+    texts = []
+    obs_map = []
+    for i in range(n):
+        if Data.getAt(touse_idx, i) == 1:
+            val = Data.getAt(var_idx, i)
+            texts.append(val if val else "")
+            obs_map.append(i)
+
+    if not texts:
+        SFIToolkit.errprintln("{err}No valid observations found.")
+        return
+
+    # --- call catademic.classify ---
+    kwargs = dict(
+        input_data=texts,
+        categories=categories,
+        api_key=api_key,
+        user_model=model,
+        model_source=provider,
+        description=desc,
+        chain_of_thought=cot,
+        thinking_budget=think,
+        step_back_prompt=stepback,
+        context_prompt=context,
+        consensus_threshold=consensus,
+        use_json_schema=not nojson,
+        max_retries=retries,
+        retry_delay=rdelay,
+        row_delay=rowdelay,
+        fail_strategy=failstr,
+    )
+
+    if j_name:
+        kwargs["journal_name"] = j_name
+    if j_issn:
+        kwargs["journal_issn"] = j_issn
+    if j_field:
+        kwargs["journal_field"] = j_field
+    if topic:
+        kwargs["topic_name"] = topic
+    if p_limit > 0:
+        kwargs["paper_limit"] = p_limit
+    if polite:
+        kwargs["polite_email"] = polite
+    if date_from:
+        kwargs["date_from"] = date_from
+    if date_to:
+        kwargs["date_to"] = date_to
+    if models:
+        kwargs["models"] = models
+    if workers > 0:
+        kwargs["max_workers"] = workers
+    if creativity is not None:
+        kwargs["creativity"] = creativity
+
+    try:
+        result_df = catademic.classify(**kwargs)
+    except Exception as e:
+        SFIToolkit.errprintln("{err}catademic.classify() failed: " + str(e))
+        return
+
+    # --- determine classification per row ---
+    cols = list(result_df.columns)
+    consensus_cols = [c for c in cols if c.endswith("_consensus")]
+    if consensus_cols:
+        cat_cols = consensus_cols
+        col_to_cat = {}
+        for cc in consensus_cols:
+            base = cc.rsplit("_consensus", 1)[0]
+            col_to_cat[cc] = base
+    else:
+        meta = {"input_data", "processing_status", "failed_models",
+                "pdf_path", "page_index", "image_path"}
+        cat_cols = [c for c in cols if c not in meta
+                    and not c.endswith("_agreement")]
+        col_to_cat = {}
+        for i, cc in enumerate(cat_cols):
+            col_to_cat[cc] = categories[i] if i < len(categories) else cc
+
+    # --- write results back to Stata ---
+    for row_i in range(len(result_df)):
+        stata_obs = obs_map[row_i]
+        row = result_df.iloc[row_i]
+        assigned = ""
+        for cc in cat_cols:
+            try:
+                if int(row[cc]) == 1:
+                    assigned = col_to_cat.get(cc, cc)
+                    break
+            except (ValueError, TypeError):
+                continue
+        if assigned:
+            Data.storeAt(gen_idx, stata_obs, assigned)
+
+    SFIToolkit.displayln("{txt}Python classification complete (academic domain).")
+end

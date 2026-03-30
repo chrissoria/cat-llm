@@ -83,7 +83,7 @@ end
 python:
 def _catllm_do_explore():
     from sfi import Data, Macro, Scalar, SFIToolkit
-    import catllm
+    import cat_stack
 
     # --- read Stata parameters ---
     varname   = Macro.getLocal("_catllm_var")
@@ -146,9 +146,9 @@ def _catllm_do_explore():
         kwargs["random_state"] = random_state
 
     try:
-        raw_cats = catllm.explore(**kwargs)
+        raw_cats = cat_stack.explore(**kwargs)
     except Exception as e:
-        SFIToolkit.errprintln("{err}catllm.explore() failed: " + str(e))
+        SFIToolkit.errprintln("{err}cat_stack.explore() failed: " + str(e))
         return
 
     # --- store results in r() ---

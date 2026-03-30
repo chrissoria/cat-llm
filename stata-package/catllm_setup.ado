@@ -1,5 +1,5 @@
-*! catllm_setup -- Install the catllm Python backend
-*! Version 1.0.0
+*! catllm_setup -- Install the cat-stack Python backend (and optional domain packages)
+*! Version 1.1.0
 
 program define catllm_setup
     version 16
@@ -16,19 +16,19 @@ program define catllm_setup
     }
 
     if "`check'" != "" {
-        di as txt "Checking catllm installation..."
+        di as txt "Checking cat-stack installation..."
         python: _catllm_check()
         exit
     }
 
-    * Install catllm via pip
+    * Install cat-stack via pip
     if "`pdf'" != "" {
-        di as txt "Installing catllm with PDF support..."
-        local pkg "catllm[pdf]"
+        di as txt "Installing cat-stack with PDF support..."
+        local pkg "cat-stack[pdf]"
     }
     else {
-        di as txt "Installing catllm..."
-        local pkg "catllm"
+        di as txt "Installing cat-stack..."
+        local pkg "cat-stack"
     }
 
     if "`upgrade'" != "" {
@@ -74,11 +74,11 @@ def _catllm_pip_install():
 def _catllm_check():
     from sfi import SFIToolkit
     try:
-        import catllm
-        version = getattr(catllm, '__version__', 'unknown')
-        SFIToolkit.displayln("{txt}catllm version: {res}" + version)
+        import cat_stack
+        version = getattr(cat_stack, '__version__', 'unknown')
+        SFIToolkit.displayln("{txt}cat_stack version: {res}" + version)
         SFIToolkit.displayln("{txt}Status: {res}OK")
     except ImportError:
-        SFIToolkit.errprintln("{err}catllm is not installed.")
+        SFIToolkit.errprintln("{err}cat_stack is not installed.")
         SFIToolkit.errprintln("{err}Run {bf:catllm setup} to install it.")
 end

@@ -1,0 +1,18 @@
+Package: cat.cog
+Title: Cognitive Assessment Scoring with LLMs
+Version: 0.1.0
+Authors@R: person("Chris", "Soria", role = c("aut", "cre"),
+                  email = "chris.soria@nyu.edu")
+Description: R interface to the Python cat-cog package. Scores CERAD
+    constructional praxis (drawn shape) assessments using LLMs. A thin domain
+    wrapper around cat.stack for cognitive test scoring from images.
+License: MIT + file LICENSE
+Encoding: UTF-8
+Roxygen: list(markdown = TRUE)
+RoxygenNote: 7.3.2
+Imports:
+    reticulate (>= 1.28),
+    cat.stack (>= 0.1.0)
+Suggests:
+    testthat (>= 3.0.0)
+Config/testthat/edition: 3

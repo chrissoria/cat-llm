@@ -1,0 +1,30 @@
+# Re-export base functions from cat.stack
+importFrom(cat.stack, classify)
+importFrom(cat.stack, extract)
+importFrom(cat.stack, explore)
+importFrom(cat.stack, summarize)
+importFrom(cat.stack, install_cat_stack)
+
+export(classify)
+export(extract)
+export(explore)
+export(summarize)
+export(install_cat_stack)
+
+# Domain-suffixed aliases
+export(classify_survey)
+export(extract_survey)
+export(explore_survey)
+
+export(classify_social)
+export(extract_social)
+export(explore_social)
+
+export(classify_academic)
+export(extract_academic)
+export(explore_academic)
+export(summarize_academic)
+
+export(cerad_drawn_score)
+
+export(catllm_attach)

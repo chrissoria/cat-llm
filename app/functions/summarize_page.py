@@ -142,6 +142,8 @@ def render(domain_id, domain_panel):
                 "status": f"Summarized {len(result_df)} items in {processing_time:.1f}s",
                 "task_type": "summarize",
             }
+            from components.history import save_run
+            save_run(st.session_state.results, st.session_state.get("settings"))
             st.success(f"Summarized {len(result_df)} items in {processing_time:.1f}s")
             st.rerun()
 

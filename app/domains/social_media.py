@@ -67,21 +67,38 @@ def render_domain_panel(function_id):
                 yt_transcript = st.checkbox("Include Transcripts", key="sm_yt_transcript")
                 result["domain_kwargs"]["sm_youtube_transcript"] = yt_transcript
 
-        # Credentials
+        # Credentials — auto-populate from saved keys, allow override
+        api_keys = st.session_state.get("api_keys", {})
+        saved_cred = ""
+        if platform == "threads":
+            saved_cred = api_keys.get("threads_token", "")
+        elif platform == "bluesky":
+            saved_cred = api_keys.get("bluesky_app_password", "")
+        elif platform == "mastodon":
+            saved_cred = api_keys.get("mastodon_token", "")
+        elif platform == "youtube":
+            saved_cred = api_keys.get("youtube_api_key", "")
+
         with st.expander("Platform Credentials"):
-            st.caption("Required for some platforms (e.g., Reddit client_id/secret, Threads token).")
-            cred_key = st.text_input("Credential / Token", type="password", key="sm_credential")
-            if cred_key:
-                if platform == "reddit":
-                    client_id = st.text_input("Reddit Client ID", key="sm_reddit_id")
-                    client_secret = st.text_input("Reddit Client Secret", type="password", key="sm_reddit_secret")
-                    if client_id and client_secret:
-                        result["domain_kwargs"]["sm_credentials"] = {
-                            "client_id": client_id,
-                            "client_secret": client_secret,
-                        }
-                else:
+            if platform == "reddit":
+                saved_id = api_keys.get("reddit_client_id", "")
+                saved_secret = api_keys.get("reddit_client_secret", "")
+                client_id = st.text_input("Reddit Client ID", value=saved_id, key="sm_reddit_id")
+                client_secret = st.text_input("Reddit Client Secret", value=saved_secret,
+                                              type="password", key="sm_reddit_secret")
+                if client_id and client_secret:
+                    result["domain_kwargs"]["sm_credentials"] = {
+                        "client_id": client_id,
+                        "client_secret": client_secret,
+                    }
+            else:
+                cred_key = st.text_input("Credential / Token", value=saved_cred,
+                                         type="password", key="sm_credential")
+                if cred_key:
                     result["domain_kwargs"]["sm_credentials"] = {"token": cred_key}
+
+            if saved_cred or (platform == "reddit" and api_keys.get("reddit_client_id")):
+                st.caption("Auto-filled from Settings. Edit here to override for this session.")
 
         result["description"] = f"{platform} posts"
         result["original_filename"] = f"{platform}_data"

@@ -7,35 +7,139 @@ from config import (
     MODEL_CHOICES, PAID_MODEL_CHOICES, FREE_MODELS_MAP, FREE_MODEL_DISPLAY_NAMES,
     HF_ROUTED_MODELS, resolve_api_key, get_model_source,
 )
+from components.key_store import load_keys, save_keys, clear_keys
+from components.settings import get_ollama_models
 
 
 def render_api_keys_sidebar():
-    """Render API key input fields in the sidebar. Updates st.session_state.api_keys."""
-    st.sidebar.markdown("### API Keys")
-    st.sidebar.caption("Enter keys for the providers you want to use. Keys are stored in session only.")
+    """Render API key input fields in the sidebar under collapsible sections."""
+    st.sidebar.markdown("### Model Setup")
 
-    providers = [
-        ("openai", "OpenAI"),
-        ("anthropic", "Anthropic"),
-        ("google", "Google"),
-        ("mistral", "Mistral"),
-        ("xai", "xAI"),
-        ("huggingface", "HuggingFace"),
-        ("perplexity", "Perplexity"),
-    ]
+    # Load saved keys on first run
+    if "api_keys" not in st.session_state:
+        st.session_state.api_keys = load_keys()
 
     api_keys = st.session_state.get("api_keys", {})
-    for provider_id, display_name in providers:
-        key = st.sidebar.text_input(
-            display_name,
-            value=api_keys.get(provider_id, ""),
-            type="password",
-            key=f"apikey_{provider_id}",
+
+    # --- Local Models (Ollama) ---
+    with st.sidebar.expander("Local Models (Ollama)"):
+        ollama_endpoint = st.text_input(
+            "Ollama Endpoint",
+            value=api_keys.get("ollama_endpoint", "http://localhost:11434"),
+            key="ollama_endpoint_input",
+            help="URL where your Ollama server is running.",
         )
-        if key:
-            api_keys[provider_id] = key
-        elif provider_id in api_keys:
-            del api_keys[provider_id]
+        api_keys["ollama_endpoint"] = ollama_endpoint
+
+        # Query Ollama for downloaded models
+        downloaded_models = get_ollama_models(ollama_endpoint)
+        downloaded_names = {m["name"] for m in downloaded_models}
+
+        def _label(name, size, downloaded_names):
+            check = " \u2713" if name in downloaded_names else ""
+            return f"{name} ({size}){check}"
+
+        # Suggested models organized by tier, with checkmarks for downloaded
+        local_model_options = {
+            "— Lower Tier (fast, smaller) —": None,
+            _label("llama3.2:1b", "1.3 GB", downloaded_names): "llama3.2:1b",
+            _label("llama3.2", "2.0 GB", downloaded_names): "llama3.2",
+            _label("phi3:mini", "2.2 GB", downloaded_names): "phi3:mini",
+            _label("qwen2.5:1.5b", "1.0 GB", downloaded_names): "qwen2.5:1.5b",
+            _label("gemma2:2b", "1.6 GB", downloaded_names): "gemma2:2b",
+            "— Middle Tier (balanced) —": None,
+            _label("llama3.1:8b", "4.7 GB", downloaded_names): "llama3.1:8b",
+            _label("mistral", "4.1 GB", downloaded_names): "mistral",
+            _label("qwen2.5:7b", "4.7 GB", downloaded_names): "qwen2.5:7b",
+            _label("gemma2:9b", "5.4 GB", downloaded_names): "gemma2:9b",
+            _label("deepseek-r1", "4.7 GB", downloaded_names): "deepseek-r1",
+            "— Upper Tier (best accuracy) —": None,
+            _label("gemma2:27b", "16 GB", downloaded_names): "gemma2:27b",
+            _label("mixtral", "26 GB", downloaded_names): "mixtral",
+            _label("llama3.1:70b", "40 GB", downloaded_names): "llama3.1:70b",
+            "— Other —": None,
+            "Other (enter manually)": "other",
+        }
+
+        # Also add any downloaded models not in the suggested list
+        suggested_names = {
+            "llama3.2:1b", "llama3.2", "phi3:mini", "qwen2.5:1.5b", "gemma2:2b",
+            "llama3.1:8b", "mistral", "qwen2.5:7b", "gemma2:9b", "deepseek-r1",
+            "gemma2:27b", "mixtral", "llama3.1:70b",
+        }
+        extra_downloaded = [m for m in downloaded_models if m["name"] not in suggested_names]
+        if extra_downloaded:
+            extra_options = {"— Downloaded (other) —": None}
+            for m in extra_downloaded:
+                extra_options[f"{m['name']} ({m['size_gb']} GB) \u2713"] = m["name"]
+            # Insert before "— Other —"
+            items = list(local_model_options.items())
+            other_idx = next(i for i, (k, _) in enumerate(items) if k == "— Other —")
+            items = items[:other_idx] + list(extra_options.items()) + items[other_idx:]
+            local_model_options = dict(items)
+
+        selected_local = st.selectbox(
+            "Model",
+            options=list(local_model_options.keys()),
+            key="ollama_model_select",
+            help="Select a suggested Ollama model or choose 'Other' to enter your own.",
+        )
+
+        selected_value = local_model_options[selected_local]
+
+        if selected_value == "other":
+            ollama_model = st.text_input(
+                "Custom Model Name",
+                value=api_keys.get("ollama_model", ""),
+                key="ollama_model_custom",
+                placeholder="e.g. codellama, phi3, your-custom-model",
+            )
+        elif selected_value is not None:
+            ollama_model = selected_value
+        else:
+            # Selected a tier header — no model chosen
+            ollama_model = ""
+
+        if ollama_model:
+            api_keys["ollama_model"] = ollama_model
+
+    # --- Cloud API Keys ---
+    with st.sidebar.expander("Cloud API Keys"):
+        save_to_disk = st.checkbox(
+            "Remember keys",
+            value=True,
+            help="Save API keys to disk so you don't have to re-enter them next time.",
+            key="save_keys_to_disk",
+        )
+
+        providers = [
+            ("openai", "OpenAI"),
+            ("anthropic", "Anthropic"),
+            ("google", "Google"),
+            ("mistral", "Mistral"),
+            ("xai", "xAI"),
+            ("huggingface", "HuggingFace"),
+            ("perplexity", "Perplexity"),
+        ]
+
+        for provider_id, display_name in providers:
+            key = st.text_input(
+                display_name,
+                value=api_keys.get(provider_id, ""),
+                type="password",
+                key=f"apikey_{provider_id}",
+            )
+            if key:
+                api_keys[provider_id] = key
+            elif provider_id in api_keys and provider_id not in ("ollama_endpoint", "ollama_model"):
+                del api_keys[provider_id]
+
+        # Persist to disk when checkbox is on
+        if save_to_disk:
+            save_keys(api_keys)
+        else:
+            clear_keys()
+
     st.session_state.api_keys = api_keys
 
 

@@ -288,6 +288,8 @@ def _run_classify(
             "ensemble_runs": ensemble_runs if ensemble_runs else None,
             "task_type": "classify",
         }
+        from components.history import save_run
+        save_run(st.session_state.results, st.session_state.get("settings"))
         st.success(f"Classified {len(result_df)} items in {processing_time:.1f}s")
         st.rerun()
 

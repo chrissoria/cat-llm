@@ -5,6 +5,28 @@ All notable changes to CatLLM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.0] - 2026-03-29
+
+### Added
+- **Desktop app (macOS)**: CatLLM can now be packaged as a standalone macOS `.app` with a `.dmg` installer. Uses PyInstaller to bundle the Streamlit app and pywebview for a native window (no browser tabs). Build artifacts in `app/desktop/`.
+- **Settings dialog**: New ⚙ Settings button in the sidebar opens a modal with 5 tabs: API Keys, Platform Credentials, Default Parameters, Output, and Local Models (About).
+- **API key persistence**: Keys saved to `~/Library/Application Support/CatLLM/api_keys.json` with base64 obfuscation and owner-only permissions. Auto-loads on startup.
+- **Platform credential storage**: Persistent storage for Threads, Reddit, Bluesky, Mastodon, YouTube tokens and OpenAlex polite email. Auto-populates domain panels.
+- **Run history with auto-save**: Every classify/extract/explore/summarize run auto-saves results to disk. History browser in sidebar shows last 10 runs with reload and delete.
+- **Ollama model detection**: Sidebar dropdown and Settings show which local models are downloaded (queries Ollama `/api/tags` API). Downloaded models marked with ✓.
+- **Collapsible sidebar sections**: API keys and local model config moved into expanders ("Local Models (Ollama)" and "Cloud API Keys") for a cleaner sidebar.
+- **Local model dropdown**: Suggested Ollama models organized by tier (Lower/Middle/Upper) with sizes, plus "Other" for custom model entry.
+
+### Changed
+- **R packages restructured** (tidyverse-style): The monolithic `catllm` R package has been replaced with 6 packages: `cat.stack` (base engine), `cat.survey`, `cat.vader`, `cat.ademic`, `cat.cog`, and `cat.llm` (meta-package). Each package uses dot-separated naming for CRAN compatibility and calls its corresponding Python sub-package via reticulate.
+- **Stata package updated**: Base commands now call `cat_stack` instead of `catllm`. Added 12 domain-specific commands: `catllm classify_survey`, `catllm classify_social`, `catllm classify_academic`, `catllm summarize_academic`, `catllm cerad`, and corresponding extract/explore variants.
+- **Native window**: Desktop app uses pywebview (WebKit on macOS) instead of opening a browser tab.
+
+### Fixed
+- **cat-cog CERAD scoring**: Fixed `KeyError: 'image_input'` crash in `cerad.py` — the column was renamed to `input_data` in cat-stack but cerad.py still referenced the old name.
+
+---
+
 ## [3.0.0] - 2026-03-19
 
 ### Changed

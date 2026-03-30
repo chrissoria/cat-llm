@@ -1,18 +1,19 @@
 v 3
-d catllm: LLM-powered classification and extraction for survey data
+d catllm: LLM-powered classification and extraction for text data
 d
-d catllm provides a Stata interface to the catllm Python package for
-d automating the categorization of open-ended survey responses using
-d large language models (LLMs). Supports text classification, category
-d discovery, saturation analysis, and text summarization across 8+
-d LLM providers (OpenAI, Anthropic, Google, and more).
+d catllm provides a Stata interface to the cat-stack ecosystem of Python
+d packages for automating the categorization of text data using large
+d language models (LLMs). Supports text classification, category discovery,
+d saturation analysis, and text summarization across general, survey, social
+d media, academic, and cognitive domains. Works with 8+ LLM providers
+d (OpenAI, Anthropic, Google, and more).
 d
 d Requires: Stata 16+ with Python integration, Python 3.8+
 d
 d Author: Christopher Soria
 d Support: chrissoria@berkeley.edu
 d
-d Distribution-Date: 20260301
+d Distribution-Date: 20260329
 
 F catllm.ado
 F catllm_classify.ado
@@ -20,9 +21,31 @@ F catllm_extract.ado
 F catllm_explore.ado
 F catllm_summarize.ado
 F catllm_setup.ado
+F catllm_classify_survey.ado
+F catllm_extract_survey.ado
+F catllm_explore_survey.ado
+F catllm_classify_social.ado
+F catllm_extract_social.ado
+F catllm_explore_social.ado
+F catllm_classify_academic.ado
+F catllm_extract_academic.ado
+F catllm_explore_academic.ado
+F catllm_summarize_academic.ado
+F catllm_cerad.ado
 F catllm.sthlp
 F catllm_classify.sthlp
 F catllm_extract.sthlp
 F catllm_explore.sthlp
 F catllm_summarize.sthlp
 F catllm_setup.sthlp
+F catllm_classify_survey.sthlp
+F catllm_extract_survey.sthlp
+F catllm_explore_survey.sthlp
+F catllm_classify_social.sthlp
+F catllm_extract_social.sthlp
+F catllm_explore_social.sthlp
+F catllm_classify_academic.sthlp
+F catllm_extract_academic.sthlp
+F catllm_explore_academic.sthlp
+F catllm_summarize_academic.sthlp
+F catllm_cerad.sthlp
