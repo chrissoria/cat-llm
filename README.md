@@ -108,6 +108,30 @@ pip install cat-llm[embeddings]   # Embedding-based similarity scores
 pip install cat-llm[formatter]    # Local JSON formatter fallback
 ```
 
+### Dependencies
+
+All dependencies are declared in `pyproject.toml` and installed automatically by pip. No manual dependency management is needed.
+
+**Core dependencies** (installed with any `pip install cat-llm` or `cat-stack`):
+
+| Package | Purpose |
+|---------|---------|
+| `pandas` | Data manipulation and output DataFrames |
+| `tqdm` | Progress bars during classification |
+| `requests` | HTTP calls to LLM provider APIs |
+| `regex` | JSON extraction from LLM responses |
+
+**Optional dependencies** (install with extras syntax):
+
+| Extra | Packages | Install |
+|-------|----------|---------|
+| `pdf` | PyMuPDF | `pip install cat-llm[pdf]` |
+| `docx` | python-docx | `pip install cat-llm[docx]` |
+| `embeddings` | sentence-transformers | `pip install cat-llm[embeddings]` |
+| `formatter` | torch, transformers, accelerate | `pip install cat-llm[formatter]` |
+
+No provider-specific SDKs are required at runtime. CatLLM communicates with all LLM providers (OpenAI, Anthropic, Google, Mistral, HuggingFace, Perplexity, xAI, Ollama) via their REST APIs using `requests` directly.
+
 ### R Package
 
 An R wrapper is available for users who prefer R over Python. It uses [reticulate](https://rstudio.github.io/reticulate/) to call the Python package under the hood.
