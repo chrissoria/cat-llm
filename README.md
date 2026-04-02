@@ -80,6 +80,7 @@ Every domain package exposes the same five core functions — `classify()`, `ext
 - [Deprecated Functions](#deprecated-functions)
 - [Related Projects](#related-projects)
 - [Academic Research](#academic-research)
+- [Testing](#testing)
 - [Contributing & Support](#contributing--support)
 - [License](#license)
 
@@ -984,6 +985,21 @@ This package implements methodology from research on LLM performance in social s
 If you use this package for research, please cite:
 
 Soria, C. (2025). CatLLM (0.1.0). Zenodo. https://doi.org/10.5281/zenodo.15532317
+
+## Testing
+
+To verify that CatLLM is working correctly, you can run a local classification test using [Ollama](https://ollama.com/) (free, no API keys required):
+
+1. Install Ollama and pull a small model:
+```console
+ollama pull llama3.1:8b
+```
+
+2. Run the local classification example notebook: [`examples/Classifying Text with Local Models (Ollama).ipynb`](examples/Classifying%20Text%20with%20Local%20Models%20(Ollama).ipynb)
+
+This notebook walks through text classification using a local model, verifying that the full pipeline — prompt construction, structured JSON output, and result parsing — works end-to-end without any cloud API calls.
+
+For cloud provider testing, additional example notebooks are available in the [`examples/`](examples/) directory covering ensemble classification, category extraction, and summarization.
 
 ## Contributing & Support
 
