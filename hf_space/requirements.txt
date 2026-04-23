@@ -1,5 +1,8 @@
 streamlit>=1.32.0
-cat-llm[pdf]>=3.0.0
+cat-llm[pdf]>=2.5.0
+mistralai
+pydantic==2.10.6
+huggingface_hub<0.27.0
 pandas
 openpyxl
 requests
