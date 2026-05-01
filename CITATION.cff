@@ -32,5 +32,5 @@ keywords:
   - computational social science
 identifiers:
   - type: doi
-    value: 10.5281/zenodo.15620202
+    value: 10.5281/zenodo.15532316
     description: "The concept DOI for all versions of CatLLM."
