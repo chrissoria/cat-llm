@@ -61,6 +61,6 @@ The `image_multi_class` function has been applied to implement CERAD protocols [
 
 # Acknowledgements
 
-This work was supported by the UC Berkeley Mentored Research Award. The author thanks Matthew Stenberg, Sara Quigley, Madeline Arnold, and Henry Tyler Dow for assistance in testing the functions on real data. The author also acknowledges the University of California, Berkeley for providing the institutional support that enabled this researPartial support was provided by the Center on the Economics and Demography of Aging, P30AG012839, and the Greater Good Science Center's Libby Fee Fellowship.
+This work was supported by the UC Berkeley Mentored Research Award. The author thanks Matthew Stenberg, Sara Quigley, Madeline Arnold, and Henry Tyler Dow for assistance in testing the functions on real data. The author also acknowledges the University of California, Berkeley for providing the institutional support that enabled this research. Partial support was provided by the Center on the Economics and Demography of Aging, P30AG012839, and the Greater Good Science Center's Libby Fee Fellowship.
 
 # References
