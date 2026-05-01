@@ -1,0 +1,35 @@
+cff-version: 1.2.0
+message: "If you use CatLLM in your research, please cite it as below."
+title: "CatLLM: A Reproducible LLM Pipeline for Classifying Open-Ended Text, Images, and PDFs Across Domains"
+type: software
+version: 3.0.0
+date-released: 2026-05-01
+authors:
+  - family-names: Soria
+    given-names: Chris
+    affiliation: "University of California, Berkeley"
+    email: chrissoria@berkeley.edu
+license: GPL-3.0-or-later
+repository-code: "https://github.com/chrissoria/cat-llm"
+url: "https://github.com/chrissoria/cat-llm"
+keywords:
+  - large language models
+  - text classification
+  - open-ended responses
+  - survey research
+  - social media analysis
+  - academic text
+  - political text
+  - cognitive assessment
+  - image classification
+  - PDF analysis
+  - ensemble methods
+  - reproducibility
+  - Python
+  - R
+  - Stata
+  - computational social science
+identifiers:
+  - type: doi
+    value: 10.5281/zenodo.15620202
+    description: "The concept DOI for all versions of CatLLM."

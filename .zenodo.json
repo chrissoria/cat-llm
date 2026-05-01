@@ -1,0 +1,79 @@
+{
+  "title": "CatLLM: A Reproducible LLM Pipeline for Classifying Open-Ended Text, Images, and PDFs Across Domains",
+  "description": "<p><strong>CatLLM</strong> is an ecosystem of Python packages that use large language and vision models to automate the categorization of open-ended text, images, and PDFs across research domains. It produces consistent, highly reproducible output optimized for statistical analysis (CSV export, ensemble voting, agreement scores, batch processing).</p><p>The <code>cat-llm</code> package is a meta-package that installs the full family of domain-specific classification packages. Each sub-package can also be installed individually for a lighter footprint.</p><p><strong>Sub-packages bundled in this release:</strong></p><ul><li><strong>cat-stack</strong> — general-purpose base library and shared infrastructure (UnifiedLLMClient, provider configs, ensemble voting, JSON extraction, embeddings, formatter fallback). All other packages depend on this.</li><li><strong>cat-survey</strong> — survey response classification</li><li><strong>cat-vader</strong> — social media text classification</li><li><strong>cat-ademic</strong> — academic paper classification</li><li><strong>cat-pol</strong> — political text classification</li><li><strong>cat-cog</strong> — cognitive assessment scoring (CERAD constructional praxis, etc.)</li><li><strong>cat-web</strong> — web content classification</li></ul><p>Every domain package exposes the same five core functions — <code>classify()</code>, <code>extract()</code>, <code>explore()</code>, <code>summarize()</code>, <code>prompt_tune()</code> — with domain-specific parameters layered on top.</p><p><strong>Capabilities:</strong></p><ul><li>Text — multi-label classification, category extraction, saturation analysis, ensemble voting across models</li><li>Images — feature classification, open-ended identification, quality scoring</li><li>PDFs — page-level classification (text, image, or both modes), structured extraction</li><li>Summarization — paragraph, bullet, one-liner, structured, and full-report modes for text and PDFs</li><li>Prompt optimization — automatic prompt tuning from user feedback</li></ul><p><strong>Supported providers:</strong> OpenAI, Anthropic, Google, Mistral, Perplexity, xAI, HuggingFace, Ollama (local), DeepSeek.</p><p>With leading models (GPT-5, Gemini, Qwen 3), CatLLM achieves <strong>98% accuracy compared to human consensus</strong> on classification tasks.</p><p>R and Stata wrapper packages are also available — see the GitHub repository.</p>",
+  "creators": [
+    {
+      "name": "Soria, Chris",
+      "affiliation": "University of California, Berkeley"
+    }
+  ],
+  "upload_type": "software",
+  "license": "GPL-3.0-or-later",
+  "access_right": "open",
+  "keywords": [
+    "large language models",
+    "text classification",
+    "open-ended responses",
+    "survey research",
+    "social media analysis",
+    "academic text",
+    "political text",
+    "cognitive assessment",
+    "image classification",
+    "PDF analysis",
+    "ensemble methods",
+    "reproducibility",
+    "Python",
+    "R",
+    "Stata",
+    "computational social science"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/chrissoria/cat-llm",
+      "relation": "isSupplementTo",
+      "resource_type": "software"
+    },
+    {
+      "identifier": "https://pypi.org/project/cat-llm/",
+      "relation": "isIdenticalTo",
+      "resource_type": "software"
+    },
+    {
+      "identifier": "https://pypi.org/project/cat-stack/",
+      "relation": "hasPart",
+      "resource_type": "software"
+    },
+    {
+      "identifier": "https://pypi.org/project/cat-survey/",
+      "relation": "hasPart",
+      "resource_type": "software"
+    },
+    {
+      "identifier": "https://pypi.org/project/cat-vader/",
+      "relation": "hasPart",
+      "resource_type": "software"
+    },
+    {
+      "identifier": "https://pypi.org/project/cat-ademic/",
+      "relation": "hasPart",
+      "resource_type": "software"
+    },
+    {
+      "identifier": "https://pypi.org/project/cat-pol/",
+      "relation": "hasPart",
+      "resource_type": "software"
+    },
+    {
+      "identifier": "https://pypi.org/project/cat-cog/",
+      "relation": "hasPart",
+      "resource_type": "software"
+    },
+    {
+      "identifier": "https://pypi.org/project/cat-web/",
+      "relation": "hasPart",
+      "resource_type": "software"
+    }
+  ],
+  "communities": []
+}

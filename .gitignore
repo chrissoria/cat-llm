@@ -46,3 +46,6 @@ survey-summarizer
 # R package build/check artifacts
 *.Rcheck/
 *.tar.gz
+
+# Zenodo upload staging
+zenodo-upload-*/
