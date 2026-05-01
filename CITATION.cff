@@ -9,6 +9,7 @@ authors:
     given-names: Chris
     affiliation: "University of California, Berkeley"
     email: chrissoria@berkeley.edu
+    orcid: "https://orcid.org/0009-0007-3558-5896"
 license: GPL-3.0-or-later
 repository-code: "https://github.com/chrissoria/cat-llm"
 url: "https://github.com/chrissoria/cat-llm"
