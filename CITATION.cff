@@ -1,6 +1,6 @@
 cff-version: 1.2.0
 message: "If you use CatLLM in your research, please cite it as below."
-title: "CatLLM: A Reproducible LLM Pipeline for Classifying Open-Ended Text, Images, and PDFs Across Domains"
+title: "CatLLM: A Reproducible Python Ecosystem for Generating, Assigning, and Scoring Open-Ended Text, Images, and Documents Across Research Domains"
 type: software
 version: 3.0.0
 date-released: 2026-05-01
