@@ -23,13 +23,13 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: CPython",
 ]
 dependencies = [
-  "cat-stack>=0.1.0",
-  "cat-survey>=0.1.0",
-  "cat-vader>=1.13.0",
-  "cat-ademic>=0.1.1",
-  "cat-cog>=0.1.0",
-  "cat-pol>=0.1.0",
-  "cat-web>=0.1.0",
+  "cat-stack>=1.0.19",
+  "cat-survey>=0.2.0",
+  "cat-vader>=1.13.2",
+  "cat-ademic>=0.2.0",
+  "cat-cog>=0.2.0",
+  "cat-pol>=1.3.0",
+  "cat-web>=0.2.0",
 ]
 
 [project.optional-dependencies]
@@ -46,9 +46,10 @@ Source = "https://github.com/chrissoria/cat-llm"
 path = "src/catllm/__about__.py"
 
 [tool.hatch.build.targets.wheel]
-packages = ["src/catllm"]
+packages = ["src/catllm", "src/cat_llm"]
 
 [tool.hatch.build.targets.sdist]
 include = [
     "src/catllm/**/*.py",
+    "src/cat_llm/__init__.py",
 ]

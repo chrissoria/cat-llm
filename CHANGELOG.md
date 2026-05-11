@@ -5,6 +5,26 @@ All notable changes to CatLLM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.1.1] - 2026-05-11
+
+### Added
+- **`cat_llm` import alias**: `import cat_llm` now works alongside the
+  canonical `import catllm`; both resolve to the same module object. This
+  aligns the import name with the underscored convention used elsewhere in
+  the cat-* family without breaking existing code.
+
+### Changed
+- **Cross-package imports normalized**: `__init__.py` updated to import from
+  the new canonical names (`catstack`, `catsurvey`, `catpol`, `catcog`)
+  rather than the underscored forms. Underscored imports keep working via
+  each sub-package's back-compat alias.
+- **Dependency pins bumped** to the versions that ship the normalized
+  canonical names + bidirectional aliases: `cat-stack>=1.0.19`,
+  `cat-survey>=0.2.0`, `cat-vader>=1.13.2`, `cat-ademic>=0.2.0`,
+  `cat-cog>=0.2.0`, `cat-pol>=1.3.0`, `cat-web>=0.2.0`.
+
+---
+
 ## [3.1.0] - 2026-03-29
 
 ### Added
