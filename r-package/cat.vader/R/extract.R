@@ -61,7 +61,7 @@ extract <- function(
 ) {
   mod <- .get_catvader()
 
-  api_key <- cat.stack:::.strip_quotes(api_key)
+  api_key <- cat.stack::.strip_quotes(api_key)
   if (!is.null(creativity)) creativity <- as.double(creativity)
 
   py_sm_credentials <- if (!is.null(sm_credentials)) reticulate::r_to_py(sm_credentials) else NULL
@@ -72,17 +72,17 @@ extract <- function(
     input_data           = reticulate::r_to_py(input_data),
     api_key              = api_key,
     sm_source            = sm_source,
-    sm_limit             = cat.stack:::.as_py_int(sm_limit),
-    sm_months            = cat.stack:::.as_py_int(sm_months),
+    sm_limit             = cat.stack::.as_py_int(sm_limit),
+    sm_months            = cat.stack::.as_py_int(sm_months),
     sm_credentials       = py_sm_credentials,
     platform             = platform,
     handle               = handle,
     hashtags             = py_hashtags,
     post_metadata        = py_post_metadata,
     description          = description,
-    max_categories       = cat.stack:::.as_py_int(max_categories),
-    categories_per_chunk = cat.stack:::.as_py_int(categories_per_chunk),
-    divisions            = cat.stack:::.as_py_int(divisions),
+    max_categories       = cat.stack::.as_py_int(max_categories),
+    categories_per_chunk = cat.stack::.as_py_int(categories_per_chunk),
+    divisions            = cat.stack::.as_py_int(divisions),
     user_model           = user_model,
     creativity           = reticulate::r_to_py(creativity),
     specificity          = specificity,
@@ -90,8 +90,8 @@ extract <- function(
     mode                 = mode,
     filename             = filename,
     model_source         = model_source,
-    iterations           = cat.stack:::.as_py_int(iterations),
-    random_state         = cat.stack:::.as_py_int(random_state),
+    iterations           = cat.stack::.as_py_int(iterations),
+    random_state         = cat.stack::.as_py_int(random_state),
     focus                = focus,
     progress_callback    = reticulate::py_none(),
     chunk_delay          = as.double(chunk_delay)

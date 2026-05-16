@@ -3,3 +3,11 @@ export(extract)
 export(explore)
 export(summarize)
 export(install_cat_stack)
+
+# Internal helpers re-used by sibling domain packages (cat.survey, cat.ademic,
+# cat.pol, cat.web, etc.). Exported so they can be reached via :: instead of
+# triple-colon, but kept internal in the documentation index.
+export(.strip_quotes)
+export(.as_py_int)
+export(.validate_add_other)
+export(.convert_models)

@@ -49,7 +49,7 @@ extract <- function(
 ) {
   mod <- .get_cat_survey()
 
-  api_key <- cat.stack:::.strip_quotes(api_key)
+  api_key <- cat.stack::.strip_quotes(api_key)
   if (!is.null(creativity)) creativity <- as.double(creativity)
 
   result <- mod$extract(
@@ -58,9 +58,9 @@ extract <- function(
     survey_question      = survey_question,
     description          = description,
     input_type           = input_type,
-    max_categories       = cat.stack:::.as_py_int(max_categories),
-    categories_per_chunk = cat.stack:::.as_py_int(categories_per_chunk),
-    divisions            = cat.stack:::.as_py_int(divisions),
+    max_categories       = cat.stack::.as_py_int(max_categories),
+    categories_per_chunk = cat.stack::.as_py_int(categories_per_chunk),
+    divisions            = cat.stack::.as_py_int(divisions),
     user_model           = user_model,
     creativity           = reticulate::r_to_py(creativity),
     specificity          = specificity,
@@ -68,8 +68,8 @@ extract <- function(
     mode                 = mode,
     filename             = filename,
     model_source         = model_source,
-    iterations           = cat.stack:::.as_py_int(iterations),
-    random_state         = cat.stack:::.as_py_int(random_state),
+    iterations           = cat.stack::.as_py_int(iterations),
+    random_state         = cat.stack::.as_py_int(random_state),
     focus                = focus,
     progress_callback    = reticulate::py_none(),
     chunk_delay          = as.double(chunk_delay)

@@ -57,7 +57,7 @@ cerad_drawn_score <- function(
 ) {
   mod <- .get_cat_cog()
 
-  api_key <- cat.stack:::.strip_quotes(api_key)
+  api_key <- cat.stack::.strip_quotes(api_key)
   if (!is.null(creativity)) creativity <- as.double(creativity)
 
   result <- mod$cerad_drawn_score(

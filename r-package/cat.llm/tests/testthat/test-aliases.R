@@ -19,3 +19,14 @@ test_that("base functions are re-exported from cat.stack", {
   expect_true(is.function(summarize))
   expect_true(is.function(install_cat_stack))
 })
+
+test_that("political and web aliases are callable", {
+  expect_true(is.function(classify_political))
+  expect_true(is.function(extract_political))
+  expect_true(is.function(explore_political))
+  expect_true(is.function(summarize_political))
+  expect_true(is.function(classify_web))
+  expect_true(is.function(extract_web))
+  expect_true(is.function(explore_web))
+  expect_true(is.function(summarize_web))
+})

@@ -7,7 +7,7 @@
 #' @return Invisibly returns a character vector of attached package names.
 #' @export
 catllm_attach <- function() {
-  pkgs <- c("cat.stack", "cat.survey", "cat.vader", "cat.ademic", "cat.cog")
+  pkgs <- c("cat.stack", "cat.survey", "cat.vader", "cat.ademic", "cat.cog", "cat.pol", "cat.web")
   for (pkg in pkgs) {
     if (!paste0("package:", pkg) %in% search()) {
       suppressPackageStartupMessages(

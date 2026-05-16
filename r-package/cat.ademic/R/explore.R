@@ -62,7 +62,7 @@ explore <- function(
 ) {
   mod <- .get_catademic()
 
-  api_key <- cat.stack:::.strip_quotes(api_key)
+  api_key <- cat.stack::.strip_quotes(api_key)
   if (!is.null(creativity)) creativity <- as.double(creativity)
 
   result <- mod$explore(
@@ -74,21 +74,21 @@ explore <- function(
     journal_field        = journal_field,
     topic_name           = topic_name,
     topic_id             = topic_id,
-    paper_limit          = cat.stack:::.as_py_int(paper_limit),
+    paper_limit          = cat.stack::.as_py_int(paper_limit),
     date_from            = date_from,
     date_to              = date_to,
     polite_email         = polite_email,
-    max_categories       = cat.stack:::.as_py_int(max_categories),
-    categories_per_chunk = cat.stack:::.as_py_int(categories_per_chunk),
-    divisions            = cat.stack:::.as_py_int(divisions),
+    max_categories       = cat.stack::.as_py_int(max_categories),
+    categories_per_chunk = cat.stack::.as_py_int(categories_per_chunk),
+    divisions            = cat.stack::.as_py_int(divisions),
     user_model           = user_model,
     creativity           = reticulate::r_to_py(creativity),
     specificity          = specificity,
     research_question    = research_question,
     filename             = filename,
     model_source         = model_source,
-    iterations           = cat.stack:::.as_py_int(iterations),
-    random_state         = cat.stack:::.as_py_int(random_state),
+    iterations           = cat.stack::.as_py_int(iterations),
+    random_state         = cat.stack::.as_py_int(random_state),
     focus                = focus,
     progress_callback    = reticulate::py_none(),
     chunk_delay          = as.double(chunk_delay)

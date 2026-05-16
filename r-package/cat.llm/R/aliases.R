@@ -69,3 +69,47 @@ summarize_academic <- function(...) cat.ademic::summarize(...)
 #' @inheritParams cat.cog::cerad_drawn_score
 #' @export
 cerad_drawn_score <- function(...) cat.cog::cerad_drawn_score(...)
+
+# --- Political / Policy (from cat.pol) ---
+
+#' @rdname catllm-aliases
+#' @inheritParams cat.pol::classify
+#' @export
+classify_political <- function(...) cat.pol::classify(...)
+
+#' @rdname catllm-aliases
+#' @inheritParams cat.pol::extract
+#' @export
+extract_political <- function(...) cat.pol::extract(...)
+
+#' @rdname catllm-aliases
+#' @inheritParams cat.pol::explore
+#' @export
+explore_political <- function(...) cat.pol::explore(...)
+
+#' @rdname catllm-aliases
+#' @inheritParams cat.pol::summarize
+#' @export
+summarize_political <- function(...) cat.pol::summarize(...)
+
+# --- Web (from cat.web) ---
+
+#' @rdname catllm-aliases
+#' @inheritParams cat.web::classify
+#' @export
+classify_web <- function(...) cat.web::classify(...)
+
+#' @rdname catllm-aliases
+#' @inheritParams cat.web::extract
+#' @export
+extract_web <- function(...) cat.web::extract(...)
+
+#' @rdname catllm-aliases
+#' @inheritParams cat.web::explore
+#' @export
+explore_web <- function(...) cat.web::explore(...)
+
+#' @rdname catllm-aliases
+#' @inheritParams cat.web::summarize
+#' @export
+summarize_web <- function(...) cat.web::summarize(...)

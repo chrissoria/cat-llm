@@ -123,11 +123,11 @@ classify <- function(
 ) {
   mod <- .get_catvader()
 
-  api_key   <- cat.stack:::.strip_quotes(api_key)
-  add_other <- cat.stack:::.validate_add_other(add_other)
+  api_key   <- cat.stack::.strip_quotes(api_key)
+  add_other <- cat.stack::.validate_add_other(add_other)
   if (!is.null(creativity)) creativity <- as.double(creativity)
 
-  py_models <- if (!is.null(models)) cat.stack:::.convert_models(models) else reticulate::py_none()
+  py_models <- if (!is.null(models)) cat.stack::.convert_models(models) else reticulate::py_none()
 
   # Convert list args to Python dicts
   py_sm_credentials <- if (!is.null(sm_credentials)) reticulate::r_to_py(sm_credentials) else NULL
@@ -139,16 +139,16 @@ classify <- function(
     categories            = reticulate::r_to_py(categories),
     api_key               = api_key,
     sm_source             = sm_source,
-    sm_limit              = cat.stack:::.as_py_int(sm_limit),
-    sm_months             = cat.stack:::.as_py_int(sm_months),
-    sm_days               = cat.stack:::.as_py_int(sm_days),
+    sm_limit              = cat.stack::.as_py_int(sm_limit),
+    sm_months             = cat.stack::.as_py_int(sm_months),
+    sm_days               = cat.stack::.as_py_int(sm_days),
     sm_credentials        = py_sm_credentials,
     sm_handle             = sm_handle,
     sm_timezone           = sm_timezone,
     sm_youtube_content    = sm_youtube_content,
     sm_youtube_transcript = sm_youtube_transcript,
-    sm_comments_per_video = cat.stack:::.as_py_int(sm_comments_per_video),
-    sm_youtube_transcript_max_chars = cat.stack:::.as_py_int(sm_youtube_transcript_max_chars),
+    sm_comments_per_video = cat.stack::.as_py_int(sm_comments_per_video),
+    sm_youtube_transcript_max_chars = cat.stack::.as_py_int(sm_youtube_transcript_max_chars),
     platform              = platform,
     handle                = handle,
     hashtags              = py_hashtags,
@@ -163,7 +163,7 @@ classify <- function(
     chain_of_thought      = chain_of_thought,
     step_back_prompt      = step_back_prompt,
     context_prompt        = context_prompt,
-    thinking_budget       = cat.stack:::.as_py_int(thinking_budget),
+    thinking_budget       = cat.stack::.as_py_int(thinking_budget),
     example1              = example1,
     example2              = example2,
     example3              = example3,
@@ -173,21 +173,21 @@ classify <- function(
     filename              = filename,
     save_directory        = save_directory,
     model_source          = model_source,
-    max_categories        = cat.stack:::.as_py_int(max_categories),
-    categories_per_chunk  = cat.stack:::.as_py_int(categories_per_chunk),
-    divisions             = cat.stack:::.as_py_int(divisions),
+    max_categories        = cat.stack::.as_py_int(max_categories),
+    categories_per_chunk  = cat.stack::.as_py_int(categories_per_chunk),
+    divisions             = cat.stack::.as_py_int(divisions),
     research_question     = research_question,
     progress_callback     = reticulate::py_none(),
     models                = py_models,
     consensus_threshold   = consensus_threshold,
     use_json_schema       = use_json_schema,
-    max_workers           = cat.stack:::.as_py_int(max_workers),
+    max_workers           = cat.stack::.as_py_int(max_workers),
     fail_strategy         = fail_strategy,
-    max_retries           = cat.stack:::.as_py_int(max_retries),
-    batch_retries         = cat.stack:::.as_py_int(batch_retries),
+    max_retries           = cat.stack::.as_py_int(max_retries),
+    batch_retries         = cat.stack::.as_py_int(batch_retries),
     retry_delay           = as.double(retry_delay),
     row_delay             = as.double(row_delay),
-    pdf_dpi               = cat.stack:::.as_py_int(pdf_dpi),
+    pdf_dpi               = cat.stack::.as_py_int(pdf_dpi),
     auto_download         = auto_download,
     add_other             = add_other,
     check_verbosity       = check_verbosity

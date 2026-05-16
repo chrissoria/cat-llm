@@ -8,6 +8,8 @@ NULL
     "v ", utils::packageVersion("cat.survey"), " cat.survey\n",
     "v ", utils::packageVersion("cat.vader"),  " cat.vader\n",
     "v ", utils::packageVersion("cat.ademic"), " cat.ademic\n",
-    "v ", utils::packageVersion("cat.cog"),    " cat.cog"
+    "v ", utils::packageVersion("cat.cog"),    " cat.cog\n",
+    "v ", utils::packageVersion("cat.pol"),    " cat.pol\n",
+    "v ", utils::packageVersion("cat.web"),    " cat.web"
   )
 }

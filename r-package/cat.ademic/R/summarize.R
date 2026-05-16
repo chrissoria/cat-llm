@@ -79,10 +79,10 @@ summarize <- function(
 ) {
   mod <- .get_catademic()
 
-  api_key <- cat.stack:::.strip_quotes(api_key)
+  api_key <- cat.stack::.strip_quotes(api_key)
   if (!is.null(creativity)) creativity <- as.double(creativity)
 
-  py_models <- if (!is.null(models)) cat.stack:::.convert_models(models) else reticulate::py_none()
+  py_models <- if (!is.null(models)) cat.stack::.convert_models(models) else reticulate::py_none()
 
   result <- mod$summarize(
     input_data          = reticulate::r_to_py(input_data),
@@ -90,16 +90,16 @@ summarize <- function(
     description         = description,
     instructions        = instructions,
     format              = format,
-    max_length          = cat.stack:::.as_py_int(max_length),
+    max_length          = cat.stack::.as_py_int(max_length),
     focus               = focus,
     user_model          = user_model,
     model_source        = model_source,
     mode                = mode,
     input_mode          = input_mode,
     input_type          = input_type,
-    pdf_dpi             = cat.stack:::.as_py_int(pdf_dpi),
+    pdf_dpi             = cat.stack::.as_py_int(pdf_dpi),
     creativity          = reticulate::r_to_py(creativity),
-    thinking_budget     = cat.stack:::.as_py_int(thinking_budget),
+    thinking_budget     = cat.stack::.as_py_int(thinking_budget),
     chain_of_thought    = chain_of_thought,
     context_prompt      = context_prompt,
     step_back_prompt    = step_back_prompt,
@@ -107,12 +107,12 @@ summarize <- function(
     save_directory      = save_directory,
     progress_callback   = reticulate::py_none(),
     models              = py_models,
-    max_workers         = cat.stack:::.as_py_int(max_workers),
+    max_workers         = cat.stack::.as_py_int(max_workers),
     parallel            = parallel,
     auto_download       = auto_download,
     safety              = safety,
-    max_retries         = cat.stack:::.as_py_int(max_retries),
-    batch_retries       = cat.stack:::.as_py_int(batch_retries),
+    max_retries         = cat.stack::.as_py_int(max_retries),
+    batch_retries       = cat.stack::.as_py_int(batch_retries),
     retry_delay         = as.double(retry_delay),
     row_delay           = as.double(row_delay),
     fail_strategy       = fail_strategy,

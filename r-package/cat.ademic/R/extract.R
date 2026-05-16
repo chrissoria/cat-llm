@@ -71,7 +71,7 @@ extract <- function(
 ) {
   mod <- .get_catademic()
 
-  api_key <- cat.stack:::.strip_quotes(api_key)
+  api_key <- cat.stack::.strip_quotes(api_key)
   if (!is.null(creativity)) creativity <- as.double(creativity)
 
   py_paper_metadata <- if (!is.null(paper_metadata)) reticulate::r_to_py(paper_metadata) else NULL
@@ -84,7 +84,7 @@ extract <- function(
     journal_field        = journal_field,
     topic_name           = topic_name,
     topic_id             = topic_id,
-    paper_limit          = cat.stack:::.as_py_int(paper_limit),
+    paper_limit          = cat.stack::.as_py_int(paper_limit),
     date_from            = date_from,
     date_to              = date_to,
     polite_email         = polite_email,
@@ -93,9 +93,9 @@ extract <- function(
     research_focus       = research_focus,
     paper_metadata       = py_paper_metadata,
     description          = description,
-    max_categories       = cat.stack:::.as_py_int(max_categories),
-    categories_per_chunk = cat.stack:::.as_py_int(categories_per_chunk),
-    divisions            = cat.stack:::.as_py_int(divisions),
+    max_categories       = cat.stack::.as_py_int(max_categories),
+    categories_per_chunk = cat.stack::.as_py_int(categories_per_chunk),
+    divisions            = cat.stack::.as_py_int(divisions),
     user_model           = user_model,
     creativity           = reticulate::r_to_py(creativity),
     specificity          = specificity,
@@ -103,8 +103,8 @@ extract <- function(
     mode                 = mode,
     filename             = filename,
     model_source         = model_source,
-    iterations           = cat.stack:::.as_py_int(iterations),
-    random_state         = cat.stack:::.as_py_int(random_state),
+    iterations           = cat.stack::.as_py_int(iterations),
+    random_state         = cat.stack::.as_py_int(random_state),
     focus                = focus,
     progress_callback    = reticulate::py_none(),
     chunk_delay          = as.double(chunk_delay)

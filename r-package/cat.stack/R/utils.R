@@ -10,7 +10,8 @@
 #'   - A plain character vector (single model, shorthand): `c("gpt-4o", "openai", "sk-...")`
 #'
 #' @return A Python list of tuples.
-#' @noRd
+#' @keywords internal
+#' @export
 .convert_models <- function(models) {
   # Handle the case where a single model is passed as a plain character vector
   # (not wrapped in a list). Detect: if models is atomic (not a list), wrap it.
@@ -71,7 +72,8 @@
 #'
 #' @param x A scalar numeric or `NULL`.
 #' @return Python `int` or Python `None`.
-#' @noRd
+#' @keywords internal
+#' @export
 .as_py_int <- function(x) {
   if (is.null(x)) return(reticulate::py_none())
   reticulate::r_to_py(as.integer(x))
@@ -87,7 +89,8 @@
 #'
 #' @param x A character scalar.
 #' @return `x` with leading/trailing matching quotes removed.
-#' @noRd
+#' @keywords internal
+#' @export
 .strip_quotes <- function(x) {
   if (is.null(x) || !is.character(x)) return(x)
   gsub("^['\"]|['\"]$", "", x)
@@ -103,7 +106,8 @@
 #'
 #' @param add_other `FALSE`, `TRUE`, or `"prompt"`.
 #' @return The validated value (unchanged if already valid).
-#' @noRd
+#' @keywords internal
+#' @export
 .validate_add_other <- function(add_other) {
   valid <- c(FALSE, TRUE, "prompt")
   if (!identical(add_other, FALSE) &&

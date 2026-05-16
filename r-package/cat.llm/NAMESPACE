@@ -27,4 +27,14 @@ export(summarize_academic)
 
 export(cerad_drawn_score)
 
+export(classify_political)
+export(extract_political)
+export(explore_political)
+export(summarize_political)
+
+export(classify_web)
+export(extract_web)
+export(explore_web)
+export(summarize_web)
+
 export(catllm_attach)
