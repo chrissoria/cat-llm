@@ -49,3 +49,8 @@ survey-summarizer
 
 # Zenodo upload staging
 zenodo-upload-*/
+
+# Desktop intermediate build artifacts
+app/desktop/CatLLM.iconset/
+app/desktop/screenshots/
+app/desktop/icon_preview_*.png

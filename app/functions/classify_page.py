@@ -36,10 +36,10 @@ def render(domain_id, domain_panel):
     st.markdown("---")
 
     # Task selection
-    st.markdown("### What would you like to do?")
+    st.markdown("### How would you like to provide categories?")
     col_btn1, col_btn2 = st.columns(2)
     with col_btn1:
-        if st.button("Enter Categories Manually", use_container_width=True):
+        if st.button("Enter Manually", use_container_width=True):
             st.session_state.task_mode = "manual"
     with col_btn2:
         if st.button("Auto-extract Categories", use_container_width=True):

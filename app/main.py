@@ -4,13 +4,23 @@ CatLLM Unified App — Entry point.
 Run with: streamlit run app/main.py
 """
 
-import sys
+import base64
 import os
+import sys
 
 # Add app directory to path so imports work
 sys.path.insert(0, os.path.dirname(__file__))
 
 import streamlit as st
+
+
+def _logo_data_uri(filename: str = "logo_mark.png") -> str:
+    path = os.path.join(os.path.dirname(__file__), "assets", filename)
+    with open(path, "rb") as f:
+        return "data:image/png;base64," + base64.b64encode(f.read()).decode("ascii")
+
+
+LOGO_MARK_URI = _logo_data_uri()
 
 # Page config must be first Streamlit call
 st.set_page_config(
@@ -21,6 +31,7 @@ st.set_page_config(
 
 from components.css import inject_css
 from components.header import render_header
+from components.update_check import check_for_updates, render_update_banner
 from components.model_selection import render_api_keys_sidebar
 from components.results_display import (
     render_classify_results,
@@ -69,15 +80,20 @@ FUNCTION_PAGES = {
 inject_css()
 init_session_state()
 init_settings()
+check_for_updates()
 
 # ---------------------------------------------------------------------------
 # Sidebar: domain selector, function selector, API keys
 # ---------------------------------------------------------------------------
-st.sidebar.image(
-    os.path.join(os.path.dirname(__file__), "assets", "logo.png"),
-    width=80,
+st.sidebar.markdown(
+    f"""
+    <div style="display:flex; align-items:center; gap:0.65rem; margin: 0 0 1.25rem 0; padding-bottom:0.75rem; border-bottom:1px solid rgba(232,237,245,0.10);">
+      <img src="{LOGO_MARK_URI}" alt="" style="height:46px; width:auto; display:block; flex-shrink:0; transform:translateY(-4px);">
+      <span style="font-family:'IBM Plex Sans',sans-serif; font-size:1.85rem; line-height:1; font-weight:600; letter-spacing:-0.025em; color:#E8EDF5;">CatLLM</span>
+    </div>
+    """,
+    unsafe_allow_html=True,
 )
-st.sidebar.markdown("## CatLLM")
 
 domain_ids = get_domain_ids()
 domain_labels = [get_domain_label(d) for d in domain_ids]
@@ -115,6 +131,15 @@ if st.session_state.get("function") != selected_fn:
     st.session_state.results = None
     st.session_state.task_mode = None
 
+# Input Type — only meaningful for General (other domains have fixed input types).
+if selected_domain == "general":
+    st.sidebar.selectbox(
+        "Input Type",
+        options=["Text Data (CSV/Excel)", "PDF Documents", "Images"],
+        index=0,
+        key="input_type_sidebar",
+    )
+
 st.sidebar.markdown("---")
 
 # API key inputs
@@ -127,25 +152,18 @@ with st.sidebar.expander("History"):
     render_history_sidebar()
 
 st.sidebar.markdown("---")
-col_reset, col_settings = st.sidebar.columns(2)
-with col_reset:
-    if st.button("Reset All", use_container_width=True):
-        reset_all()
-        st.rerun()
-with col_settings:
-    if st.button("\u2699 Settings", use_container_width=True):
-        show_settings_dialog()
+if st.sidebar.button("Reset All", use_container_width=True):
+    reset_all()
+    st.rerun()
+if st.sidebar.button("\u2699 Settings", use_container_width=True):
+    show_settings_dialog()
 
 
 # ---------------------------------------------------------------------------
-# Header
+# Main content: update banner (if any) + two columns (input | output)
 # ---------------------------------------------------------------------------
-render_header()
+render_update_banner()
 
-
-# ---------------------------------------------------------------------------
-# Main content: two columns (input | output)
-# ---------------------------------------------------------------------------
 col_input, col_output = st.columns([1, 1])
 
 with col_input:
@@ -181,14 +199,7 @@ with col_output:
 
 
 # ---------------------------------------------------------------------------
-# Bottom: code modal
+# Footer: colophon expander
 # ---------------------------------------------------------------------------
-if st.session_state.get("show_code_modal") and st.session_state.get("results"):
-    st.markdown("---")
-    st.markdown("### Reproducibility Code")
-    code = st.session_state.results.get("code", "")
-    if code:
-        st.code(code, language="python")
-    if st.button("Close"):
-        st.session_state.show_code_modal = False
-        st.rerun()
+st.markdown("---")
+render_header()

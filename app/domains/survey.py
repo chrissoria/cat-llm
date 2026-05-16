@@ -1,17 +1,18 @@
 """
-Survey domain (cat-survey): adds survey_question input.
+Survey domain (cat-survey): text-only CSV/Excel uploader + survey_question.
 """
 
 import streamlit as st
-from domains.general import render_domain_panel as render_general_panel
+from components.file_upload import render_csv_upload
 
 
 def render_domain_panel(function_id):
     """Render input panel for the Survey domain.
 
-    Same as General but adds a 'Survey Question' text input.
+    Survey responses are inherently textual, so this panel skips the
+    multimodal Input Type radio and goes straight to the CSV/Excel uploader.
     """
-    result = render_general_panel(function_id)
+    input_data, description, filename, df = render_csv_upload()
 
     survey_question = st.text_input(
         "Survey Question",
@@ -20,5 +21,12 @@ def render_domain_panel(function_id):
         key="survey_question",
     )
 
-    result["domain_kwargs"]["survey_question"] = survey_question
-    return result
+    return {
+        "input_data": input_data,
+        "input_type": "text",
+        "description": description,
+        "original_filename": filename,
+        "mode": None,
+        "df": df,
+        "domain_kwargs": {"survey_question": survey_question},
+    }

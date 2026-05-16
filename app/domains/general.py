@@ -22,11 +22,9 @@ def render_domain_panel(function_id):
             df: DataFrame or None
             domain_kwargs: dict of domain-specific kwargs (empty for general)
     """
-    input_type_choice = st.radio(
-        "Input Type",
-        options=["Text Data (CSV/Excel)", "PDF Documents", "Images"],
-        horizontal=True,
-        key="input_type_radio",
+    # Input Type is selected from the sidebar (see main.py).
+    input_type_choice = st.session_state.get(
+        "input_type_sidebar", "Text Data (CSV/Excel)"
     )
 
     result = {

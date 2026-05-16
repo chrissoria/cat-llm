@@ -30,8 +30,6 @@ def init_session_state():
         "pdf_name_map": {},
         # Results
         "results": None,
-        # UI
-        "show_code_modal": False,
     }
     for key, value in defaults.items():
         if key not in st.session_state:
@@ -41,7 +39,6 @@ def init_session_state():
 def reset_results():
     """Clear results and related state."""
     st.session_state.results = None
-    st.session_state.show_code_modal = False
 
 
 def reset_all():
@@ -52,6 +49,5 @@ def reset_all():
     st.session_state.extracted_categories = None
     st.session_state.extraction_params = None
     st.session_state.results = None
-    st.session_state.show_code_modal = False
     st.session_state.example_loaded = False
     st.session_state.pdf_name_map = {}
