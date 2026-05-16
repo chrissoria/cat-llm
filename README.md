@@ -36,12 +36,12 @@ With leading models like GPT-5, Gemini, and Qwen 3, CatLLM achieves **98% accura
 | Package | Domain | Install | Import |
 |---------|--------|---------|--------|
 | **cat-llm** | Everything (meta-package) | `pip install cat-llm` | `import catllm` |
-| **cat-stack** | General-purpose base | `pip install cat-stack` | `import cat_stack` |
-| **cat-survey** | Survey responses | `pip install cat-survey` | `import cat_survey` |
+| **cat-stack** | General-purpose base | `pip install cat-stack` | `import catstack` |
+| **cat-survey** | Survey responses | `pip install cat-survey` | `import catsurvey` |
 | **cat-vader** | Social media | `pip install cat-vader` | `import catvader` |
 | **cat-ademic** | Academic papers | `pip install cat-ademic` | `import catademic` |
-| **cat-pol** | Political text | `pip install cat-pol` | `import cat_pol` |
-| **cat-cog** | Cognitive assessment | `pip install cat-cog` | `import cat_cog` |
+| **cat-pol** | Political text | `pip install cat-pol` | `import catpol` |
+| **cat-cog** | Cognitive assessment | `pip install cat-cog` | `import catcog` |
 | **cat-web** | Web content | `pip install cat-web` | `import catweb` |
 
 **Dependency graph:**
@@ -252,7 +252,7 @@ results = cat.classify(
 
 ```python
 # pip install cat-stack (general-purpose, no domain framing)
-import cat_stack as cat
+import catstack as cat
 
 results = cat.classify(
     input_data=df['text_column'],
@@ -277,7 +277,7 @@ The survey package provides survey-tuned prompts, few-shot example support, and 
 - R and Stata wrappers available for multi-language workflows
 
 ```python
-import cat_survey as cat
+import catsurvey as cat
 
 results = cat.classify(
     input_data=df['responses'],
@@ -335,7 +335,7 @@ Domain-tuned prompts for political science — legislation, speeches, executive 
 - Designed for policy area coding, ideology classification, cross-city comparison
 
 ```python
-import cat_pol as pol
+import catpol as pol
 
 # Classify ordinances from a built-in source
 results = pol.classify(
@@ -376,9 +376,9 @@ LLM-powered evaluation of drawn images for neuropsychological testing, including
 - Designed for clinical research and cognitive screening studies
 
 ```python
-import cat_cog
+import catcog
 
-scores = cat_cog.cerad_drawn_score(
+scores = catcog.cerad_drawn_score(
     shape="diamond",
     image_input=df['drawing_paths'],
     api_key=api_key
@@ -404,7 +404,7 @@ results = cat.classify(
 The domain-neutral classification engine that all other packages build on. Use this directly when your text doesn't fit neatly into a specific domain.
 
 ```python
-import cat_stack as cat
+import catstack as cat
 
 results = cat.classify(
     input_data=df['text_column'],
