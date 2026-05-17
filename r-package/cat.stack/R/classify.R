@@ -39,7 +39,10 @@
 #'   Default `NULL`.
 #' @param model_source Character. Provider hint for single-model mode:
 #'   `"auto"`, `"openai"`, `"anthropic"`, `"google"`, `"mistral"`,
-#'   `"huggingface"`, `"xai"`. Default `"auto"`.
+#'   `"perplexity"`, `"huggingface"`, `"xai"`, `"ollama"`, or
+#'   `"claude-code"`. Default `"auto"` (detects from model name; falls
+#'   back to `"huggingface"` for Qwen/Llama/DeepSeek-style names — use
+#'   `"ollama"` explicitly to route those to a local Ollama server).
 #' @param max_categories Integer. Maximum number of categories when
 #'   `categories = "auto"`. Default `12L`.
 #' @param categories_per_chunk Integer. Categories extracted per chunk when

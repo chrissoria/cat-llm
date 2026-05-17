@@ -11,6 +11,8 @@ knitr::opts_chunk$set(eval = FALSE, comment = "#>", collapse = TRUE)
 
 `summarize()` produces structured summaries of text, PDFs, or images. Useful for digesting long policy documents, academic abstracts, or a corpus of social media posts into a comparable summary column you can analyze.
 
+> **Note:** Calls below use the namespaced form `cat.stack::summarize()` to avoid collision with `dplyr::summarize()`, `base::summary()`, and other `summarize` aliases. After `library(cat.stack)` only, the bare `summarize()` is unambiguous; the explicit form is safer in mixed sessions.
+
 ## Set up
 
 ```{r setup-pkgs}
@@ -30,7 +32,7 @@ docs <- c(
         "buildings within 1,000 feet of a transit stop...")
 )
 
-results <- summarize(
+results <- cat.stack::summarize(
   input_data   = docs,
   format       = "paragraph",   # "paragraph", "bullets", "one_liner", "structured", "full"
   instructions = "Focus on what the policy does and who it affects",
@@ -51,7 +53,7 @@ For PDF input, install the PDF extras and pass a directory of PDFs:
 ```
 
 ```{r summarize-pdf}
-results <- summarize(
+results <- cat.stack::summarize(
   input_data   = "./policy_pdfs/",     # directory of PDFs (or vector of file paths)
   format       = "bullets",
   instructions = "Summarize each PDF as 5 bullet points covering: what, who, why, when, cost.",
@@ -76,7 +78,7 @@ results <- summarize(
 Same `models = list(...)` pattern as `classify()` works here too:
 
 ```{r ensemble-summarize}
-results <- summarize(
+results <- cat.stack::summarize(
   input_data = docs,
   format     = "bullets",
   models = list(

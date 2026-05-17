@@ -84,7 +84,9 @@ write_csv(df_classified, "survey_responses_classified.csv")
 # Or jump into analysis right away:
 library(dplyr)
 df_classified %>%
-  summarize(across(all_of(c("Job/school", "Family", "Cost of living", "Lifestyle", "Other")), mean))
+  dplyr::summarize(
+    across(all_of(c("Job/school", "Family", "Cost of living", "Lifestyle", "Other")), mean)
+  )
 ```
 
 ## Tips

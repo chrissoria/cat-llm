@@ -100,7 +100,10 @@ Default \code{NULL}.}
 
 \item{model_source}{Character. Provider hint for single-model mode:
 \code{"auto"}, \code{"openai"}, \code{"anthropic"}, \code{"google"}, \code{"mistral"},
-\code{"huggingface"}, \code{"xai"}. Default \code{"auto"}.}
+\code{"perplexity"}, \code{"huggingface"}, \code{"xai"}, \code{"ollama"}, or
+\code{"claude-code"}. Default \code{"auto"} (detects from model name; falls
+back to \code{"huggingface"} for Qwen/Llama/DeepSeek-style names — use
+\code{"ollama"} explicitly to route those to a local Ollama server).}
 
 \item{max_categories}{Integer. Maximum number of categories when
 \code{categories = "auto"}. Default \code{12L}.}

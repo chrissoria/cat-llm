@@ -72,19 +72,18 @@ results <- classify(
 
 | Threshold           | Meaning                                                                  |
 |---------------------|--------------------------------------------------------------------------|
-| `"unanimous"`       | Only assign category if every model agrees. Highest precision.            |
-| `"majority"`        | Assign if more than half agree. Good balance.                             |
-| `0.5`               | Equivalent to majority — at least 50% must agree.                          |
-| `0.67`              | At least two-thirds must agree.                                            |
-| `1.0`               | Same as unanimous.                                                         |
+| `"unanimous"`       | Only assign category if every model agrees. Highest precision (default).  |
+| `"majority"`        | Assign if more than half agree (50%). Good balance.                       |
+| `"two-thirds"`      | At least two-thirds must agree (~67%).                                     |
+| Custom numeric `0.0`–`1.0` | Any threshold between 0 and 1.                                       |
 
 ## Output columns
 
-For an ensemble with 3 models, the result `data.frame` includes:
+For an ensemble with N models classifying into K categories, the result `data.frame` includes:
 
-- `input_data`
-- `<category>_<model_slug>` columns for each (model × category) pair
-- `<category>_consensus` columns with the voted result
-- `<category>_n_agree` count of how many models picked it
+- `input_data` — original text
+- `category_<i>_<model_slug>` columns (i = 1..K) for each (model × category) pair
+- `category_<i>_consensus` columns with the voted result (0/1)
+- Agreement scores showing how many models agreed
 
 Use the `_consensus` columns for downstream analysis; the per-model columns help diagnose disagreement.
