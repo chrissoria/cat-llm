@@ -21,6 +21,7 @@ def init_session_state():
         "task_mode": None,
         "extracted_categories": None,
         "extraction_params": None,
+        "verbosity_check": None,
         "ensemble_num_runs": 3,
         # Data
         "survey_data": None,
@@ -48,6 +49,7 @@ def reset_all():
     st.session_state.task_mode = None
     st.session_state.extracted_categories = None
     st.session_state.extraction_params = None
+    st.session_state.verbosity_check = None
     st.session_state.results = None
     st.session_state.example_loaded = False
     st.session_state.pdf_name_map = {}

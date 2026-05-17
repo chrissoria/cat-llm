@@ -176,6 +176,53 @@ def _render_manual_classify(domain_id, input_data, input_type, description, orig
     model_temperatures = model_sel["model_temperatures"]
     consensus_threshold = model_sel["consensus_threshold"]
 
+    if st.button(
+        "Check categories",
+        use_container_width=True,
+        disabled=not categories_entered or not models_tuples,
+        help="Use the selected model to flag categories that lack a description or example (1 API call).",
+    ):
+        check_model_name = models_tuples[0][0]
+        check_model_source = models_tuples[0][1]
+        check_api_key = models_tuples[0][2]
+        with st.spinner("Checking categories…"):
+            try:
+                verbosity_result = catllm.check_category_verbosity(
+                    categories_entered,
+                    api_key=check_api_key,
+                    user_model=check_model_name,
+                    model_source=check_model_source,
+                )
+                st.session_state.verbosity_check = {
+                    "categories": list(categories_entered),
+                    "result": verbosity_result,
+                }
+            except Exception as e:
+                st.error(f"Verbosity check failed: {e}")
+        st.rerun()
+
+    vc = st.session_state.get("verbosity_check")
+    if vc and vc["categories"] == categories_entered:
+        thin = [v for v in vc["result"] if not v["is_verbose"]]
+        if not thin:
+            st.success(
+                f"All {len(vc['result'])} categories include a description and examples.",
+                icon="✅",
+            )
+        else:
+            lines = []
+            for v in thin:
+                missing = []
+                if not v.get("has_description"): missing.append("description")
+                if not v.get("has_examples"): missing.append("example")
+                lines.append(f"- **{v['category']}** — add a {' and '.join(missing)}")
+            st.warning(
+                f"{len(thin)} of {len(vc['result'])} categories could be more detailed. "
+                "Verbose categories with descriptions and examples typically improve "
+                "classification accuracy.\n\n" + "\n".join(lines),
+                icon="⚠️",
+            )
+
     if st.button("Categorize Data", type="primary", use_container_width=True):
         if input_data is None:
             st.error("Please upload data first")
