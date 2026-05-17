@@ -1,0 +1,207 @@
+---
+title: "Extracting and Exploring Categories with Local Models (Ollama)"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(eval = FALSE, comment = "#>", collapse = TRUE)
+```
+
+# Extracting and Exploring Categories with Local Models (Ollama)
+
+This walkthrough runs `extract()` and `explore()` entirely on your local
+machine via Ollama — no API keys, no cloud costs, full data privacy.
+
+What this script covers:
+
+1. Checking Ollama status and listing installed models
+2. `extract()` — normalized, deduplicated category list
+3. `explore()` — raw category frequency list for saturation analysis
+
+## Prerequisites
+
+```{r prereqs}
+# install.packages("cat.llm",
+#                  repos = c("https://chrissoria.r-universe.dev",
+#                            "https://cloud.r-project.org"))
+library(cat.llm)
+
+# One-time Python backend install:
+# install_cat_stack()
+
+# One-time model pull (in a terminal):
+#   ollama pull llama3.2      # ~2.0 GB
+#   ollama pull qwen2.5:7b   # ~4.7 GB
+```
+
+## 1. Check Ollama
+
+`ensure_ollama_running()` checks whether Ollama is reachable and,
+if not, attempts to start it automatically (macOS: via the Ollama.app
+daemon; Linux/Windows: via `ollama serve`).
+
+```{r check-ollama}
+ensure_ollama_running()
+
+# See what models you have installed
+models <- list_ollama_models()
+cat("Installed models:", length(models), "\n")
+for (m in models) cat(" -", m, "\n")
+
+# Set the model you want to use — change to any model you have installed
+MODEL <- "llama3.2"
+
+if (!check_ollama_model(MODEL)) {
+  cat("'", MODEL, "' is not installed. Downloading now...\n", sep = "")
+  pull_ollama_model(MODEL, auto_confirm = TRUE)
+}
+```
+
+`check_ollama_model()` does partial matching, so `"llama3.2"` matches
+`"llama3.2:latest"`.  `pull_ollama_model()` prints estimated size and a
+resource check before downloading; `auto_confirm = TRUE` skips the
+interactive prompt — safe in scripts and RMarkdown documents.
+
+## 2. Load data
+
+```{r load-data}
+# Using a character vector here; in practice substitute your own CSV column:
+# df <- read.csv("survey_responses.csv")
+# responses <- df$open_response
+
+responses <- c(
+  "I moved to be closer to family.",
+  "Better job opportunities in this city.",
+  "Lower cost of living.",
+  "Wanted a warmer climate.",
+  "My partner got into graduate school here.",
+  "I was priced out of my old neighborhood.",
+  "Looking for a fresh start after my divorce.",
+  "Company relocated our office.",
+  "Needed more space for a home office.",
+  "Better schools for the kids.",
+  "I retired and wanted to be near the beach.",
+  "Cheaper rent and more outdoor activities.",
+  "Transferred to a new branch.",
+  "Family illness — needed to be nearby.",
+  "Just wanted to live somewhere more walkable."
+)
+
+SURVEY_QUESTION <- "Why did you move to your current residence?"
+```
+
+## 3. `extract()` — normalized category list
+
+`extract()` runs multiple iterations of chunked extraction, semantically
+merges the results, and returns a ranked, deduplicated list. Use this as
+the first step before `classify()`.
+
+```{r extract}
+extract_results <- extract(
+  input_data      = responses,
+  survey_question = SURVEY_QUESTION,
+  user_model      = MODEL,
+  model_source    = "ollama",
+  max_categories  = 10L,
+  iterations      = 3L
+)
+
+cat("Top categories (extract):\n")
+for (cat_label in extract_results$top_categories) {
+  cat(" ", cat_label, "\n")
+}
+
+cat("\nCategory frequency counts:\n")
+print(head(extract_results$counts_df, 15))
+```
+
+The three components of the return value:
+
+| Field            | Contents                                                       |
+|------------------|----------------------------------------------------------------|
+| `top_categories` | Curated, ordered character vector — ready to pass to `classify()` |
+| `counts_df`      | Every candidate category + how many iterations selected it     |
+| `raw_top_text`   | Raw model prose (useful for debugging prompt issues)           |
+
+## 4. `explore()` — raw category list for saturation analysis
+
+`explore()` returns *every* category string from every chunk across every
+iteration — duplicates intact. Use this to check whether your category
+space is saturating (i.e. whether new iterations stop producing new
+categories).
+
+```{r explore}
+raw_categories <- explore(
+  input_data      = responses,
+  survey_question = SURVEY_QUESTION,
+  user_model      = MODEL,
+  model_source    = "ollama",
+  iterations      = 3L
+)
+
+cat("Total raw extractions:", length(raw_categories), "\n")
+cat("Unique categories:    ", length(unique(raw_categories)), "\n")
+```
+
+### Saturation check
+
+New unique categories should decrease with each iteration. If iteration 3
+still introduces as many new categories as iteration 1, add more
+iterations.
+
+```{r saturation}
+n_iter <- 3L
+per_iter <- length(raw_categories) %/% n_iter
+seen <- character(0)
+
+cat("Saturation by iteration:\n")
+for (i in seq_len(n_iter)) {
+  chunk <- raw_categories[((i - 1L) * per_iter + 1L):(i * per_iter)]
+  new_cats <- setdiff(chunk, seen)
+  seen <- union(seen, chunk)
+  cat(sprintf("  Iteration %d: %3d new unique categories\n", i, length(new_cats)))
+}
+
+cat("\nSample raw categories (first 20):\n")
+for (c in head(raw_categories, 20)) cat(" -", c, "\n")
+```
+
+## From explore/extract to classify
+
+Pass `extract_results$top_categories` directly to `classify()`, or
+rewrite the labels to be more verbose first (verbose labels typically
+improve accuracy by several percentage points):
+
+```{r classify}
+verbose_cats <- c(
+  "Employment/Career: Moving for a new job, promotion, transfer, or better career prospects.",
+  "Family/Relationships: Relocating to be near family, following a partner, or after a major life event.",
+  "Cost/Affordability: Driven by housing costs, rent increases, or seeking a cheaper area.",
+  "Lifestyle/Environment: Seeking a preferred climate, outdoor access, walkability, or quality of life.",
+  "Education: Moving for better schools for children, or a partner's graduate program.",
+  "Other: The response does not fit any of the above categories."
+)
+
+results <- classify(
+  input_data      = responses,
+  categories      = verbose_cats,
+  survey_question = SURVEY_QUESTION,
+  user_model      = MODEL,
+  model_source    = "ollama"
+)
+
+str(results)
+```
+
+## Tips
+
+- **Ollama auto-starts automatically** when you call `classify()` or
+  `extract()` with `model_source = "ollama"` — you don't need to call
+  `ensure_ollama_running()` manually, though doing so first gives a clear
+  error if Ollama isn't installed.
+- **Small models (phi3:mini, qwen2.5:3b) work** for extraction;
+  classification accuracy improves with larger models (qwen2.5:7b,
+  mistral:7b).
+- **Use ensemble mode** with multiple local models for higher-stakes
+  coding — see `02-validate-hybrid-ensemble.Rmd` and
+  `03-ensemble-classification-cloud-and-local.Rmd`.

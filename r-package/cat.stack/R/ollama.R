@@ -131,3 +131,109 @@ ensure_ollama_running <- function(auto_start = TRUE,
     "and try again.", call. = FALSE
   )
 }
+
+#' List locally installed Ollama models
+#'
+#' Returns the names of all models already downloaded to your local Ollama
+#' installation. Requires Ollama to be running (call `ensure_ollama_running()`
+#' first, or start it manually with `ollama serve`).
+#'
+#' @param host Character. Hostname Ollama is reachable on. Default `"localhost"`.
+#' @param port Integer. Port Ollama is reachable on. Default `11434L`.
+#'
+#' @return A character vector of model names (e.g. `c("qwen2.5:7b", "mistral:7b")`),
+#'   or an empty character vector if Ollama is not running.
+#'
+#' @examples
+#' \dontrun{
+#' ensure_ollama_running()
+#' list_ollama_models()
+#' }
+#' @export
+list_ollama_models <- function(host = "localhost", port = 11434L) {
+  providers <- tryCatch(
+    reticulate::import("cat_stack._providers"),
+    error = function(e) stop(
+      "Could not load cat_stack Python module. ",
+      "Run cat.stack::install_cat_stack() first. (",
+      conditionMessage(e), ")", call. = FALSE
+    )
+  )
+  as.character(reticulate::py_to_r(
+    providers$list_ollama_models(host = host, port = .as_py_int(port))
+  ))
+}
+
+#' Check whether a specific Ollama model is installed locally
+#'
+#' Returns `TRUE` if the named model is available in your local Ollama
+#' installation, `FALSE` otherwise. Partial name matching is supported
+#' (e.g. `"llama3.2"` matches `"llama3.2:latest"`).
+#'
+#' @param model Character. Model name to look for (e.g. `"qwen2.5:7b"`).
+#' @param host Character. Hostname Ollama is reachable on. Default `"localhost"`.
+#' @param port Integer. Port Ollama is reachable on. Default `11434L`.
+#'
+#' @return Logical scalar.
+#'
+#' @examples
+#' \dontrun{
+#' check_ollama_model("qwen2.5:7b")
+#' }
+#' @export
+check_ollama_model <- function(model, host = "localhost", port = 11434L) {
+  providers <- tryCatch(
+    reticulate::import("cat_stack._providers"),
+    error = function(e) stop(
+      "Could not load cat_stack Python module. ",
+      "Run cat.stack::install_cat_stack() first. (",
+      conditionMessage(e), ")", call. = FALSE
+    )
+  )
+  isTRUE(reticulate::py_to_r(
+    providers$check_ollama_model(model = model, host = host, port = .as_py_int(port))
+  ))
+}
+
+#' Pull (download) an Ollama model
+#'
+#' Downloads the named model into your local Ollama installation. Prints the
+#' estimated model size and a resource check before downloading. Set
+#' `auto_confirm = TRUE` to skip the interactive confirmation prompt — useful
+#' in scripts and RMarkdown documents.
+#'
+#' @param model Character. Model name to download (e.g. `"llama3.2"`,
+#'   `"qwen2.5:7b"`).
+#' @param host Character. Hostname Ollama is reachable on. Default `"localhost"`.
+#' @param port Integer. Port Ollama is reachable on. Default `11434L`.
+#' @param auto_confirm Logical. Skip the confirmation prompt. Default `FALSE`.
+#'
+#' @return Invisibly returns `TRUE` on success, `FALSE` on failure.
+#'
+#' @examples
+#' \dontrun{
+#' pull_ollama_model("llama3.2", auto_confirm = TRUE)
+#' }
+#' @export
+pull_ollama_model <- function(model,
+                               host         = "localhost",
+                               port         = 11434L,
+                               auto_confirm = FALSE) {
+  providers <- tryCatch(
+    reticulate::import("cat_stack._providers"),
+    error = function(e) stop(
+      "Could not load cat_stack Python module. ",
+      "Run cat.stack::install_cat_stack() first. (",
+      conditionMessage(e), ")", call. = FALSE
+    )
+  )
+  result <- reticulate::py_to_r(
+    providers$pull_ollama_model(
+      model        = model,
+      host         = host,
+      port         = .as_py_int(port),
+      auto_confirm = auto_confirm
+    )
+  )
+  invisible(isTRUE(result))
+}
