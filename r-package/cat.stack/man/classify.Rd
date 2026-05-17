@@ -44,7 +44,8 @@ classify(
   pdf_dpi = 150L,
   auto_download = FALSE,
   add_other = "prompt",
-  check_verbosity = TRUE
+  check_verbosity = TRUE,
+  auto_start_ollama = TRUE
 )
 }
 \arguments{
@@ -160,6 +161,12 @@ silently adds "Other". \code{FALSE} never adds it.}
 
 \item{check_verbosity}{Logical. Check whether each category has a
 description and examples (1 API call). Default \code{TRUE}.}
+
+\item{auto_start_ollama}{Logical. If \code{TRUE} (default), automatically
+call \code{\link[=ensure_ollama_running]{ensure_ollama_running()}} when \code{model_source = "ollama"} or any
+ensemble entry uses the \code{"ollama"} provider. Set \code{FALSE} to skip
+the check (e.g. on CI runners where you don't want to launch
+Ollama).}
 }
 \value{
 A \code{data.frame} with one row per input item and classification

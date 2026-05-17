@@ -20,7 +20,8 @@ explore(
   iterations = 8L,
   random_state = NULL,
   focus = NULL,
-  chunk_delay = 0
+  chunk_delay = 0,
+  auto_start_ollama = TRUE
 )
 }
 \arguments{
@@ -60,6 +61,10 @@ category list.}
 \item{focus}{Character or \code{NULL}. Optional focus instruction.}
 
 \item{chunk_delay}{Numeric. Seconds between API calls. Default \code{0.0}.}
+
+\item{auto_start_ollama}{Logical. If \code{TRUE} (default), automatically
+call \code{\link[=ensure_ollama_running]{ensure_ollama_running()}} when \code{model_source = "ollama"}. Set
+\code{FALSE} to skip the check (e.g. on CI).}
 }
 \value{
 A character vector of every category string extracted across all

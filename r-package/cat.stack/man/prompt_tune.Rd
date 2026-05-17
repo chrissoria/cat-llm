@@ -24,7 +24,8 @@ prompt_tune(
   ui = "terminal",
   optimize = "balanced",
   add_other = "prompt",
-  thinking_budget = 0L
+  thinking_budget = 0L,
+  auto_start_ollama = TRUE
 )
 }
 \arguments{
@@ -79,6 +80,11 @@ local web page with checkboxes (may not auto-launch from R sessions).}
 "Other" catch-all category. Default \code{"prompt"}.}
 
 \item{thinking_budget}{Integer. Default \code{0L}.}
+
+\item{auto_start_ollama}{Logical. If \code{TRUE} (default), automatically
+call \code{\link[=ensure_ollama_running]{ensure_ollama_running()}} when \code{model_source = "ollama"} or
+any ensemble entry uses the \code{"ollama"} provider. Set \code{FALSE} to
+skip the check.}
 }
 \value{
 A named list with components:

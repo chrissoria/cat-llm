@@ -49,6 +49,10 @@
 #' @param add_other Logical or `"prompt"`. Controls auto-addition of an
 #'   "Other" catch-all category. Default `"prompt"`.
 #' @param thinking_budget Integer. Default `0L`.
+#' @param auto_start_ollama Logical. If `TRUE` (default), automatically
+#'   call [ensure_ollama_running()] when `model_source = "ollama"` or
+#'   any ensemble entry uses the `"ollama"` provider. Set `FALSE` to
+#'   skip the check.
 #'
 #' @return A named list with components:
 #'   * `system_prompt` — the optimized system prompt (best found)
@@ -102,9 +106,12 @@ prompt_tune <- function(
     ui                  = "terminal",
     optimize            = "balanced",
     add_other           = "prompt",
-    thinking_budget     = 0L
+    thinking_budget     = 0L,
+    auto_start_ollama   = TRUE
 ) {
   mod <- .get_cat_stack()
+
+  .maybe_ensure_ollama(model_source, models, auto = auto_start_ollama)
 
   api_key   <- .strip_quotes(api_key)
   add_other <- .validate_add_other(add_other)

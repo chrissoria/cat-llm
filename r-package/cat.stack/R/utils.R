@@ -97,6 +97,42 @@
 }
 
 
+#' Auto-start a local Ollama server when needed
+#'
+#' Internal helper: if `model_source = "ollama"` or any model spec in the
+#' ensemble `models` list has `"ollama"` as the provider, call
+#' [ensure_ollama_running()] silently so the user doesn't see a
+#' `ConnectionError: OLLAMA NOT RUNNING` from the Python side.
+#'
+#' @param model_source Character or `NULL` (single-model mode).
+#' @param models List of model specs (ensemble mode), or `NULL`.
+#' @param auto Logical. `FALSE` skips the check entirely (user opt-out).
+#' @return Invisibly `NULL`.
+#' @keywords internal
+#' @export
+.maybe_ensure_ollama <- function(model_source = NULL, models = NULL, auto = TRUE) {
+  if (!isTRUE(auto)) return(invisible(NULL))
+
+  ms <- if (is.null(model_source)) "" else tolower(as.character(model_source))
+  single_ollama <- identical(ms, "ollama")
+
+  ensemble_ollama <- FALSE
+  if (!is.null(models)) {
+    ensemble_ollama <- any(vapply(models, function(m) {
+      provider <- NULL
+      if (is.character(m) && length(m) >= 2L) provider <- m[[2L]]
+      else if (is.list(m) && length(m) >= 2L) provider <- m[[2L]]
+      !is.null(provider) && identical(tolower(as.character(provider)), "ollama")
+    }, logical(1L)))
+  }
+
+  if (single_ollama || ensemble_ollama) {
+    ensure_ollama_running(verbose = FALSE)
+  }
+  invisible(NULL)
+}
+
+
 #' Validate and normalise the `add_other` argument
 #'
 #' Python's default for `add_other` is `"prompt"`, which calls `input()`.

@@ -67,6 +67,10 @@
 #'   Default `30.0`.
 #' @param batch_timeout Numeric. Maximum seconds to wait for batch completion.
 #'   Default `86400.0`.
+#' @param auto_start_ollama Logical. If `TRUE` (default), automatically
+#'   call [ensure_ollama_running()] when `model_source = "ollama"` or
+#'   any ensemble entry uses the `"ollama"` provider. Set `FALSE` to
+#'   skip the check.
 #'
 #' @return A `data.frame` with summarization results.
 #'
@@ -123,9 +127,12 @@ summarize <- function(
     fail_strategy        = "partial",
     batch_mode           = FALSE,
     batch_poll_interval  = 30.0,
-    batch_timeout        = 86400.0
+    batch_timeout        = 86400.0,
+    auto_start_ollama    = TRUE
 ) {
   cat_py <- .get_cat_stack()
+
+  .maybe_ensure_ollama(model_source, models, auto = auto_start_ollama)
 
   api_key <- .strip_quotes(api_key)
 

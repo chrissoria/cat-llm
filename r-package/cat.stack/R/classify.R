@@ -81,6 +81,11 @@
 #'   silently adds "Other". `FALSE` never adds it.
 #' @param check_verbosity Logical. Check whether each category has a
 #'   description and examples (1 API call). Default `TRUE`.
+#' @param auto_start_ollama Logical. If `TRUE` (default), automatically
+#'   call [ensure_ollama_running()] when `model_source = "ollama"` or any
+#'   ensemble entry uses the `"ollama"` provider. Set `FALSE` to skip
+#'   the check (e.g. on CI runners where you don't want to launch
+#'   Ollama).
 #'
 #' @return A `data.frame` with one row per input item and classification
 #'   columns. In single-model mode the columns are the category names. In
@@ -150,9 +155,12 @@ classify <- function(
     pdf_dpi              = 150L,
     auto_download        = FALSE,
     add_other            = "prompt",
-    check_verbosity      = TRUE
+    check_verbosity      = TRUE,
+    auto_start_ollama    = TRUE
 ) {
   cat_py <- .get_cat_stack()
+
+  .maybe_ensure_ollama(model_source, models, auto = auto_start_ollama)
 
   api_key   <- .strip_quotes(api_key)
   add_other <- .validate_add_other(add_other)

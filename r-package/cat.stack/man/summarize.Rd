@@ -37,7 +37,8 @@ summarize(
   fail_strategy = "partial",
   batch_mode = FALSE,
   batch_poll_interval = 30,
-  batch_timeout = 86400
+  batch_timeout = 86400,
+  auto_start_ollama = TRUE
 )
 }
 \arguments{
@@ -136,6 +137,11 @@ Default \code{30.0}.}
 
 \item{batch_timeout}{Numeric. Maximum seconds to wait for batch completion.
 Default \code{86400.0}.}
+
+\item{auto_start_ollama}{Logical. If \code{TRUE} (default), automatically
+call \code{\link[=ensure_ollama_running]{ensure_ollama_running()}} when \code{model_source = "ollama"} or
+any ensemble entry uses the \code{"ollama"} provider. Set \code{FALSE} to
+skip the check.}
 }
 \value{
 A \code{data.frame} with summarization results.

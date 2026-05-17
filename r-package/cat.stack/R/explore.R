@@ -30,6 +30,9 @@
 #' @param random_state Integer or `NULL`. Random seed for reproducibility.
 #' @param focus Character or `NULL`. Optional focus instruction.
 #' @param chunk_delay Numeric. Seconds between API calls. Default `0.0`.
+#' @param auto_start_ollama Logical. If `TRUE` (default), automatically
+#'   call [ensure_ollama_running()] when `model_source = "ollama"`. Set
+#'   `FALSE` to skip the check (e.g. on CI).
 #'
 #' @return A character vector of every category string extracted across all
 #'   chunks and iterations. Length is approximately
@@ -65,9 +68,12 @@ explore <- function(
     iterations        = 8L,
     random_state      = NULL,
     focus             = NULL,
-    chunk_delay       = 0.0
+    chunk_delay       = 0.0,
+    auto_start_ollama = TRUE
 ) {
   cat_py <- .get_cat_stack()
+
+  .maybe_ensure_ollama(model_source, NULL, auto = auto_start_ollama)
 
   api_key <- .strip_quotes(api_key)
   if (!is.null(creativity)) creativity <- as.double(creativity)

@@ -31,22 +31,12 @@ install.packages("cat.llm",
 library(cat.llm)
 ```
 
-## 3. Make sure Ollama is running
+## 3. Classify with the local model
 
-`ensure_ollama_running()` checks whether the local Ollama server is
-reachable and, by default, starts it for you if it isn't (using the
-macOS Ollama.app, or `ollama serve` on Linux/Windows). Call it once
-per R session before any local-model classification — this prevents
-the `ConnectionError: OLLAMA NOT RUNNING` you'd otherwise get.
-
-```{r ensure-ollama}
-ensure_ollama_running()
-#> Ollama is now running.
-```
-
-## 4. Classify with the local model
-
-No `api_key` is needed when using Ollama:
+No `api_key` is needed when using Ollama. The Ollama server starts
+automatically the first time you call `classify()` (or `extract()`,
+`explore()`, `summarize()`, `prompt_tune()`) with
+`model_source = "ollama"`:
 
 ```{r classify}
 responses <- c(
@@ -65,7 +55,11 @@ results <- classify(
 print(results)
 ```
 
-## 5. Why local?
+> To opt out of auto-start (e.g. on a CI runner), pass
+> `auto_start_ollama = FALSE`. To call it explicitly somewhere else,
+> use `ensure_ollama_running()`.
+
+## 4. Why local?
 
 - **Zero API cost** — only your machine's electricity.
 - **Data never leaves your network** — important for sensitive survey data, clinical text, internal documents.
@@ -73,7 +67,7 @@ print(results)
 
 The trade-off: local 7B–14B models are usually a few percentage points behind frontier cloud models on classification accuracy. For most survey work the gap is small; for high-stakes coding, validate against a labeled subsample.
 
-## 6. Suggested local models
+## 5. Suggested local models
 
 | Model               | Pull command                | Notes                                  |
 |---------------------|-----------------------------|----------------------------------------|

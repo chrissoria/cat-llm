@@ -33,6 +33,9 @@
 #'   `"decisions to move"`).
 #' @param chunk_delay Numeric. Seconds between API calls (rate limiting).
 #'   Default `0.0`.
+#' @param auto_start_ollama Logical. If `TRUE` (default), automatically
+#'   call [ensure_ollama_running()] when `model_source = "ollama"`. Set
+#'   `FALSE` to skip the check (e.g. on CI).
 #'
 #' @return A named list with:
 #' \describe{
@@ -71,9 +74,12 @@ extract <- function(
     iterations        = 8L,
     random_state      = NULL,
     focus             = NULL,
-    chunk_delay       = 0.0
+    chunk_delay       = 0.0,
+    auto_start_ollama = TRUE
 ) {
   cat_py <- .get_cat_stack()
+
+  .maybe_ensure_ollama(model_source, NULL, auto = auto_start_ollama)
 
   api_key <- .strip_quotes(api_key)
   if (!is.null(creativity)) creativity <- as.double(creativity)
