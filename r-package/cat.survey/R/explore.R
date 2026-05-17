@@ -24,6 +24,17 @@
 #' @param chunk_delay Numeric. Seconds between API calls. Default `0.0`.
 #'
 #' @return A character vector of every category string extracted.
+#' @examples
+#' \dontrun{
+#' raw_categories <- explore(
+#'   input_data      = df$open_response,
+#'   survey_question = "What concerns you most about your community?",
+#'   api_key         = Sys.getenv("OPENAI_API_KEY"),
+#'   user_model      = "gpt-4o-mini",
+#'   iterations      = 4L
+#' )
+#' table(raw_categories)
+#' }
 #' @export
 explore <- function(
     input_data,

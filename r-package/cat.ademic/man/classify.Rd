@@ -163,3 +163,24 @@ A \code{data.frame} with classification results.
 Wraps the Python \code{catademic.classify()} function. Adds journal and topic
 sourcing parameters to the base cat.stack classification engine.
 }
+\examples{
+\dontrun{
+# Classify abstracts directly
+results <- classify(
+  categories = c("Methods", "Theory", "Review", "Other"),
+  input_data = df$abstract,
+  mode       = "text",
+  api_key    = Sys.getenv("OPENAI_API_KEY"),
+  user_model = "gpt-4o-mini"
+)
+
+# Fetch papers from a journal via OpenAlex
+results <- classify(
+  categories   = c("Empirical", "Theoretical", "Review"),
+  journal_name = "American Sociological Review",
+  paper_limit  = 100L,
+  polite_email = "you@university.edu",
+  api_key      = Sys.getenv("OPENAI_API_KEY")
+)
+}
+}

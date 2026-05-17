@@ -1,0 +1,103 @@
+---
+title: "Extracting Categories with extract()"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(eval = FALSE, comment = "#>", collapse = TRUE)
+```
+
+# Discover a category scheme with `extract()`
+
+`extract()` discovers and returns a **normalized, de-duplicated** set of categories from your data. Use this when you have free-text data and no pre-defined coding scheme — let the model surface the recurring themes for you.
+
+Behind the scenes, `extract()` chunks your data, runs the discovery prompt multiple times (across `iterations`), merges semantically similar labels, and returns a ranked list of top categories.
+
+## Set up
+
+```{r setup-pkgs}
+library(cat.stack)
+api_key <- Sys.getenv("OPENAI_API_KEY")
+```
+
+## Basic usage
+
+```{r basic-extract}
+responses <- c(
+  "Just had the best coffee ever! Highly recommend the new place downtown.",
+  "The bus was 40 minutes late again. Public transit here is a joke.",
+  "Loved the museum exhibit on California water rights.",
+  "Why is rent so expensive in this neighborhood?",
+  "Tried the new ramen spot — totally worth the wait.",
+  "Construction noise on 4th street has been brutal lately.",
+  "The library's new author series is amazing.",
+  "Need to find an affordable place before lease ends.",
+  "Saw a great documentary at the indie theater last night.",
+  "Trash pickup hasn't come in three weeks. Calling 311."
+)
+
+result <- extract(
+  input_data           = responses,
+  api_key              = api_key,
+  user_model           = "gpt-4o-mini",
+  max_categories       = 8L,
+  iterations           = 6L
+)
+
+result$top_categories
+```
+
+## Inspect the full output
+
+`extract()` returns a named list with three components:
+
+```{r inspect}
+names(result)
+# [1] "counts_df"      "top_categories"  "raw_top_text"
+
+# counts_df: every candidate category + how many iterations picked it
+head(result$counts_df, 15)
+
+# top_categories: the curated, ordered list (this is what you'd pass to classify())
+result$top_categories
+
+# raw_top_text: the original prose the model produced (useful for debugging prompt issues)
+head(result$raw_top_text, 3)
+```
+
+## Tune the discovery
+
+| Argument               | Effect                                                                          |
+|------------------------|--------------------------------------------------------------------------------|
+| `max_categories`       | Cap on the number of categories returned. Smaller = forces the model to merge.   |
+| `categories_per_chunk` | Categories the model proposes per chunk before consolidation.                    |
+| `divisions`            | Number of chunks the data is split into per iteration.                            |
+| `iterations`           | Number of passes. More passes = more stable but more expensive.                   |
+| `specificity`          | `"broad"` (default) or `"specific"`. `"specific"` gives finer-grained themes.    |
+
+```{r tuned-extract}
+result_specific <- extract(
+  input_data           = responses,
+  api_key              = api_key,
+  user_model           = "gpt-4o-mini",
+  max_categories       = 12L,
+  iterations           = 10L,
+  specificity          = "specific"
+)
+result_specific$top_categories
+```
+
+## What to do with the output
+
+Pass `result$top_categories` directly to `classify()`:
+
+```{r classify-from-extract}
+classified <- classify(
+  input_data = responses,
+  categories = result$top_categories,
+  api_key    = api_key,
+  user_model = "gpt-4o-mini"
+)
+```
+
+Or curate manually first — rewriting the labels to be more verbose tends to boost classification accuracy by several percentage points (see the Python README's "Best Practices for Classification" section).

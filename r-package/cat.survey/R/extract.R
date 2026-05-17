@@ -25,6 +25,18 @@
 #' @param chunk_delay Numeric. Seconds between API calls. Default `0.0`.
 #'
 #' @return A named list with `counts_df`, `top_categories`, and `raw_top_text`.
+#' @examples
+#' \dontrun{
+#' result <- extract(
+#'   input_data      = c("Took a new job in Chicago",
+#'                       "Wanted to be closer to grandkids",
+#'                       "Couldn't afford rent in the Bay Area"),
+#'   survey_question = "Why did you move?",
+#'   api_key         = Sys.getenv("OPENAI_API_KEY"),
+#'   user_model      = "gpt-4o-mini"
+#' )
+#' print(result$top_categories)
+#' }
 #' @export
 extract <- function(
     input_data,

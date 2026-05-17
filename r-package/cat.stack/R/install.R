@@ -13,6 +13,17 @@
 #' @param ... Additional arguments passed to [reticulate::py_install()].
 #'
 #' @return Invisibly `NULL`.
+#' @examples
+#' \dontrun{
+#' # Standard install
+#' install_cat_stack()
+#'
+#' # With PDF support (installs cat-stack[pdf])
+#' install_cat_stack(pdf = TRUE)
+#'
+#' # Upgrade an existing install
+#' install_cat_stack(upgrade = TRUE)
+#' }
 #' @export
 install_cat_stack <- function(method = "auto", conda = "auto", pdf = FALSE,
                               upgrade = FALSE, ...) {

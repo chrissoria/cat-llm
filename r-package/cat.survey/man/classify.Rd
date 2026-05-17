@@ -130,3 +130,16 @@ A \code{data.frame} with classification results.
 Wraps the Python \code{cat_survey.classify()} function. Adds \code{survey_question}
 context to the base cat.stack classification engine.
 }
+\examples{
+\dontrun{
+results <- classify(
+  input_data      = c("Took a new job in Chicago",
+                      "Wanted to be closer to grandkids",
+                      "Couldn't afford rent in the Bay Area"),
+  categories      = c("Job/school", "Family", "Cost of living", "Other"),
+  survey_question = "Why did you move?",
+  api_key         = Sys.getenv("OPENAI_API_KEY"),
+  user_model      = "gpt-4o-mini"
+)
+}
+}

@@ -63,6 +63,18 @@
 #' @param check_verbosity Logical. Default `TRUE`.
 #'
 #' @return A `data.frame` with classification results.
+#' @examples
+#' \dontrun{
+#' # Classify your own text directly
+#' results <- classify(
+#'   input_data = c("Just had the best coffee ever!",
+#'                  "Politicians are all the same",
+#'                  "Looking forward to the game tonight"),
+#'   categories = c("Positive", "Negative", "Neutral"),
+#'   api_key    = Sys.getenv("OPENAI_API_KEY"),
+#'   user_model = "gpt-4o-mini"
+#' )
+#' }
 #' @export
 classify <- function(
     input_data           = NULL,

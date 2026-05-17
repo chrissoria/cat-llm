@@ -1,0 +1,94 @@
+---
+title: "Extracting Categories from Columns of Text"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(eval = FALSE, comment = "#>", collapse = TRUE)
+```
+
+# End-to-end: data.frame column → classified dataset
+
+The canonical CatLLM workflow when you don't have a pre-defined coding scheme:
+
+1. `extract()` to discover the category scheme from your data
+2. `classify()` to assign every row to one or more of those categories
+3. Export to CSV for analysis in R, Stata, or Python
+
+## Set up
+
+```{r setup-pkgs}
+library(cat.survey)
+library(readr)
+
+api_key <- Sys.getenv("OPENAI_API_KEY")
+
+df <- read_csv("survey_responses.csv")   # has a column `open_response`
+head(df$open_response)
+```
+
+## Step 1 — Extract a category scheme
+
+```{r extract}
+cats <- cat.survey::extract(
+  input_data           = df$open_response,
+  survey_question      = "Why did you move to a new city?",
+  max_categories       = 12L,
+  api_key              = api_key,
+  user_model           = "gpt-4o-mini"
+)
+
+cats$top_categories
+```
+
+Review `cats$top_categories` and edit if needed — you can drop, merge, or rewrite category labels before classifying. **Verbose labels classify more accurately than short ones.**
+
+```{r curate-categories}
+verbose_cats <- c(
+  "Job/school: A change in employment, education, or career, including transfers and retirement.",
+  "Family: Relationship changes, having children, supporting relatives, or relocating to be near family.",
+  "Cost of living: Housing affordability, cost of goods, or general economic pressure.",
+  "Lifestyle: Climate, recreation, cultural fit, or change of scenery.",
+  "Other: The response does not fit any of the above categories."
+)
+```
+
+## Step 2 — Classify every row
+
+```{r classify}
+results <- cat.survey::classify(
+  input_data      = df$open_response,
+  categories      = verbose_cats,
+  survey_question = "Why did you move to a new city?",
+  api_key         = api_key,
+  user_model      = "gpt-4o-mini"
+)
+
+str(results)
+```
+
+The output `data.frame` has one row per input response and one column per category (0/1 indicators by default, with the `_text` column preserving the original input).
+
+## Step 3 — Merge back into the original data.frame
+
+```{r merge}
+df_classified <- cbind(df, results)
+head(df_classified)
+```
+
+## Step 4 — Export and analyze
+
+```{r export}
+write_csv(df_classified, "survey_responses_classified.csv")
+
+# Or jump into analysis right away:
+library(dplyr)
+df_classified %>%
+  summarize(across(all_of(c("Job/school", "Family", "Cost of living", "Lifestyle", "Other")), mean))
+```
+
+## Tips
+
+- **Run on a subsample first** to verify the category scheme makes sense before classifying thousands of rows.
+- **Use ensemble mode** (see `02-ensemble-classification-cloud-and-local.Rmd`) for high-stakes coding.
+- **Validate against a hand-labeled subsample** for any published research — see the Python README's "Best Practices" section for guidance.

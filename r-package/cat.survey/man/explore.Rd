@@ -68,3 +68,15 @@ Wraps the Python \code{cat_survey.explore()} function. Returns every category
 string extracted from every chunk across every iteration -- with duplicates
 intact. Useful for analysing category stability and saturation.
 }
+\examples{
+\dontrun{
+raw_categories <- explore(
+  input_data      = df$open_response,
+  survey_question = "What concerns you most about your community?",
+  api_key         = Sys.getenv("OPENAI_API_KEY"),
+  user_model      = "gpt-4o-mini",
+  iterations      = 4L
+)
+table(raw_categories)
+}
+}

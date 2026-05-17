@@ -44,6 +44,18 @@
 #' @param batch_timeout Numeric. Default `86400.0`.
 #'
 #' @return A `data.frame` with summarization results.
+#' @examples
+#' \dontrun{
+#' summaries <- summarize(
+#'   input_data    = c("https://example.com/article-1",
+#'                     "https://example.com/article-2"),
+#'   source_domain = "example.com",
+#'   content_type  = "news article",
+#'   format        = "bullets",
+#'   api_key       = Sys.getenv("OPENAI_API_KEY"),
+#'   user_model    = "gpt-4o-mini"
+#' )
+#' }
 #' @export
 summarize <- function(
     input_data           = NULL,

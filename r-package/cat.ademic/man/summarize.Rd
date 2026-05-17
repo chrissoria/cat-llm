@@ -117,3 +117,15 @@ Wraps the Python \code{catademic.summarize()} function. Generates summaries of
 academic paper data. The Python function accepts \code{input_data} and passes all
 other arguments through via \verb{**kwargs} to \code{cat_stack.summarize()}.
 }
+\examples{
+\dontrun{
+summaries <- summarize(
+  input_data   = df$abstracts,
+  description  = "Sociology journal abstracts",
+  instructions = "Summarize the key findings in 2 sentences",
+  format       = "paragraph",
+  api_key      = Sys.getenv("OPENAI_API_KEY"),
+  user_model   = "gpt-4o-mini"
+)
+}
+}

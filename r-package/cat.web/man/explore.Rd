@@ -76,3 +76,15 @@ Wraps the Python \code{catweb.explore()} function. Returns every category
 string extracted from every chunk across every iteration -- with
 duplicates intact.
 }
+\examples{
+\dontrun{
+raw_cats <- explore(
+  input_data    = urls,
+  source_domain = "example.com",
+  api_key       = Sys.getenv("OPENAI_API_KEY"),
+  user_model    = "gpt-4o-mini",
+  iterations    = 4L
+)
+table(raw_cats)
+}
+}

@@ -73,3 +73,16 @@ A named list with \code{counts_df}, \code{top_categories}, and \code{raw_top_tex
 Wraps the Python \code{cat_survey.extract()} function. Discovers and returns a
 normalised, deduplicated set of categories found in survey response data.
 }
+\examples{
+\dontrun{
+result <- extract(
+  input_data      = c("Took a new job in Chicago",
+                      "Wanted to be closer to grandkids",
+                      "Couldn't afford rent in the Bay Area"),
+  survey_question = "Why did you move?",
+  api_key         = Sys.getenv("OPENAI_API_KEY"),
+  user_model      = "gpt-4o-mini"
+)
+print(result$top_categories)
+}
+}

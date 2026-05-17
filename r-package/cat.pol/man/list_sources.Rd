@@ -14,3 +14,11 @@ Returns the names of all data sources registered with the Python \code{catpol}
 package (city ordinances, federal laws, executive orders, presidential
 speeches, social media archives, etc.).
 }
+\examples{
+\dontrun{
+list_sources()
+#> [1] "city_san_diego"           "city_san_francisco"
+#> [3] "federal_laws"             "federal_executive_orders"
+#> [5] "social_trump_truth"       ...
+}
+}

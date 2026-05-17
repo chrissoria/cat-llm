@@ -106,3 +106,15 @@ A named list with \code{counts_df}, \code{top_categories}, and \code{raw_top_tex
 Wraps the Python \code{catademic.extract()} function. Discovers and returns a
 normalised, deduplicated set of categories from academic paper data.
 }
+\examples{
+\dontrun{
+result <- extract(
+  topic_name   = "climate change adaptation",
+  paper_limit  = 200L,
+  polite_email = "you@university.edu",
+  api_key      = Sys.getenv("OPENAI_API_KEY"),
+  user_model   = "gpt-4o-mini"
+)
+print(result$top_categories)
+}
+}

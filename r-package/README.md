@@ -43,6 +43,10 @@ install_cat_stack()
 
 Each domain package depends on `cat.stack` (the shared classification engine).
 
+## Worked examples
+
+R Markdown walkthroughs covering common use cases live in [`examples/`](examples/) — Ollama-local classification, multi-model ensembles, category discovery with `extract()`, saturation analysis with `explore()`, end-to-end column → classified-dataset flows, and PDF/text summarization. Mirror the [Python `examples/`](../examples/) notebooks.
+
 ## Source layout
 
 ```
@@ -55,6 +59,7 @@ r-package/
 ├── cat.pol/             ← Policy documents
 ├── cat.web/             ← Web content
 ├── cat.llm/             ← Meta-package + Getting Started vignette
+├── examples/            ← R Markdown worked examples
 └── test-all-packages.R  ← End-to-end smoke test (8/8 PASS expected)
 ```
 

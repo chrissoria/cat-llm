@@ -1,0 +1,71 @@
+---
+title: "Classifying Text with Local Models (Ollama)"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(eval = FALSE, comment = "#>", collapse = TRUE)
+```
+
+# Classify text with a local Ollama model
+
+When you don't want to pay for cloud API calls or your data can't leave your machine (IRB, HIPAA, internal policy), run classification entirely locally via [Ollama](https://ollama.com).
+
+## 1. Install Ollama and pull a model
+
+In a terminal:
+
+```bash
+# Install: see https://ollama.com/download
+ollama pull qwen2.5:7b
+ollama serve   # runs in the background; one-time
+```
+
+## 2. Install the R package
+
+```{r install}
+install.packages("cat.stack",
+                 repos = c("https://chrissoria.r-universe.dev",
+                          "https://cloud.r-project.org"))
+library(cat.stack)
+```
+
+## 3. Classify with the local model
+
+No `api_key` is needed when using Ollama:
+
+```{r classify}
+responses <- c(
+  "The new wellness program is great, I've been using it daily.",
+  "It's confusing and the app crashes constantly.",
+  "I haven't tried it yet but it sounds promising."
+)
+
+results <- classify(
+  input_data    = responses,
+  categories    = c("Positive", "Negative", "Neutral"),
+  user_model    = "qwen2.5:7b",
+  model_source  = "ollama"
+)
+
+print(results)
+```
+
+## 4. Why local?
+
+- **Zero API cost** — only your machine's electricity.
+- **Data never leaves your network** — important for sensitive survey data, clinical text, internal documents.
+- **Reproducible** — model weights are pinned by `ollama pull <model>:<tag>` and don't change underneath you the way cloud models do.
+
+The trade-off: local 7B–14B models are usually a few percentage points behind frontier cloud models on classification accuracy. For most survey work the gap is small; for high-stakes coding, validate against a labeled subsample.
+
+## 5. Suggested local models
+
+| Model               | Pull command                | Notes                                  |
+|---------------------|-----------------------------|----------------------------------------|
+| `qwen2.5:7b`        | `ollama pull qwen2.5:7b`    | Good baseline; fast on Apple Silicon   |
+| `qwen2.5:14b`       | `ollama pull qwen2.5:14b`   | Higher accuracy; ~10 GB RAM            |
+| `llama3.1:8b`       | `ollama pull llama3.1:8b`   | Solid generalist                       |
+| `gpt-oss:20b`       | `ollama pull gpt-oss:20b`   | Strong for English, slower             |
+
+See https://ollama.com/library for the full catalog.

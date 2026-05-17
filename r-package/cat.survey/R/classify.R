@@ -45,6 +45,18 @@
 #' @param auto_download Logical. Default `FALSE`.
 #'
 #' @return A `data.frame` with classification results.
+#' @examples
+#' \dontrun{
+#' results <- classify(
+#'   input_data      = c("Took a new job in Chicago",
+#'                       "Wanted to be closer to grandkids",
+#'                       "Couldn't afford rent in the Bay Area"),
+#'   categories      = c("Job/school", "Family", "Cost of living", "Other"),
+#'   survey_question = "Why did you move?",
+#'   api_key         = Sys.getenv("OPENAI_API_KEY"),
+#'   user_model      = "gpt-4o-mini"
+#' )
+#' }
 #' @export
 classify <- function(
     input_data,

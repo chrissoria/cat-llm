@@ -83,3 +83,16 @@ Wraps the Python \code{catpol.explore()} function. Returns every category
 string extracted from every chunk across every iteration -- with
 duplicates intact.
 }
+\examples{
+\dontrun{
+raw_cats <- explore(
+  source     = "federal_executive_orders",
+  since      = "2025-01-01",
+  n          = 30L,
+  api_key    = Sys.getenv("OPENAI_API_KEY"),
+  user_model = "gpt-4o-mini",
+  iterations = 4L
+)
+sort(table(raw_cats), decreasing = TRUE)
+}
+}

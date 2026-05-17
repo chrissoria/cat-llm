@@ -29,6 +29,18 @@
 #' @param chunk_delay Numeric. Default `0.0`.
 #'
 #' @return A character vector of every category string extracted.
+#' @examples
+#' \dontrun{
+#' raw_cats <- explore(
+#'   source     = "federal_executive_orders",
+#'   since      = "2025-01-01",
+#'   n          = 30L,
+#'   api_key    = Sys.getenv("OPENAI_API_KEY"),
+#'   user_model = "gpt-4o-mini",
+#'   iterations = 4L
+#' )
+#' sort(table(raw_cats), decreasing = TRUE)
+#' }
 #' @export
 explore <- function(
     input_data           = NULL,

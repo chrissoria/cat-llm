@@ -86,3 +86,14 @@ A named list with \code{counts_df}, \code{top_categories}, and \code{raw_top_tex
 Wraps the Python \code{catpol.extract()} function. Returns a normalised,
 deduplicated set of categories from policy text or a registered source.
 }
+\examples{
+\dontrun{
+result <- extract(
+  input_data       = df$bill_text,
+  document_context = "California state legislation",
+  api_key          = Sys.getenv("OPENAI_API_KEY"),
+  user_model       = "gpt-4o-mini"
+)
+print(result$top_categories)
+}
+}

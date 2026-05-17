@@ -136,3 +136,16 @@ Wraps the Python \code{catpol.summarize()} function. Generates summaries from
 policy text or from a registered political data source. Adds a \code{tone}
 parameter for policy-specific framing.
 }
+\examples{
+\dontrun{
+results <- summarize(
+  source     = "federal_executive_orders",
+  since      = "2025-01-01",
+  n          = 20L,
+  format     = "paragraph",
+  tone       = "eli5",
+  api_key    = Sys.getenv("OPENAI_API_KEY"),
+  user_model = "gpt-4o-mini"
+)
+}
+}

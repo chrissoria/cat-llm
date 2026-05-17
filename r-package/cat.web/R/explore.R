@@ -26,6 +26,17 @@
 #' @param chunk_delay Numeric. Default `0.0`.
 #'
 #' @return A character vector of every category string extracted.
+#' @examples
+#' \dontrun{
+#' raw_cats <- explore(
+#'   input_data    = urls,
+#'   source_domain = "example.com",
+#'   api_key       = Sys.getenv("OPENAI_API_KEY"),
+#'   user_model    = "gpt-4o-mini",
+#'   iterations    = 4L
+#' )
+#' table(raw_cats)
+#' }
 #' @export
 explore <- function(
     input_data           = NULL,

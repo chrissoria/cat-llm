@@ -78,3 +78,15 @@ A named list with \code{counts_df}, \code{top_categories}, and \code{raw_top_tex
 Wraps the Python \code{catweb.extract()} function. Accepts URLs (auto-fetched)
 or raw text. Returns a normalised, deduplicated set of categories.
 }
+\examples{
+\dontrun{
+result <- extract(
+  input_data    = c("https://example.com/page1",
+                    "https://example.com/page2"),
+  source_domain = "example.com",
+  api_key       = Sys.getenv("OPENAI_API_KEY"),
+  user_model    = "gpt-4o-mini"
+)
+print(result$top_categories)
+}
+}

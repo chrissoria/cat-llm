@@ -88,3 +88,14 @@ A character vector of every category string extracted.
 Wraps the Python \code{catvader.explore()} function. Returns every category string
 extracted from every chunk across every iteration -- with duplicates intact.
 }
+\examples{
+\dontrun{
+raw_cats <- explore(
+  input_data = df$posts,
+  api_key    = Sys.getenv("OPENAI_API_KEY"),
+  user_model = "gpt-4o-mini",
+  iterations = 4L
+)
+table(raw_cats)
+}
+}

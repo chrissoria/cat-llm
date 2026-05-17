@@ -1,0 +1,90 @@
+---
+title: "Ensemble Classification with Cloud and Local Models"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(eval = FALSE, comment = "#>", collapse = TRUE)
+```
+
+# Multi-model ensemble classification
+
+Running the same input through multiple models and combining via majority voting often improves accuracy by reducing individual model bias. Per the CatLLM evaluation, inexpensive open-weight ensembles can match or exceed individual frontier-class models at a fraction of the cost.
+
+## Set up
+
+```{r setup-pkgs}
+library(cat.stack)
+# Have OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY in .Renviron
+```
+
+## Cloud-only ensemble (3 providers, unanimous voting)
+
+```{r cloud-ensemble}
+responses <- c(
+  "Took a new job in Chicago",
+  "Wanted to be closer to grandkids",
+  "Couldn't afford rent in the Bay Area",
+  "Job market collapsed after the layoffs",
+  "Family pressure to move home"
+)
+
+verbose_cats <- c(
+  "Job/school: A change in employment, education, or career, including transfers and retirement.",
+  "Family: Relationship changes, having children, supporting relatives, or relocating to be near family.",
+  "Cost of living: Housing affordability, cost of goods, or general economic pressure.",
+  "Other: The response does not fit any of the above categories."
+)
+
+results <- classify(
+  input_data = responses,
+  categories = verbose_cats,
+  models = list(
+    c("gpt-4o-mini",              "openai",    Sys.getenv("OPENAI_API_KEY")),
+    c("claude-3-5-haiku-20241022", "anthropic", Sys.getenv("ANTHROPIC_API_KEY")),
+    c("gemini-2.5-flash",         "google",    Sys.getenv("GOOGLE_API_KEY"))
+  ),
+  consensus_threshold = "unanimous"   # alternatives: "majority", 0.5, etc.
+)
+
+# The output includes per-model columns + a consensus column
+str(results)
+```
+
+## Cloud + local hybrid ensemble
+
+Mixing cloud and local models gives you the speed of cloud + the cost/privacy benefits of local. Each model's vote counts equally.
+
+```{r hybrid-ensemble}
+results <- classify(
+  input_data = responses,
+  categories = verbose_cats,
+  models = list(
+    c("gpt-4o-mini",              "openai",    Sys.getenv("OPENAI_API_KEY")),
+    c("claude-3-5-haiku-20241022", "anthropic", Sys.getenv("ANTHROPIC_API_KEY")),
+    c("qwen2.5:7b",               "ollama",    "")           # local, no key
+  ),
+  consensus_threshold = "majority"   # 2 of 3 agree
+)
+```
+
+## Consensus thresholds
+
+| Threshold           | Meaning                                                                  |
+|---------------------|--------------------------------------------------------------------------|
+| `"unanimous"`       | Only assign category if every model agrees. Highest precision.            |
+| `"majority"`        | Assign if more than half agree. Good balance.                             |
+| `0.5`               | Equivalent to majority — at least 50% must agree.                          |
+| `0.67`              | At least two-thirds must agree.                                            |
+| `1.0`               | Same as unanimous.                                                         |
+
+## Output columns
+
+For an ensemble with 3 models, the result `data.frame` includes:
+
+- `input_data`
+- `<category>_<model_slug>` columns for each (model × category) pair
+- `<category>_consensus` columns with the voted result
+- `<category>_n_agree` count of how many models picked it
+
+Use the `_consensus` columns for downstream analysis; the per-model columns help diagnose disagreement.

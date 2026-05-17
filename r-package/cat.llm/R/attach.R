@@ -5,6 +5,12 @@
 #' reload after detaching.
 #'
 #' @return Invisibly returns a character vector of attached package names.
+#' @examples
+#' \dontrun{
+#' # Normally this happens automatically on `library(cat.llm)`.
+#' # Call manually to re-attach after detaching:
+#' catllm_attach()
+#' }
 #' @export
 catllm_attach <- function() {
   pkgs <- c("cat.stack", "cat.survey", "cat.vader", "cat.ademic", "cat.cog", "cat.pol", "cat.web")

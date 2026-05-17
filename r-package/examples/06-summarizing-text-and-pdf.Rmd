@@ -1,0 +1,89 @@
+---
+title: "Summarizing Text and PDF Data"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(eval = FALSE, comment = "#>", collapse = TRUE)
+```
+
+# Summarize text and PDFs with `summarize()`
+
+`summarize()` produces structured summaries of text, PDFs, or images. Useful for digesting long policy documents, academic abstracts, or a corpus of social media posts into a comparable summary column you can analyze.
+
+## Set up
+
+```{r setup-pkgs}
+library(cat.stack)
+api_key <- Sys.getenv("OPENAI_API_KEY")
+```
+
+## Summarize text
+
+```{r summarize-text}
+docs <- c(
+  paste("The city council voted 6-3 to approve the new affordable housing ordinance,",
+        "which requires developers of buildings with 10+ units to set aside 15% as",
+        "affordable to households earning less than 80% of area median income..."),
+  paste("After three months of public comment, the planning commission has adopted",
+        "new zoning rules for the downtown corridor, easing parking minimums for",
+        "buildings within 1,000 feet of a transit stop...")
+)
+
+results <- summarize(
+  input_data   = docs,
+  format       = "paragraph",   # "paragraph", "bullets", "one_liner", "structured", "full"
+  instructions = "Focus on what the policy does and who it affects",
+  api_key      = api_key,
+  user_model   = "gpt-4o-mini"
+)
+
+results$summary
+```
+
+## Summarize PDFs
+
+For PDF input, install the PDF extras and pass a directory of PDFs:
+
+```{r install-pdf}
+# One-time:
+# cat.stack::install_cat_stack(pdf = TRUE)
+```
+
+```{r summarize-pdf}
+results <- summarize(
+  input_data   = "./policy_pdfs/",     # directory of PDFs (or vector of file paths)
+  format       = "bullets",
+  instructions = "Summarize each PDF as 5 bullet points covering: what, who, why, when, cost.",
+  api_key      = api_key,
+  user_model   = "gpt-4o-mini",
+  pdf_dpi      = 150L
+)
+```
+
+## Output formats
+
+| `format`       | Output style                                                              |
+|----------------|---------------------------------------------------------------------------|
+| `"paragraph"`  | 2–4 sentence prose summary                                                |
+| `"bullets"`    | 3–6 short bullet points                                                   |
+| `"one_liner"`  | Single-sentence headline                                                  |
+| `"structured"` | JSON-like fields (e.g. `topic`, `audience`, `key_finding`)                |
+| `"full"`       | Longer multi-paragraph summary suitable for review                        |
+
+## Multi-model ensemble for summaries
+
+Same `models = list(...)` pattern as `classify()` works here too:
+
+```{r ensemble-summarize}
+results <- summarize(
+  input_data = docs,
+  format     = "bullets",
+  models = list(
+    c("gpt-4o-mini",              "openai",    Sys.getenv("OPENAI_API_KEY")),
+    c("claude-3-5-haiku-20241022", "anthropic", Sys.getenv("ANTHROPIC_API_KEY"))
+  )
+)
+```
+
+For summaries, ensembles produce per-model columns (e.g. `summary_gpt_4o_mini`, `summary_claude`) rather than a voted consensus — summarization isn't a discrete classification, so use the per-model outputs to compare or merge manually.

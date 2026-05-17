@@ -128,3 +128,16 @@ Wraps the Python \code{catweb.summarize()} function. Accepts URLs (auto-fetched)
 or raw text. Web context (source domain, content type, metadata) is
 injected into the summarization prompt.
 }
+\examples{
+\dontrun{
+summaries <- summarize(
+  input_data    = c("https://example.com/article-1",
+                    "https://example.com/article-2"),
+  source_domain = "example.com",
+  content_type  = "news article",
+  format        = "bullets",
+  api_key       = Sys.getenv("OPENAI_API_KEY"),
+  user_model    = "gpt-4o-mini"
+)
+}
+}

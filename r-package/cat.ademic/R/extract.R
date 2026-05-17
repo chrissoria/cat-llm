@@ -36,6 +36,17 @@
 #' @param chunk_delay Numeric. Default `0.0`.
 #'
 #' @return A named list with `counts_df`, `top_categories`, and `raw_top_text`.
+#' @examples
+#' \dontrun{
+#' result <- extract(
+#'   topic_name   = "climate change adaptation",
+#'   paper_limit  = 200L,
+#'   polite_email = "you@university.edu",
+#'   api_key      = Sys.getenv("OPENAI_API_KEY"),
+#'   user_model   = "gpt-4o-mini"
+#' )
+#' print(result$top_categories)
+#' }
 #' @export
 extract <- function(
     input_data           = NULL,

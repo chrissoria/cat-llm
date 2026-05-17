@@ -1,0 +1,84 @@
+---
+title: "Exploring Categories with explore()"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(eval = FALSE, comment = "#>", collapse = TRUE)
+```
+
+# Use `explore()` for saturation analysis
+
+`explore()` is the raw category-extraction step. Unlike `extract()` (which de-duplicates and merges semantically similar labels), `explore()` returns **every category string from every chunk across every iteration** — with duplicates intact. That makes it the right tool for understanding **category stability**: do the same themes keep appearing, or are new ones still being discovered with each iteration?
+
+## Use case
+
+You have ~500 open-ended survey responses and want to know: "If I sample 50 of them, am I capturing most of the themes? Or do I need to look at all 500?"
+
+## Set up
+
+```{r setup-pkgs}
+library(cat.survey)
+api_key <- Sys.getenv("OPENAI_API_KEY")
+```
+
+## Run explore with several iterations
+
+```{r explore}
+raw_categories <- cat.survey::explore(
+  input_data           = df$open_response,
+  survey_question      = "Why did you move to this city?",
+  iterations           = 12L,         # number of passes
+  divisions            = 8L,          # data chunks per pass
+  categories_per_chunk = 10L,         # max categories pulled per chunk
+  api_key              = api_key,
+  user_model           = "gpt-4o-mini"
+)
+
+length(raw_categories)
+head(raw_categories, 20)
+```
+
+## Analyze stability
+
+Count how often each raw category string appeared. Themes that show up often are stable; themes that show up once are likely chunk-specific noise.
+
+```{r stability}
+cat_counts <- sort(table(raw_categories), decreasing = TRUE)
+head(cat_counts, 20)
+
+# Themes appearing in at least 25% of iterations are "stable"
+stable_themes <- names(cat_counts[cat_counts >= max(cat_counts) * 0.25])
+stable_themes
+```
+
+## Saturation plot
+
+If the rate of new unique categories per iteration is dropping toward zero, you've reached saturation.
+
+```{r saturation, eval = FALSE}
+# Hypothetically split your responses into 4 sample sizes and re-run:
+sample_sizes <- c(50, 100, 250, 500)
+unique_counts <- sapply(sample_sizes, function(n) {
+  raw <- cat.survey::explore(
+    input_data           = sample(df$open_response, n),
+    survey_question      = "Why did you move to this city?",
+    iterations           = 4L,
+    api_key              = api_key,
+    user_model           = "gpt-4o-mini"
+  )
+  length(unique(raw))
+})
+
+plot(sample_sizes, unique_counts, type = "b",
+     xlab = "Sample size", ylab = "Unique categories discovered")
+```
+
+A flattening curve means you've hit saturation; a still-rising curve means more data is still revealing new themes.
+
+## When to use `explore()` vs `extract()`
+
+| Function    | Output                                  | Best for                                                    |
+|-------------|-----------------------------------------|-------------------------------------------------------------|
+| `explore()` | Raw category strings (with duplicates)   | Saturation analysis, finding stable themes, methods papers   |
+| `extract()` | De-duplicated, normalized top categories | Building a clean codebook to pass into `classify()`         |

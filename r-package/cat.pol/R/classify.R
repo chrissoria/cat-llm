@@ -53,6 +53,27 @@
 #' @param check_verbosity Logical. Default `TRUE`.
 #'
 #' @return A `data.frame` with classification results.
+#' @examples
+#' \dontrun{
+#' # Pull recent San Diego ordinances from a registered source
+#' results <- classify(
+#'   source     = "city_san_diego",
+#'   doc_type   = "ordinance",
+#'   since      = "2024-01-01",
+#'   n          = 50L,
+#'   categories = c("Housing", "Public Safety", "Finance",
+#'                  "Infrastructure", "Health"),
+#'   api_key    = Sys.getenv("OPENAI_API_KEY"),
+#'   user_model = "gpt-4o-mini"
+#' )
+#'
+#' # Or classify your own text directly
+#' results <- classify(
+#'   input_data = df$bill_text,
+#'   categories = c("Housing", "Public Safety", "Finance"),
+#'   api_key    = Sys.getenv("OPENAI_API_KEY")
+#' )
+#' }
 #' @export
 classify <- function(
     categories,

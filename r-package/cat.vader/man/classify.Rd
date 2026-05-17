@@ -178,3 +178,16 @@ A \code{data.frame} with classification results.
 Wraps the Python \code{catvader.classify()} function. Adds social media sourcing
 parameters to the base cat.stack classification engine.
 }
+\examples{
+\dontrun{
+# Classify your own text directly
+results <- classify(
+  input_data = c("Just had the best coffee ever!",
+                 "Politicians are all the same",
+                 "Looking forward to the game tonight"),
+  categories = c("Positive", "Negative", "Neutral"),
+  api_key    = Sys.getenv("OPENAI_API_KEY"),
+  user_model = "gpt-4o-mini"
+)
+}
+}

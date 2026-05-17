@@ -33,3 +33,15 @@ Invisibly \code{NULL}.
 Installs the \code{cat-stack} Python package into the Python environment used by
 reticulate. Optionally installs PDF extras.
 }
+\examples{
+\dontrun{
+# Standard install
+install_cat_stack()
+
+# With PDF support (installs cat-stack[pdf])
+install_cat_stack(pdf = TRUE)
+
+# Upgrade an existing install
+install_cat_stack(upgrade = TRUE)
+}
+}

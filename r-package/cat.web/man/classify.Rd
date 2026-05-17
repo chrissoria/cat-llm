@@ -140,3 +140,24 @@ Wraps the Python \code{catweb.classify()} function. Accepts URLs (auto-fetched
 to text) or raw text strings. Injects web context (source domain, content
 type, metadata) into the classification prompt.
 }
+\examples{
+\dontrun{
+# Classify a list of URLs (auto-fetched to text)
+results <- classify(
+  categories    = c("News", "Opinion", "Tutorial"),
+  input_data    = c("https://example.com/article-1",
+                    "https://example.com/article-2"),
+  source_domain = "example.com",
+  content_type  = "blog post",
+  api_key       = Sys.getenv("OPENAI_API_KEY"),
+  user_model    = "gpt-4o-mini"
+)
+
+# Or classify raw text (no fetching)
+results <- classify(
+  categories = c("News", "Opinion", "Tutorial"),
+  input_data = df$article_text,
+  api_key    = Sys.getenv("OPENAI_API_KEY")
+)
+}
+}
