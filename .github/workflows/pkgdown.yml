@@ -57,6 +57,8 @@ jobs:
         run: |
           # Install in dependency order: cat.stack first, then domain packages,
           # then the cat.llm meta-package last (it depends on all of them).
+          # Use base install.packages() with repos=NULL to avoid pulling
+          # remotes/pak as a dependency.
           pkgs <- c(
             "cat.stack",
             "cat.survey", "cat.vader", "cat.ademic", "cat.cog",
@@ -65,10 +67,10 @@ jobs:
           )
           for (p in pkgs) {
             message("Installing ", p, " from local source")
-            devtools::install_local(
+            install.packages(
               file.path("r-package", p),
-              force = TRUE, upgrade = "never",
-              quiet = TRUE, dependencies = FALSE
+              repos = NULL,
+              type  = "source"
             )
           }
         shell: Rscript {0}
