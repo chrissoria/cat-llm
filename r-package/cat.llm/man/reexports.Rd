@@ -8,6 +8,7 @@
 \alias{summarize}
 \alias{prompt_tune}
 \alias{install_cat_stack}
+\alias{ensure_ollama_running}
 \title{Re-exported functions from cat.stack}
 \description{
 The \code{cat.llm} meta-package re-exports the core functions from \code{cat.stack}
@@ -23,6 +24,7 @@ the canonical documentation in \code{cat.stack}.
 \item{\code{\link[cat.stack]{summarize}}}{Summarize text, images, or PDFs in several formats.}
 \item{\code{\link[cat.stack]{prompt_tune}}}{Interactive, human-in-the-loop tuning of the classification system prompt.}
 \item{\code{\link[cat.stack]{install_cat_stack}}}{One-time installer for the Python \code{catstack} backend.}
+\item{\code{\link[cat.stack]{ensure_ollama_running}}}{Check (and optionally start) a local Ollama server before running local-model classification.}
 }
 }
 \keyword{internal}

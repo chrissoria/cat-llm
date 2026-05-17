@@ -1,4 +1,4 @@
-#' @importFrom cat.stack classify extract explore summarize prompt_tune install_cat_stack
+#' @importFrom cat.stack classify extract explore summarize prompt_tune install_cat_stack ensure_ollama_running
 NULL
 
 .onAttach <- function(libname, pkgname) {

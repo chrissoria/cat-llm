@@ -12,9 +12,10 @@
 #'   \item{\code{\link[cat.stack]{summarize}}}{Summarize text, images, or PDFs in several formats.}
 #'   \item{\code{\link[cat.stack]{prompt_tune}}}{Interactive, human-in-the-loop tuning of the classification system prompt.}
 #'   \item{\code{\link[cat.stack]{install_cat_stack}}}{One-time installer for the Python `catstack` backend.}
+#'   \item{\code{\link[cat.stack]{ensure_ollama_running}}}{Check (and optionally start) a local Ollama server before running local-model classification.}
 #' }
 #'
 #' @name reexports
-#' @aliases classify extract explore summarize prompt_tune install_cat_stack
+#' @aliases classify extract explore summarize prompt_tune install_cat_stack ensure_ollama_running
 #' @keywords internal
 NULL

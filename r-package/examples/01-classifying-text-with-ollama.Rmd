@@ -18,8 +18,9 @@ In a terminal:
 ```bash
 # Install: see https://ollama.com/download
 ollama pull qwen2.5:7b
-ollama serve   # runs in the background; one-time
 ```
+
+(You do **not** need to run `ollama serve` manually — see step 3.)
 
 ## 2. Install the CatLLM ecosystem
 
@@ -30,7 +31,20 @@ install.packages("cat.llm",
 library(cat.llm)
 ```
 
-## 3. Classify with the local model
+## 3. Make sure Ollama is running
+
+`ensure_ollama_running()` checks whether the local Ollama server is
+reachable and, by default, starts it for you if it isn't (using the
+macOS Ollama.app, or `ollama serve` on Linux/Windows). Call it once
+per R session before any local-model classification — this prevents
+the `ConnectionError: OLLAMA NOT RUNNING` you'd otherwise get.
+
+```{r ensure-ollama}
+ensure_ollama_running()
+#> Ollama is now running.
+```
+
+## 4. Classify with the local model
 
 No `api_key` is needed when using Ollama:
 
@@ -51,7 +65,7 @@ results <- classify(
 print(results)
 ```
 
-## 4. Why local?
+## 5. Why local?
 
 - **Zero API cost** — only your machine's electricity.
 - **Data never leaves your network** — important for sensitive survey data, clinical text, internal documents.
@@ -59,7 +73,7 @@ print(results)
 
 The trade-off: local 7B–14B models are usually a few percentage points behind frontier cloud models on classification accuracy. For most survey work the gap is small; for high-stakes coding, validate against a labeled subsample.
 
-## 5. Suggested local models
+## 6. Suggested local models
 
 | Model               | Pull command                | Notes                                  |
 |---------------------|-----------------------------|----------------------------------------|

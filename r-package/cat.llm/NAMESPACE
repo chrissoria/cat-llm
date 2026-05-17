@@ -5,6 +5,7 @@ importFrom(cat.stack, explore)
 importFrom(cat.stack, summarize)
 importFrom(cat.stack, prompt_tune)
 importFrom(cat.stack, install_cat_stack)
+importFrom(cat.stack, ensure_ollama_running)
 
 export(classify)
 export(extract)
@@ -12,6 +13,7 @@ export(explore)
 export(summarize)
 export(prompt_tune)
 export(install_cat_stack)
+export(ensure_ollama_running)
 
 # Domain-suffixed aliases
 export(classify_survey)
