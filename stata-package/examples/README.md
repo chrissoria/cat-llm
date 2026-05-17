@@ -5,11 +5,12 @@ Stata `.do` walkthroughs mirroring the [Python `examples/` notebooks](../../exam
 | File | What it covers |
 |---|---|
 | [01-classifying-text-with-ollama.do](01-classifying-text-with-ollama.do) | Classify text against a local Ollama model — zero API cost, fully local |
-| [02-ensemble-classification-cloud-and-local.do](02-ensemble-classification-cloud-and-local.do) | Combine predictions from multiple LLMs with unanimous voting |
-| [03-exploring-categories-with-explore.do](03-exploring-categories-with-explore.do) | Use `catllm explore` to surface raw categories for saturation analysis |
-| [04-extracting-categories-from-columns.do](04-extracting-categories-from-columns.do) | End-to-end: extract a category scheme from a Stata variable, then classify |
-| [05-extracting-categories-with-extract.do](05-extracting-categories-with-extract.do) | Discover and de-duplicate categories with `catllm extract` when you have no predefined scheme |
-| [06-summarizing-text-and-pdf.do](06-summarizing-text-and-pdf.do) | Use `catllm summarize` on text and (optionally) PDF inputs |
+| [02-validate-hybrid-ensemble.do](02-validate-hybrid-ensemble.do) | Smoke-test the ensemble pipeline end-to-end (Ollama auto-start, JSON-formatter auto-enable, expected output columns) |
+| [03-ensemble-classification-cloud-and-local.do](03-ensemble-classification-cloud-and-local.do) | Combine predictions from multiple LLMs with unanimous voting |
+| [04-exploring-categories-with-explore.do](04-exploring-categories-with-explore.do) | Use `catllm explore` to surface raw categories for saturation analysis |
+| [05-extracting-categories-from-columns.do](05-extracting-categories-from-columns.do) | End-to-end: extract a category scheme from a Stata variable, then classify |
+| [06-extracting-categories-with-extract.do](06-extracting-categories-with-extract.do) | Discover and de-duplicate categories with `catllm extract` when you have no predefined scheme |
+| [07-summarizing-text-and-pdf.do](07-summarizing-text-and-pdf.do) | Use `catllm summarize` on text and (optionally) PDF inputs |
 
 The regression-test file [`test_stata_package.do`](test_stata_package.do) exercises the whole package surface in one run (error paths, `domain()`, `pyoptions()`, etc.) and is the smoke-test we use before tagging a release.
 
@@ -43,13 +44,13 @@ The regression-test file [`test_stata_package.do`](test_stata_package.do) exerci
 From the `stata-package/examples/` directory:
 
 ```bash
-stata-se -b do 01-classifying-text-with-ollama.do
+stata-se -b do 02-validate-hybrid-ensemble.do
 ```
 
 Or in an interactive Stata session:
 
 ```stata
-do 01-classifying-text-with-ollama.do
+do 02-validate-hybrid-ensemble.do
 ```
 
 If the `catllm` package is installed via `ssc` or `net install`, the `adopath +` line at the top of each example is unnecessary. The examples include it so you can run them straight from a git checkout without first installing.

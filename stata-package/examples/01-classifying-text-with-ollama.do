@@ -43,11 +43,12 @@ input str200 response
 end
 
 * --- 4. Classify with the local Ollama model ---------------------------------
-* No `apikey()` is needed for Ollama -- pass an empty string.
+* No real API key is needed for Ollama, but Stata's syntax parser requires
+* a non-empty string for the apikey() option -- pass any placeholder.
 * `provider("ollama")` tells cat-stack which backend to use.
 catllm classify response,                           ///
     categories("Positive" "Negative" "Neutral")     ///
-    apikey("")                                      ///
+    apikey("_")                                     ///
     model("qwen2.5:7b")                             ///
     provider("ollama")                              ///
     generate(sentiment)
