@@ -1,5 +1,5 @@
 *! catllm_summarize -- Summarize text or PDFs using LLMs
-*! Version 1.0.0
+*! Version 1.1.0
 
 program define catllm_summarize, rclass
     version 16
@@ -19,6 +19,8 @@ program define catllm_summarize, rclass
             STEPback                                            ///
             CONText                                             ///
             MODels(string asis)                                 ///
+            DOMain(string)                                      ///
+            PYOptions(string asis)                              ///
             REPLACE                                             ///
         ]
 
@@ -68,6 +70,8 @@ program define catllm_summarize, rclass
     local _catllm_ctx     "`context'"
     local _catllm_models  `"`models'"'
     local _catllm_touse   "`touse'"
+    local _catllm_domain  "`domain'"
+    local _catllm_pyopts  `"`pyoptions'"'
 
     if `creativity' == -1 {
         local _catllm_creat ""
@@ -77,7 +81,11 @@ program define catllm_summarize, rclass
     }
 
     * ----- call Python -----
+    local _catllm_failed ""
     python: _catllm_do_summarize()
+    if "`_catllm_failed'" != "" {
+        exit 198
+    }
 
     * ----- return results -----
     quietly count if `generate' != "" & `touse'
@@ -95,9 +103,89 @@ program define catllm_summarize, rclass
 end
 
 python:
+def _catllm_resolve_backend(domain):
+    """Return the python module to call. Empty domain -> cat_stack."""
+    from sfi import SFIToolkit
+    if not domain:
+        try:
+            import cat_stack
+        except ImportError:
+            SFIToolkit.errprintln(
+                "{err}cat-stack is not installed. Run: catllm setup"
+            )
+            raise
+        return cat_stack
+    d = domain.lower().strip()
+    pkg_map = {
+        "pol":    ("cat_pol",    "cat-pol"),
+        "vader":  ("catvader",   "cat-vader"),
+        "ademic": ("catademic",  "cat-ademic"),
+        "survey": ("cat_survey", "cat-survey"),
+        "cog":    ("cat_cog",    "cat-cog"),
+        "web":    ("catweb",     "cat-web"),
+    }
+    if d not in pkg_map:
+        SFIToolkit.errprintln(
+            "{err}Unknown domain: '" + domain + "'. "
+            "Valid: pol, vader, ademic, survey, cog, web."
+        )
+        raise ValueError("unknown domain: " + domain)
+    mod_name, pkg_name = pkg_map[d]
+    try:
+        return __import__(mod_name)
+    except ImportError:
+        SFIToolkit.errprintln(
+            "{err}Domain package '" + pkg_name + "' is not installed. "
+            "Run: catllm setup, domain(" + d + ")"
+        )
+        raise
+
+def _catllm_parse_pyoptions(s):
+    """Parse 'key=val, key=val' into a dict. Values run through ast.literal_eval."""
+    import ast
+    out = {}
+    if not s or not s.strip():
+        return out
+    s = s.strip()
+    if len(s) >= 2 and s[0] == s[-1] and s[0] in ('"', "'"):
+        s = s[1:-1]
+    parts, buf, depth, quote = [], "", 0, None
+    for ch in s:
+        if quote:
+            buf += ch
+            if ch == quote:
+                quote = None
+            continue
+        if ch in ('"', "'"):
+            quote = ch
+            buf += ch
+            continue
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+        if ch == "," and depth == 0:
+            parts.append(buf)
+            buf = ""
+        else:
+            buf += ch
+    if buf:
+        parts.append(buf)
+    for piece in parts:
+        if "=" not in piece:
+            continue
+        k, v = piece.split("=", 1)
+        k, v = k.strip(), v.strip()
+        if not k:
+            continue
+        try:
+            out[k] = ast.literal_eval(v)
+        except (ValueError, SyntaxError):
+            out[k] = v
+    return out
+
 def _catllm_do_summarize():
     from sfi import Data, Macro, SFIToolkit
-    import cat_stack
 
     # --- read Stata parameters ---
     varname    = Macro.getLocal("_catllm_var")
@@ -114,10 +202,19 @@ def _catllm_do_summarize():
     context    = Macro.getLocal("_catllm_ctx") != ""
     models_str = Macro.getLocal("_catllm_models")
     touse      = Macro.getLocal("_catllm_touse")
+    domain     = Macro.getLocal("_catllm_domain")
+    pyopts_str = Macro.getLocal("_catllm_pyopts")
     creat_str  = Macro.getLocal("_catllm_creat")
 
     creativity = float(creat_str) if creat_str else None
     maxlen = int(maxlen_str) if maxlen_str and int(maxlen_str) > 0 else None
+
+    try:
+        module = _catllm_resolve_backend(domain)
+    except Exception:
+        Macro.setLocal("_catllm_failed", "1")
+        return
+    extra_kwargs = _catllm_parse_pyoptions(pyopts_str)
 
     # --- parse models for ensemble ---
     models = None
@@ -146,6 +243,7 @@ def _catllm_do_summarize():
 
     if not texts:
         SFIToolkit.errprintln("{err}No valid observations found.")
+        Macro.setLocal("_catllm_failed", "1")
         return
 
     # --- call catllm.summarize ---
@@ -171,10 +269,13 @@ def _catllm_do_summarize():
     if models:
         kwargs["models"] = models
 
+    kwargs.update(extra_kwargs)
+
     try:
-        result_df = cat_stack.summarize(**kwargs)
+        result_df = module.summarize(**kwargs)
     except Exception as e:
-        SFIToolkit.errprintln("{err}cat_stack.summarize() failed: " + str(e))
+        SFIToolkit.errprintln("{err}" + module.__name__ + ".summarize() failed: " + str(e))
+        Macro.setLocal("_catllm_failed", "1")
         return
 
     # --- write summaries back to Stata ---
@@ -183,8 +284,8 @@ def _catllm_do_summarize():
     if summ_col not in result_df.columns:
         # Fall back to first non-input column
         for col in result_df.columns:
-            if col not in ("input_data", "processing_status", "failed_models",
-                           "pdf_path", "page_index"):
+            if col not in ("input_index", "input_data", "processing_status",
+                           "failed_models", "pdf_path", "page_index"):
                 summ_col = col
                 break
 

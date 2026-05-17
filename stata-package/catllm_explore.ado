@@ -1,5 +1,5 @@
 *! catllm_explore -- Raw category extraction for saturation analysis
-*! Version 1.0.0
+*! Version 1.1.0
 
 program define catllm_explore, rclass
     version 16
@@ -20,6 +20,8 @@ program define catllm_explore, rclass
             FOCus(string asis)                                  ///
             RANDOMseed(integer -1)                              ///
             SAVing(string)                                      ///
+            DOMain(string)                                      ///
+            PYOptions(string asis)                              ///
         ]
 
     * ----- defaults -----
@@ -56,6 +58,8 @@ program define catllm_explore, rclass
     local _catllm_focus   `"`focus'"'
     local _catllm_touse   "`touse'"
     local _catllm_saving  "`saving'"
+    local _catllm_domain  "`domain'"
+    local _catllm_pyopts  `"`pyoptions'"'
 
     if `creativity' == -1 {
         local _catllm_creat ""
@@ -72,18 +76,118 @@ program define catllm_explore, rclass
     }
 
     * ----- call Python -----
+    local _catllm_failed ""
+    local _catllm_ret_n_raw ""
+    local _catllm_ret_n_uniq ""
+    local _catllm_ret_top ""
+    local _catllm_ret_n_unique_cap ""
     python: _catllm_do_explore()
+    if "`_catllm_failed'" != "" {
+        exit 198
+    }
 
-    * ----- display -----
+    * ----- populate r() -----
+    if "`_catllm_ret_n_raw'" != "" {
+        return scalar n_raw = `_catllm_ret_n_raw'
+        return scalar n_unique = `_catllm_ret_n_uniq'
+        return local top_categories `"`_catllm_ret_top'"'
+        if "`_catllm_ret_n_unique_cap'" != "" {
+            forvalues i = 1/`_catllm_ret_n_unique_cap' {
+                local _c = "`_catllm_ret_cat`i''"
+                return local cat`i' `"`_c'"'
+            }
+        }
+    }
+
     di as txt ""
     di as txt "Exploration complete. Raw categories stored in r()."
     di as txt "Use {bf:return list} to see results."
 end
 
 python:
+def _catllm_resolve_backend(domain):
+    """Return the python module to call. Empty domain -> cat_stack."""
+    from sfi import SFIToolkit
+    if not domain:
+        try:
+            import cat_stack
+        except ImportError:
+            SFIToolkit.errprintln(
+                "{err}cat-stack is not installed. Run: catllm setup"
+            )
+            raise
+        return cat_stack
+    d = domain.lower().strip()
+    pkg_map = {
+        "pol":    ("cat_pol",    "cat-pol"),
+        "vader":  ("catvader",   "cat-vader"),
+        "ademic": ("catademic",  "cat-ademic"),
+        "survey": ("cat_survey", "cat-survey"),
+        "cog":    ("cat_cog",    "cat-cog"),
+        "web":    ("catweb",     "cat-web"),
+    }
+    if d not in pkg_map:
+        SFIToolkit.errprintln(
+            "{err}Unknown domain: '" + domain + "'. "
+            "Valid: pol, vader, ademic, survey, cog, web."
+        )
+        raise ValueError("unknown domain: " + domain)
+    mod_name, pkg_name = pkg_map[d]
+    try:
+        return __import__(mod_name)
+    except ImportError:
+        SFIToolkit.errprintln(
+            "{err}Domain package '" + pkg_name + "' is not installed. "
+            "Run: catllm setup, domain(" + d + ")"
+        )
+        raise
+
+def _catllm_parse_pyoptions(s):
+    """Parse 'key=val, key=val' into a dict. Values run through ast.literal_eval."""
+    import ast
+    out = {}
+    if not s or not s.strip():
+        return out
+    s = s.strip()
+    if len(s) >= 2 and s[0] == s[-1] and s[0] in ('"', "'"):
+        s = s[1:-1]
+    parts, buf, depth, quote = [], "", 0, None
+    for ch in s:
+        if quote:
+            buf += ch
+            if ch == quote:
+                quote = None
+            continue
+        if ch in ('"', "'"):
+            quote = ch
+            buf += ch
+            continue
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+        if ch == "," and depth == 0:
+            parts.append(buf)
+            buf = ""
+        else:
+            buf += ch
+    if buf:
+        parts.append(buf)
+    for piece in parts:
+        if "=" not in piece:
+            continue
+        k, v = piece.split("=", 1)
+        k, v = k.strip(), v.strip()
+        if not k:
+            continue
+        try:
+            out[k] = ast.literal_eval(v)
+        except (ValueError, SyntaxError):
+            out[k] = v
+    return out
+
 def _catllm_do_explore():
     from sfi import Data, Macro, Scalar, SFIToolkit
-    import cat_stack
 
     # --- read Stata parameters ---
     varname   = Macro.getLocal("_catllm_var")
@@ -100,11 +204,20 @@ def _catllm_do_explore():
     focus     = Macro.getLocal("_catllm_focus")
     touse     = Macro.getLocal("_catllm_touse")
     saving    = Macro.getLocal("_catllm_saving")
+    domain    = Macro.getLocal("_catllm_domain")
+    pyopts_str = Macro.getLocal("_catllm_pyopts")
     creat_str = Macro.getLocal("_catllm_creat")
     seed_str  = Macro.getLocal("_catllm_seed")
 
     creativity = float(creat_str) if creat_str else None
     random_state = int(seed_str) if seed_str else None
+
+    try:
+        module = _catllm_resolve_backend(domain)
+    except Exception:
+        Macro.setLocal("_catllm_failed", "1")
+        return
+    extra_kwargs = _catllm_parse_pyoptions(pyopts_str)
 
     # --- read text data ---
     var_idx   = Data.getVarIndex(varname)
@@ -120,6 +233,7 @@ def _catllm_do_explore():
 
     if not texts:
         SFIToolkit.errprintln("{err}No valid text observations found.")
+        Macro.setLocal("_catllm_failed", "1")
         return
 
     # --- call catllm.explore ---
@@ -145,29 +259,30 @@ def _catllm_do_explore():
     if random_state is not None:
         kwargs["random_state"] = random_state
 
+    kwargs.update(extra_kwargs)
+
     try:
-        raw_cats = cat_stack.explore(**kwargs)
+        raw_cats = module.explore(**kwargs)
     except Exception as e:
-        SFIToolkit.errprintln("{err}cat_stack.explore() failed: " + str(e))
+        SFIToolkit.errprintln("{err}" + module.__name__ + ".explore() failed: " + str(e))
+        Macro.setLocal("_catllm_failed", "1")
         return
 
-    # --- store results in r() ---
-    Scalar.setValue("r(n_raw)", len(raw_cats), vtype="hidden")
-
-    # Count unique categories
+    # --- store results in locals for the .ado to return ---
     unique_cats = list(set(raw_cats))
-    Scalar.setValue("r(n_unique)", len(unique_cats), vtype="hidden")
+    capped = unique_cats[:100]
 
-    # Store unique categories
-    for i, cat in enumerate(unique_cats[:100], 1):  # cap at 100
-        Macro.setGlobal("r(cat{})".format(i), cat)
-
-    # Store frequency table as macro
     from collections import Counter
     freq = Counter(raw_cats)
     top_20 = freq.most_common(20)
-    Macro.setGlobal("r(top_categories)",
+
+    Macro.setLocal("_catllm_ret_n_raw", str(len(raw_cats)))
+    Macro.setLocal("_catllm_ret_n_uniq", str(len(unique_cats)))
+    Macro.setLocal("_catllm_ret_top",
                    " ".join('"{}"'.format(c) for c, _ in top_20))
+    Macro.setLocal("_catllm_ret_n_unique_cap", str(len(capped)))
+    for i, cat in enumerate(capped, 1):
+        Macro.setLocal("_catllm_ret_cat{}".format(i), cat)
 
     # Optionally save raw results to a new dataset
     if saving:

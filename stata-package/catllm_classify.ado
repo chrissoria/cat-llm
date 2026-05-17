@@ -1,5 +1,5 @@
 *! catllm_classify -- Classify text into categories using LLMs
-*! Version 1.0.0
+*! Version 1.1.0
 
 program define catllm_classify, rclass
     version 16
@@ -25,6 +25,8 @@ program define catllm_classify, rclass
             ROWdelay(real 0.0)                                  ///
             FAILstrategy(string)                                ///
             NOJSONschema                                        ///
+            DOMain(string)                                      ///
+            PYOptions(string asis)                              ///
             REPLACE                                             ///
         ]
 
@@ -84,6 +86,8 @@ program define catllm_classify, rclass
     local _catllm_rowdelay "`rowdelay'"
     local _catllm_failstr  "`failstrategy'"
     local _catllm_nojson   "`nojsonschema'"
+    local _catllm_domain   "`domain'"
+    local _catllm_pyopts   `"`pyoptions'"'
 
     if `creativity' == -1 {
         local _catllm_creat ""
@@ -93,7 +97,11 @@ program define catllm_classify, rclass
     }
 
     * ----- call Python -----
+    local _catllm_failed ""
     python: _catllm_do_classify()
+    if "`_catllm_failed'" != "" {
+        exit 198
+    }
 
     * ----- return results -----
     quietly count if `generate' != "" & `touse'
@@ -112,9 +120,89 @@ program define catllm_classify, rclass
 end
 
 python:
+def _catllm_resolve_backend(domain):
+    """Return the python module to call. Empty domain -> cat_stack."""
+    from sfi import SFIToolkit
+    if not domain:
+        try:
+            import cat_stack
+        except ImportError:
+            SFIToolkit.errprintln(
+                "{err}cat-stack is not installed. Run: catllm setup"
+            )
+            raise
+        return cat_stack
+    d = domain.lower().strip()
+    pkg_map = {
+        "pol":    ("cat_pol",    "cat-pol"),
+        "vader":  ("catvader",   "cat-vader"),
+        "ademic": ("catademic",  "cat-ademic"),
+        "survey": ("cat_survey", "cat-survey"),
+        "cog":    ("cat_cog",    "cat-cog"),
+        "web":    ("catweb",     "cat-web"),
+    }
+    if d not in pkg_map:
+        SFIToolkit.errprintln(
+            "{err}Unknown domain: '" + domain + "'. "
+            "Valid: pol, vader, ademic, survey, cog, web."
+        )
+        raise ValueError("unknown domain: " + domain)
+    mod_name, pkg_name = pkg_map[d]
+    try:
+        return __import__(mod_name)
+    except ImportError:
+        SFIToolkit.errprintln(
+            "{err}Domain package '" + pkg_name + "' is not installed. "
+            "Run: catllm setup, domain(" + d + ")"
+        )
+        raise
+
+def _catllm_parse_pyoptions(s):
+    """Parse 'key=val, key=val' into a dict. Values run through ast.literal_eval."""
+    import ast
+    out = {}
+    if not s or not s.strip():
+        return out
+    s = s.strip()
+    if len(s) >= 2 and s[0] == s[-1] and s[0] in ('"', "'"):
+        s = s[1:-1]
+    parts, buf, depth, quote = [], "", 0, None
+    for ch in s:
+        if quote:
+            buf += ch
+            if ch == quote:
+                quote = None
+            continue
+        if ch in ('"', "'"):
+            quote = ch
+            buf += ch
+            continue
+        if ch in "([{":
+            depth += 1
+        elif ch in ")]}":
+            depth -= 1
+        if ch == "," and depth == 0:
+            parts.append(buf)
+            buf = ""
+        else:
+            buf += ch
+    if buf:
+        parts.append(buf)
+    for piece in parts:
+        if "=" not in piece:
+            continue
+        k, v = piece.split("=", 1)
+        k, v = k.strip(), v.strip()
+        if not k:
+            continue
+        try:
+            out[k] = ast.literal_eval(v)
+        except (ValueError, SyntaxError):
+            out[k] = v
+    return out
+
 def _catllm_do_classify():
     from sfi import Data, Macro, SFIToolkit
-    import cat_stack
 
     # --- read Stata parameters ---
     varname    = Macro.getLocal("_catllm_var")
@@ -138,9 +226,18 @@ def _catllm_do_classify():
     rowdelay   = float(Macro.getLocal("_catllm_rowdelay") or "0.0")
     failstr    = Macro.getLocal("_catllm_failstr")
     nojson     = Macro.getLocal("_catllm_nojson") != ""
+    domain     = Macro.getLocal("_catllm_domain")
+    pyopts_str = Macro.getLocal("_catllm_pyopts")
     creat_str  = Macro.getLocal("_catllm_creat")
 
     creativity = float(creat_str) if creat_str else None
+
+    try:
+        module = _catllm_resolve_backend(domain)
+    except Exception:
+        Macro.setLocal("_catllm_failed", "1")
+        return
+    extra_kwargs = _catllm_parse_pyoptions(pyopts_str)
 
     # --- parse categories ---
     # Accepts: "Cat A" "Cat B" "Cat C"  or  Cat_A Cat_B Cat_C
@@ -178,6 +275,7 @@ def _catllm_do_classify():
 
     if not texts:
         SFIToolkit.errprintln("{err}No valid observations found.")
+        Macro.setLocal("_catllm_failed", "1")
         return
 
     # --- call catllm ---
@@ -210,10 +308,13 @@ def _catllm_do_classify():
     if creativity is not None:
         kwargs["creativity"] = creativity
 
+    kwargs.update(extra_kwargs)
+
     try:
-        result_df = cat_stack.classify(**kwargs)
+        result_df = module.classify(**kwargs)
     except Exception as e:
-        SFIToolkit.errprintln("{err}cat_stack.classify() failed: " + str(e))
+        SFIToolkit.errprintln("{err}" + module.__name__ + ".classify() failed: " + str(e))
+        Macro.setLocal("_catllm_failed", "1")
         return
 
     # --- determine classification per row ---
@@ -231,12 +332,18 @@ def _catllm_do_classify():
             base = cc.rsplit("_consensus", 1)[0]
             col_to_cat[cc] = base
     else:
-        # Single model: columns are positional (category_1, category_2, ...)
-        meta = {"input_data", "processing_status", "failed_models",
-                "pdf_path", "page_index", "image_path"}
-        cat_cols = [c for c in cols if c not in meta
-                    and not c.endswith("_agreement")]
-        # Map positional columns back to the input category names in order
+        # Single model: cat-stack emits columns named category_1, category_2, ...
+        # Match positively on that pattern; sort by the trailing index so
+        # the order is stable regardless of DataFrame column order.
+        import re
+        pat = re.compile(r"^category_(\d+)$")
+        indexed = []
+        for c in cols:
+            m = pat.match(c)
+            if m:
+                indexed.append((int(m.group(1)), c))
+        indexed.sort()
+        cat_cols = [c for _, c in indexed]
         col_to_cat = {}
         for i, cc in enumerate(cat_cols):
             col_to_cat[cc] = categories[i] if i < len(categories) else cc
