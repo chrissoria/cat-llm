@@ -56,7 +56,24 @@ str(results)
 
 ## Cloud + local hybrid ensemble
 
-Mixing cloud and local models gives you the speed of cloud + the cost/privacy benefits of local. Each model's vote counts equally.
+Mixing cloud and local models gives you the speed and accuracy of
+cloud + the cost/privacy benefits of local. Each model's vote counts
+equally.
+
+Two important things happen automatically when any ensemble entry
+uses `"ollama"`:
+
+1. **Ollama auto-starts** if the server isn't already running (the R
+   wrapper detects `model_source = "ollama"` in any model entry and
+   calls `ensure_ollama_running()` before the Python call).
+2. **The JSON formatter fallback auto-enables** with a printed
+   warning. Small local models more often emit malformed
+   classification JSON; the formatter (a fine-tuned local Qwen2.5-
+   0.5B) gets loaded on demand to rescue those rows. The model
+   itself loads lazily — only when the first parse failure happens
+   — so a clean run pays zero formatter overhead.
+
+You can opt out of the formatter with `json_formatter = FALSE`.
 
 ```{r hybrid-ensemble}
 results <- classify(
@@ -65,10 +82,31 @@ results <- classify(
   models = list(
     c("gpt-4o-mini",              "openai",    Sys.getenv("OPENAI_API_KEY")),
     c("claude-3-5-haiku-20241022", "anthropic", Sys.getenv("ANTHROPIC_API_KEY")),
-    c("qwen2.5:14b",              "ollama",    "")           # local, no key (or "qwen2.5:7b" for ~4.7 GB)
+    c("qwen2.5:7b",               "ollama",    "")           # local, no key
   ),
   consensus_threshold = "majority"   # 2 of 3 agree
 )
+```
+
+### Minimal hybrid (1 cloud + 2 local) — verified runnable
+
+A leaner mix that runs on a single cloud key + two ~5 GB local models.
+Best fit if you want the cloud model's accuracy as a tiebreaker for
+two cheap local votes:
+
+```{r hybrid-minimal}
+results <- classify(
+  input_data = responses,
+  categories = verbose_cats,
+  models = list(
+    c("gpt-4o-mini", "openai", Sys.getenv("OPENAI_API_KEY")),
+    c("qwen2.5:7b",  "ollama", ""),
+    c("mistral:7b",  "ollama", "")
+  ),
+  consensus_threshold = "majority"
+)
+print(results[, c("input_data", "processing_status",
+                  grep("_consensus$", colnames(results), value = TRUE))])
 ```
 
 ## Consensus thresholds
