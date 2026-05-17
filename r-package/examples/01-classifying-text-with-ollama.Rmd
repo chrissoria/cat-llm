@@ -17,10 +17,11 @@ In a terminal:
 
 ```bash
 # Install: see https://ollama.com/download
-ollama pull qwen2.5:7b
+ollama pull qwen2.5:14b   # ~10 GB; recommended over 7b for accuracy
 ```
 
 (You do **not** need to run `ollama serve` manually — see step 3.)
+See the model table at the bottom for smaller/larger alternatives.
 
 ## 2. Install the CatLLM ecosystem
 
@@ -45,10 +46,21 @@ responses <- c(
   "I haven't tried it yet but it sounds promising."
 )
 
+# Verbose category descriptions classify several percentage points
+# more accurately than short labels — especially for smaller local
+# models like the 14B Qwen below. See the Best Practices section of
+# the cat.llm vignette for the empirical evidence.
+verbose_cats <- c(
+  "Positive: The respondent expresses satisfaction, approval, or favorable sentiment.",
+  "Negative: The respondent expresses dissatisfaction, frustration, or criticism.",
+  "Neutral: The respondent is factual, ambivalent, or does not express clear sentiment.",
+  "Other: The response does not fit any of the above categories."
+)
+
 results <- classify(
   input_data    = responses,
-  categories    = c("Positive", "Negative", "Neutral"),
-  user_model    = "qwen2.5:7b",
+  categories    = verbose_cats,
+  user_model    = "qwen2.5:14b",
   model_source  = "ollama"
 )
 
@@ -69,11 +81,11 @@ The trade-off: local 7B–14B models are usually a few percentage points behind 
 
 ## 5. Suggested local models
 
-| Model               | Pull command                | Notes                                  |
-|---------------------|-----------------------------|----------------------------------------|
-| `qwen2.5:7b`        | `ollama pull qwen2.5:7b`    | Good baseline; fast on Apple Silicon   |
-| `qwen2.5:14b`       | `ollama pull qwen2.5:14b`   | Higher accuracy; ~10 GB RAM            |
-| `llama3.1:8b`       | `ollama pull llama3.1:8b`   | Solid generalist                       |
-| `gpt-oss:20b`       | `ollama pull gpt-oss:20b`   | Strong for English, slower             |
+| Model               | Pull command                | Notes                                                            |
+|---------------------|-----------------------------|------------------------------------------------------------------|
+| `qwen2.5:14b`       | `ollama pull qwen2.5:14b`   | **Recommended baseline.** ~10 GB RAM. Good balance of accuracy + speed. |
+| `qwen2.5:7b`        | `ollama pull qwen2.5:7b`    | Faster but noticeably weaker on multi-label classification. Use only when RAM is tight. |
+| `llama3.1:8b`       | `ollama pull llama3.1:8b`   | Solid generalist; slightly behind Qwen on classification.        |
+| `gpt-oss:20b`       | `ollama pull gpt-oss:20b`   | Higher accuracy still; ~20 GB RAM and noticeably slower.         |
 
 See https://ollama.com/library for the full catalog.
