@@ -16,14 +16,17 @@ permissions:
 
 jobs:
   build:
+    # NOTE: Intel (macos-13) runner is dropped from the matrix because
+    # GitHub's free-tier Intel runners are scarce — jobs sit queued for hours.
+    # Re-add it (and update the catllm.com "Intel — Coming soon" placeholder)
+    # once we have either an Apple Developer paid-runner budget or a confirmed
+    # Intel user asking for it.
     strategy:
       fail-fast: false
       matrix:
         include:
           - runner: macos-14   # Apple Silicon (M1)
             arch: arm64
-          - runner: macos-13   # Intel
-            arch: x86_64
 
     runs-on: ${{ matrix.runner }}
 
