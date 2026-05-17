@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.0.0}{...}
+{* *! version 1.1.0}{...}
 {viewerjumpto "Syntax" "catllm_extract##syntax"}{...}
 {viewerjumpto "Description" "catllm_extract##description"}{...}
 {viewerjumpto "Options" "catllm_extract##options"}{...}
@@ -45,6 +45,10 @@
 
 {syntab:Reproducibility}
 {synopt:{cmdab:random:seed(}{it:integer}{cmd:)}}random seed for chunk sampling{p_end}
+
+{syntab:Backend selection}
+{synopt:{cmdab:dom:ain(}{it:string}{cmd:)}}use a domain backend: pol, vader, ademic, survey, cog, web{p_end}
+{synopt:{cmdab:pyo:ptions(}{it:string}{cmd:)}}passthrough kwargs: {cmd:"key=val, key=val"}{p_end}
 {synoptline}
 
 
@@ -73,6 +77,18 @@ produces general themes; {bf:specific} produces finer-grained categories.
 {phang}
 {opt focus(string)} narrows extraction to a specific aspect.
 Example: {cmd:focus("reasons for leaving")}.
+
+{phang}
+{opt domain(string)} routes the call through a domain-specific Python
+sub-package: {bf:pol} (cat-pol), {bf:vader} (cat-vader), {bf:ademic}
+(cat-ademic), {bf:survey} (cat-survey), {bf:cog} (cat-cog), {bf:web}
+(cat-web). Default uses {bf:cat-stack}. Install with
+{cmd:catllm setup, domain({it:name})}.
+
+{phang}
+{opt pyoptions(string)} forwards arbitrary keyword arguments to the
+underlying Python function. Format: comma-separated {cmd:key=value} pairs;
+values parsed as Python literals.
 
 
 {marker results}{...}
@@ -106,3 +122,6 @@ Example: {cmd:focus("reasons for leaving")}.
 {phang2}{cmd:. catllm extract response, apikey($OPENAI_API_KEY)}{p_end}
 {phang2}{cmd:. local cats = r(categories)}{p_end}
 {phang2}{cmd:. catllm classify response, categories(`cats') apikey($OPENAI_API_KEY)}{p_end}
+
+{pstd}Use the academic-domain backend:{p_end}
+{phang2}{cmd:. catllm extract abstract, apikey($OPENAI_API_KEY) domain(ademic)}{p_end}

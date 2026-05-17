@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.0.0}{...}
+{* *! version 1.1.0}{...}
 {viewerjumpto "Syntax" "catllm_classify##syntax"}{...}
 {viewerjumpto "Description" "catllm_classify##description"}{...}
 {viewerjumpto "Options" "catllm_classify##options"}{...}
@@ -55,6 +55,10 @@
 {synopt:{cmdab:rowd:elay(}{it:real}{cmd:)}}delay between rows in seconds; default {bf:0.0}{p_end}
 {synopt:{cmdab:fail:strategy(}{it:string}{cmd:)}}partial or strict; default {bf:partial}{p_end}
 {synopt:{cmd:nojsonschema}}disable structured JSON output{p_end}
+
+{syntab:Backend selection}
+{synopt:{cmdab:dom:ain(}{it:string}{cmd:)}}use a domain backend: pol, vader, ademic, survey, cog, web{p_end}
+{synopt:{cmdab:pyo:ptions(}{it:string}{cmd:)}}passthrough kwargs: {cmd:"key=val, key=val"}{p_end}
 {synoptline}
 
 
@@ -98,6 +102,23 @@ Example: {cmd:models("gpt-4o openai $OPENAI_API_KEY; claude-sonnet-4-20250514 an
 Options: {bf:majority} (default), {bf:two-thirds}, {bf:unanimous}, or a
 number between 0 and 1.
 
+{dlgtab:Backend selection}
+
+{phang}
+{opt domain(string)} routes the call through a domain-specific Python
+sub-package with prompts tuned for that text type. Valid values:
+{bf:pol} (cat-pol), {bf:vader} (cat-vader), {bf:ademic} (cat-ademic),
+{bf:survey} (cat-survey), {bf:cog} (cat-cog), {bf:web} (cat-web). With no
+{opt domain()}, the base {bf:cat-stack} engine is used. Install a domain
+package with {cmd:catllm setup, domain({it:name})}.
+
+{phang}
+{opt pyoptions(string)} forwards arbitrary keyword arguments to the
+underlying Python function. Format: comma-separated {cmd:key=value} pairs.
+Values are parsed as Python literals (numbers, booleans, strings, lists).
+Use this to access any cat-stack parameter not otherwise wrapped as a Stata
+option.
+
 
 {marker results}{...}
 {title:Stored results}
@@ -132,3 +153,9 @@ number between 0 and 1.
 
 {pstd}Classify only certain observations:{p_end}
 {phang2}{cmd:. catllm classify response if !missing(response), categories("Yes" "No") apikey($OPENAI_API_KEY)}{p_end}
+
+{pstd}Use the survey-domain backend:{p_end}
+{phang2}{cmd:. catllm classify response, categories("Positive" "Negative" "Neutral") apikey($OPENAI_API_KEY) domain(survey)}{p_end}
+
+{pstd}Forward an arbitrary kwarg to the Python call:{p_end}
+{phang2}{cmd:. catllm classify response, categories("A" "B") apikey($OPENAI_API_KEY) pyoptions("max_retries=3, row_delay=0.2")}{p_end}

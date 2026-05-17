@@ -86,4 +86,38 @@ catllm summarize response,                          ///
 
 list response summary, separator(0) abbreviate(30)
 
+* --- Step 6: pyoptions passthrough ---
+di _n "{hline 60}"
+di "Step 6: pyoptions() escape hatch"
+di "{hline 60}"
+
+catllm classify response,                           ///
+    categories("Healthcare" "Economy"               ///
+               "Education" "Environment"            ///
+               "Infrastructure")                    ///
+    apikey($OPENAI_API_KEY)                         ///
+    generate(topic_pyopts)                          ///
+    pyoptions("max_retries=3, retry_delay=0.5")
+
+tab topic_pyopts
+
+* --- Step 7: domain() error paths ---
+di _n "{hline 60}"
+di "Step 7: domain() validation"
+di "{hline 60}"
+
+* Should print "Unknown domain: 'bogus'" and exit cleanly
+capture noisily catllm classify response,           ///
+    categories("Yes" "No")                          ///
+    apikey($OPENAI_API_KEY)                         ///
+    generate(topic_bogus)                           ///
+    domain(bogus)
+
+* --- Step 8: domain() happy path (uncomment if cat-survey installed) ---
+* catllm classify response,                          ///
+*     categories("Healthcare" "Economy")             ///
+*     apikey($OPENAI_API_KEY)                        ///
+*     generate(topic_survey)                         ///
+*     domain(survey)
+
 di _n "All tests complete."

@@ -1,5 +1,5 @@
 {smcl}
-{* *! version 1.0.0}{...}
+{* *! version 1.1.0}{...}
 {viewerjumpto "Syntax" "catllm_explore##syntax"}{...}
 {viewerjumpto "Description" "catllm_explore##description"}{...}
 {viewerjumpto "Options" "catllm_explore##options"}{...}
@@ -46,6 +46,10 @@
 {syntab:Output}
 {synopt:{cmdab:sav:ing(}{it:filename}{cmd:)}}save raw categories to a .dta file{p_end}
 {synopt:{cmdab:random:seed(}{it:integer}{cmd:)}}random seed for reproducibility{p_end}
+
+{syntab:Backend selection}
+{synopt:{cmdab:dom:ain(}{it:string}{cmd:)}}use a domain backend: pol, vader, ademic, survey, cog, web{p_end}
+{synopt:{cmdab:pyo:ptions(}{it:string}{cmd:)}}passthrough kwargs: {cmd:"key=val, key=val"}{p_end}
 {synoptline}
 
 
@@ -63,6 +67,22 @@ whether additional iterations yield diminishing returns.
 Unlike {helpb catllm_extract:catllm extract}, duplicates are intentionally
 retained. Use {opt saving()} to export the raw results to a separate dataset
 for further analysis.
+
+
+{marker options}{...}
+{title:Options}
+
+{phang}
+{opt domain(string)} routes the call through a domain-specific Python
+sub-package: {bf:pol} (cat-pol), {bf:vader} (cat-vader), {bf:ademic}
+(cat-ademic), {bf:survey} (cat-survey), {bf:cog} (cat-cog), {bf:web}
+(cat-web). Default uses {bf:cat-stack}. Install with
+{cmd:catllm setup, domain({it:name})}.
+
+{phang}
+{opt pyoptions(string)} forwards arbitrary keyword arguments to the
+underlying Python function. Format: comma-separated {cmd:key=value} pairs;
+values parsed as Python literals.
 
 
 {marker results}{...}
@@ -90,3 +110,6 @@ for further analysis.
 {phang2}{cmd:. catllm explore response, apikey($OPENAI_API_KEY) iterations(12) saving(raw_cats)}{p_end}
 {phang2}{cmd:. use raw_cats, clear}{p_end}
 {phang2}{cmd:. tab raw_category}{p_end}
+
+{pstd}Saturation analysis on political opinion text:{p_end}
+{phang2}{cmd:. catllm explore opinion, apikey($OPENAI_API_KEY) domain(pol) iterations(20)}{p_end}
