@@ -38,18 +38,20 @@ jobs:
         with:
           use-public-rspm: true
 
-      - name: Install system deps (libcurl/openssl)
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y libcurl4-openssl-dev libssl-dev libxml2-dev
-
-      - name: Install build R deps
-        run: |
-          install.packages(c(
-            "pkgdown", "devtools", "knitr", "rmarkdown",
-            "reticulate", "testthat", "bslib"
-          ), repos = "https://cloud.r-project.org")
-        shell: Rscript {0}
+      # setup-r-dependencies handles system deps (libuv, libpng, libxml2, etc.)
+      # via Posit Public Package Manager binaries. Using cat.stack's working
+      # directory because it has the base reticulate dependency declared.
+      - uses: r-lib/actions/setup-r-dependencies@v2
+        with:
+          working-directory: r-package/cat.stack
+          extra-packages: |
+            any::pkgdown
+            any::devtools
+            any::knitr
+            any::rmarkdown
+            any::bslib
+            any::testthat
+          needs: website
 
       - name: Install all cat.* packages from local source
         run: |
