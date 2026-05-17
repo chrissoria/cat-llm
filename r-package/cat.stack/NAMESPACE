@@ -2,6 +2,7 @@ export(classify)
 export(extract)
 export(explore)
 export(summarize)
+export(prompt_tune)
 export(install_cat_stack)
 
 # Internal helpers re-used by sibling domain packages (cat.survey, cat.ademic,

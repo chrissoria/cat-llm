@@ -38,6 +38,10 @@ reference:
 - title: Summarize
   contents:
   - summarize
+- title: Prompt optimization
+  desc: Interactive, human-in-the-loop tuning of the system prompt.
+  contents:
+  - prompt_tune
 - title: Installation
   contents:
   - install_cat_stack

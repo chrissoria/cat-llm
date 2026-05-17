@@ -17,6 +17,7 @@ test_that("base functions are re-exported from cat.stack", {
   expect_true(is.function(extract))
   expect_true(is.function(explore))
   expect_true(is.function(summarize))
+  expect_true(is.function(prompt_tune))
   expect_true(is.function(install_cat_stack))
 })
 

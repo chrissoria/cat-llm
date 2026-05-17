@@ -61,6 +61,9 @@ explore_web(...)
 
 summarize_web(...)
 }
+\arguments{
+\item{...}{Additional arguments passed to the Python function.}
+}
 \description{
 These functions provide convenient domain-suffixed names so users can
 tab-complete to find the right function. Each is a thin re-export from

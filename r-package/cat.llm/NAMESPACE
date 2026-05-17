@@ -3,12 +3,14 @@ importFrom(cat.stack, classify)
 importFrom(cat.stack, extract)
 importFrom(cat.stack, explore)
 importFrom(cat.stack, summarize)
+importFrom(cat.stack, prompt_tune)
 importFrom(cat.stack, install_cat_stack)
 
 export(classify)
 export(extract)
 export(explore)
 export(summarize)
+export(prompt_tune)
 export(install_cat_stack)
 
 # Domain-suffixed aliases

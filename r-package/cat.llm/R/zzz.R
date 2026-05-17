@@ -1,4 +1,4 @@
-#' @importFrom cat.stack classify extract explore summarize install_cat_stack
+#' @importFrom cat.stack classify extract explore summarize prompt_tune install_cat_stack
 NULL
 
 .onAttach <- function(libname, pkgname) {
