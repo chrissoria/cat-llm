@@ -1,374 +1,0 @@
-
-  ___  ____  ____  ____  ____ ®
- /__    /   ____/   /   ____/      StataNow 19.5
-___/   /   /___/   /   /___/       SE—Standard Edition
-
- Statistics and Data Science       Copyright 1985-2025 StataCorp LLC
-                                   StataCorp
-                                   4905 Lakeway Drive
-                                   College Station, Texas 77845 USA
-                                   800-782-8272        https://www.stata.com
-                                   979-696-4600        service@stata.com
-
-Stata license: Single-user , expiring  6 Aug 2026
-Serial number: 401909206182
-  Licensed to: Chris Soria
-               UC Berkeley
-
-Notes:
-      1. Stata is running in batch mode.
-      2. Unicode is supported; see help unicode_advice.
-      3. Maximum number of variables is set to 5,000 but can be increased;
-          see help set_maxvar.
-
-. do 06-extracting-categories-with-extract.do 
-
-. *****************************************************************************
-> ***
-. * 06-extracting-categories-with-extract.do
-. *
-. * Discover a category scheme with `catllm extract`. Use this when you
-. * have free-text data and no pre-defined coding scheme -- let the model
-. * surface the recurring themes for you.
-. *
-. * Behind the scenes, extract() chunks your data, runs the discovery
-. * prompt multiple times (across `iterations`), merges semantically
-. * similar labels, and returns a ranked list of top categories.
-. *
-. * Compare this to example 04, which is end-to-end (extract -> classify).
-. * This example focuses on the tuning knobs of extract itself.
-. *
-. * Requires: OPENAI_API_KEY
-. * Cost:     ~$0.10 (two extract runs at different specificity)
-. * Runtime:  ~1 minute
-. *****************************************************************************
-> ***
-. 
-. clear all
-
-. set more off
-
-. 
-. adopath + "`c(pwd)'/.."
-  [1]  (BASE)      "/Applications/StataNow/ado/base/"
-  [2]  (SITE)      "/Applications/StataNow/ado/site/"
-  [3]              "."
-  [4]  (PERSONAL)  "/Users/chrissoria/Documents/Stata/ado/personal/"
-  [5]  (PLUS)      "/Users/chrissoria/Library/Application Support/Stata/ado/plu
-> s/"
-  [6]  (OLDPLACE)  "~/ado/"
-  [7]              "/Users/chrissoria/Documents/Research/cat-llm/stata-package/
-> examples/.."
-
-. 
-. global OPENAI_API_KEY : env OPENAI_API_KEY
-
-. if "$OPENAI_API_KEY" == "" {
-.     di as error "OPENAI_API_KEY not set."
-.     exit 198
-. }
-
-. 
-. * --- Example data: a mixed bag of neighborhood comments --------------------
-> --
-. input str200 response
-
-                                                                               
->                                                                              
->                                          response
-  1. "Just had the best coffee ever! Highly recommend the new place downtown."
-  2. "The bus was 40 minutes late again. Public transit here is a joke."
-  3. "Loved the museum exhibit on California water rights."
-  4. "Why is rent so expensive in this neighborhood?"
-  5. "Tried the new ramen spot -- totally worth the wait."
-  6. "Construction noise on 4th street has been brutal lately."
-  7. "The library's new author series is amazing."
-  8. "Need to find an affordable place before lease ends."
-  9. "Saw a great documentary at the indie theater last night."
- 10. "Trash pickup hasn't come in three weeks. Calling 311."
- 11. end
-
-. 
-. * --- 1. Basic extract ------------------------------------------------------
-> --
-. di _n "{hline 60}"
-
-------------------------------------------------------------
-
-. di "1. Basic extract -- broad themes"
-1. Basic extract -- broad themes
-
-. di "{hline 60}"
-------------------------------------------------------------
-
-. 
-. catllm extract response,                                ///
->     apikey($OPENAI_API_KEY)                             ///
->     model("gpt-4o-mini")                                ///
->     maxcategories(8)                                    ///
->     iterations(6)
-Extracting categories from 10 observations...
-Auto-adjusted divisions from 12 to 3 for 10 responses.
-Auto-adjusted categories_per_chunk from 10 to 6 for chunk size 3.
-Exploring categories for question: ''
-Using provider: openai, model: gpt-4o-mini
-          108 total category extractions across 6 iterations.
-          Top 8 categories will be identified.
-
-Processing chunks (pass 1/6):   0%|          | 0/3 [00:00<?, ?it/s]Processing
->  chunks (pass 1/6):  33%|###3      | 1/3 [00:01<00:03,  1.84s/it]Processing 
-> chunks (pass 1/6):  67%|######6   | 2/3 [00:02<00:01,  1.24s/it]Processing c
-> hunks (pass 1/6): 100%|##########| 3/3 [00:03<00:00,  1.03it/s]Processing ch
-> unks (pass 1/6): 100%|##########| 3/3 [00:03<00:00,  1.11s/it]
-Processing chunks (pass 2/6):   0%|          | 0/3 [00:00<?, ?it/s]Processing
->  chunks (pass 2/6):  33%|###3      | 1/3 [00:00<00:01,  1.12it/s]Processing 
-> chunks (pass 2/6):  67%|######6   | 2/3 [00:02<00:01,  1.05s/it]Processing c
-> hunks (pass 2/6): 100%|##########| 3/3 [00:02<00:00,  1.02it/s]Processing ch
-> unks (pass 2/6): 100%|##########| 3/3 [00:02<00:00,  1.01it/s]
-Processing chunks (pass 3/6):   0%|          | 0/3 [00:00<?, ?it/s]Processing
->  chunks (pass 3/6):  33%|###3      | 1/3 [00:00<00:01,  1.47it/s]Processing 
-> chunks (pass 3/6):  67%|######6   | 2/3 [00:01<00:00,  1.06it/s]Processing c
-> hunks (pass 3/6): 100%|##########| 3/3 [00:02<00:00,  1.11it/s]Processing ch
-> unks (pass 3/6): 100%|##########| 3/3 [00:02<00:00,  1.13it/s]
-Processing chunks (pass 4/6):   0%|          | 0/3 [00:00<?, ?it/s]Processing
->  chunks (pass 4/6):  33%|###3      | 1/3 [00:00<00:01,  1.09it/s]Processing 
-> chunks (pass 4/6):  67%|######6   | 2/3 [00:01<00:00,  1.27it/s]Processing c
-> hunks (pass 4/6): 100%|##########| 3/3 [00:02<00:00,  1.12it/s]Processing ch
-> unks (pass 4/6): 100%|##########| 3/3 [00:02<00:00,  1.14it/s]
-Processing chunks (pass 5/6):   0%|          | 0/3 [00:00<?, ?it/s]Processing
->  chunks (pass 5/6):  33%|###3      | 1/3 [00:01<00:02,  1.02s/it]Processing 
-> chunks (pass 5/6):  67%|######6   | 2/3 [00:01<00:00,  1.04it/s]Processing c
-> hunks (pass 5/6): 100%|##########| 3/3 [00:02<00:00,  1.05it/s]Processing ch
-> unks (pass 5/6): 100%|##########| 3/3 [00:02<00:00,  1.04it/s]
-Processing chunks (pass 6/6):   0%|          | 0/3 [00:00<?, ?it/s]Processing
->  chunks (pass 6/6):  33%|###3      | 1/3 [00:00<00:01,  1.34it/s]Processing 
-> chunks (pass 6/6):  67%|######6   | 2/3 [00:01<00:00,  1.21it/s]Processing c
-> hunks (pass 6/6): 100%|##########| 3/3 [00:03<00:00,  1.24s/it]Processing ch
-> unks (pass 6/6): 100%|##########| 3/3 [00:03<00:00,  1.28s/it]
-
-Top categories:
-1. Community Issues
-2. Housing and Urban Issues
-3. Food and Dining Experiences
-4. Environmental Concerns
-5. Transportation Accessibility
-6. Cultural and Entertainment Offerings
-7. Public Services and Infrastructure
-8. Recommendations and Feedback
-
-Discovered categories:
-  1. Community Issues  (n=5)
-  2. Housing and Urban Issues  (n=4)
-  3. Food and Dining Experiences  (n=4)
-  4. Environmental Concerns  (n=4)
-  5. Transportation Accessibility  (n=4)
-  6. Cultural and Entertainment Offerings  (n=3)
-  7. Public Services and Infrastructure  (n=3)
-  8. Recommendations and Feedback  (n=3)
-
-Extraction complete. Categories stored in r().
-Use return list to see results.
-
-. 
-. di _n "Returned in r():"
-
-Returned in r():
-
-. return list
-
-scalars:
-       r(n_categories) =  8
-
-macros:
-               r(cat8) : "Recommendations and Feedback"
-               r(cat7) : "Public Services and Infrastructure"
-               r(cat6) : "Cultural and Entertainment Offerings"
-               r(cat5) : "Transportation Accessibility"
-               r(cat4) : "Environmental Concerns"
-               r(cat3) : "Food and Dining Experiences"
-               r(cat2) : "Housing and Urban Issues"
-               r(cat1) : "Community Issues"
-         r(categories) : ""Community Issues" "Housing and Urban Issues" "Fo.."
-
-. 
-. * Individual categories are stored in r(cat1)..r(catN)
-. di _n "Programmatic access:"
-
-Programmatic access:
-
-. forvalues i = 1/`r(n_categories)' {
-  2.     di "  cat`i' = " `"`r(cat`i')'"'
-  3. }
-  cat1 = Community Issues
-  cat2 = Housing and Urban Issues
-  cat3 = Food and Dining Experiences
-  cat4 = Environmental Concerns
-  cat5 = Transportation Accessibility
-  cat6 = Cultural and Entertainment Offerings
-  cat7 = Public Services and Infrastructure
-  cat8 = Recommendations and Feedback
-
-. 
-. * The full quoted list is in r(categories), ready to pipe into classify():
-. *   local cats = `"`r(categories)'"'
-. *   catllm classify response, categories(`cats') apikey(...)
-. *
-. * See example 04 for the end-to-end pipeline.
-. 
-. * --- 2. Tune the discovery: specific vs broad ------------------------------
-> --
-. * `pyoptions("specificity=...")` controls how granular the themes are.
-. * "broad" (default) gives general themes; "specific" gives finer-grained ones
-> .
-. di _n "{hline 60}"
-
-------------------------------------------------------------
-
-. di "2. Specific extract -- finer-grained themes"
-2. Specific extract -- finer-grained themes
-
-. di "{hline 60}"
-------------------------------------------------------------
-
-. 
-. catllm extract response,                                ///
->     apikey($OPENAI_API_KEY)                             ///
->     model("gpt-4o-mini")                                ///
->     maxcategories(12)                                   ///
->     iterations(10)                                      ///
->     pyoptions("specificity='specific'")
-Extracting categories from 10 observations...
-Auto-adjusted divisions from 12 to 3 for 10 responses.
-Auto-adjusted categories_per_chunk from 10 to 6 for chunk size 3.
-Exploring categories for question: ''
-Using provider: openai, model: gpt-4o-mini
-          180 total category extractions across 10 iterations.
-          Top 12 categories will be identified.
-
-Processing chunks (pass 1/10):   0%|          | 0/3 [00:00<?, ?it/s]Processin
-> g chunks (pass 1/10):  33%|###3      | 1/3 [00:00<00:01,  1.04it/s]Processin
-> g chunks (pass 1/10):  67%|######6   | 2/3 [00:01<00:00,  1.31it/s]Processin
-> g chunks (pass 1/10): 100%|##########| 3/3 [00:02<00:00,  1.31it/s]Processin
-> g chunks (pass 1/10): 100%|##########| 3/3 [00:02<00:00,  1.28it/s]
-Processing chunks (pass 2/10):   0%|          | 0/3 [00:00<?, ?it/s]Processin
-> g chunks (pass 2/10):  33%|###3      | 1/3 [00:00<00:01,  1.41it/s]Processin
-> g chunks (pass 2/10):  67%|######6   | 2/3 [00:01<00:00,  1.26it/s]Processin
-> g chunks (pass 2/10): 100%|##########| 3/3 [00:02<00:00,  1.12it/s]Processin
-> g chunks (pass 2/10): 100%|##########| 3/3 [00:02<00:00,  1.17it/s]
-Processing chunks (pass 3/10):   0%|          | 0/3 [00:00<?, ?it/s]Processin
-> g chunks (pass 3/10):  33%|###3      | 1/3 [00:00<00:01,  1.21it/s]Processin
-> g chunks (pass 3/10):  67%|######6   | 2/3 [00:01<00:01,  1.03s/it]Processin
-> g chunks (pass 3/10): 100%|##########| 3/3 [00:02<00:00,  1.05it/s]Processin
-> g chunks (pass 3/10): 100%|##########| 3/3 [00:02<00:00,  1.05it/s]
-Processing chunks (pass 4/10):   0%|          | 0/3 [00:00<?, ?it/s]Processin
-> g chunks (pass 4/10):  33%|###3      | 1/3 [00:00<00:01,  1.07it/s]Processin
-> g chunks (pass 4/10):  67%|######6   | 2/3 [00:02<00:01,  1.02s/it]Processin
-> g chunks (pass 4/10): 100%|##########| 3/3 [00:03<00:00,  1.01s/it]Processin
-> g chunks (pass 4/10): 100%|##########| 3/3 [00:03<00:00,  1.01s/it]
-Processing chunks (pass 5/10):   0%|          | 0/3 [00:00<?, ?it/s]Processin
-> g chunks (pass 5/10):  33%|###3      | 1/3 [00:00<00:01,  1.02it/s]Processin
-> g chunks (pass 5/10):  67%|######6   | 2/3 [00:02<00:01,  1.15s/it]Processin
-> g chunks (pass 5/10): 100%|##########| 3/3 [00:03<00:00,  1.13s/it]Processin
-> g chunks (pass 5/10): 100%|##########| 3/3 [00:03<00:00,  1.12s/it]
-Processing chunks (pass 6/10):   0%|          | 0/3 [00:00<?, ?it/s]Processin
-> g chunks (pass 6/10):  33%|###3      | 1/3 [00:00<00:01,  1.07it/s]Processin
-> g chunks (pass 6/10):  67%|######6   | 2/3 [00:01<00:00,  1.24it/s]Processin
-> g chunks (pass 6/10): 100%|##########| 3/3 [00:02<00:00,  1.05s/it]Processin
-> g chunks (pass 6/10): 100%|##########| 3/3 [00:02<00:00,  1.00it/s]
-Processing chunks (pass 7/10):   0%|          | 0/3 [00:00<?, ?it/s]Processin
-> g chunks (pass 7/10):  33%|###3      | 1/3 [00:01<00:02,  1.01s/it]Processin
-> g chunks (pass 7/10):  67%|######6   | 2/3 [00:02<00:01,  1.08s/it]Processin
-> g chunks (pass 7/10): 100%|##########| 3/3 [00:02<00:00,  1.11it/s]Processin
-> g chunks (pass 7/10): 100%|##########| 3/3 [00:02<00:00,  1.06it/s]
-Processing chunks (pass 8/10):   0%|          | 0/3 [00:00<?, ?it/s]Processin
-> g chunks (pass 8/10):  33%|###3      | 1/3 [00:01<00:02,  1.05s/it]Processin
-> g chunks (pass 8/10):  67%|######6   | 2/3 [00:02<00:01,  1.02s/it]Processin
-> g chunks (pass 8/10): 100%|##########| 3/3 [00:02<00:00,  1.10it/s]Processin
-> g chunks (pass 8/10): 100%|##########| 3/3 [00:02<00:00,  1.06it/s]
-Processing chunks (pass 9/10):   0%|          | 0/3 [00:00<?, ?it/s]Processin
-> g chunks (pass 9/10):  33%|###3      | 1/3 [00:00<00:01,  1.13it/s]Processin
-> g chunks (pass 9/10):  67%|######6   | 2/3 [00:01<00:00,  1.04it/s]Processin
-> g chunks (pass 9/10): 100%|##########| 3/3 [00:03<00:00,  1.19s/it]Processin
-> g chunks (pass 9/10): 100%|##########| 3/3 [00:03<00:00,  1.12s/it]
-Processing chunks (pass 10/10):   0%|          | 0/3 [00:00<?, ?it/s]Processi
-> ng chunks (pass 10/10):  33%|###3      | 1/3 [00:00<00:01,  1.04it/s]Process
-> ing chunks (pass 10/10):  67%|######6   | 2/3 [00:01<00:00,  1.20it/s]Proces
-> sing chunks (pass 10/10): 100%|##########| 3/3 [00:02<00:00,  1.27it/s]Proce
-> ssing chunks (pass 10/10): 100%|##########| 3/3 [00:02<00:00,  1.23it/s]
-
-Top categories:
-1. Recommendations
-2. Community Issues
-3. Food and Beverage
-4. Cultural Entertainment
-5. Housing and Real Estate
-6. Community Events
-7. Urban Environment
-8. Local Culture
-9. Local Businesses
-10. Documentaries
-11. Community Services
-12. Noise Issues
-
-Discovered categories:
-  1. Recommendations  (n=7)
-  2. Community Issues  (n=6)
-  3. Food and Beverage  (n=6)
-  4. Cultural Entertainment  (n=6)
-  5. Housing and Real Estate  (n=5)
-  6. Community Events  (n=4)
-  7. Urban Environment  (n=4)
-  8. Local Culture  (n=4)
-  9. Local Businesses  (n=4)
-  10. Documentaries  (n=4)
-  11. Community Services  (n=4)
-  12. Noise Issues  (n=3)
-
-Extraction complete. Categories stored in r().
-Use return list to see results.
-
-. 
-. di _n "Specific scheme:"
-
-Specific scheme:
-
-. forvalues i = 1/`r(n_categories)' {
-  2.     di "  cat`i' = " `"`r(cat`i')'"'
-  3. }
-  cat1 = Recommendations
-  cat2 = Community Issues
-  cat3 = Food and Beverage
-  cat4 = Cultural Entertainment
-  cat5 = Housing and Real Estate
-  cat6 = Community Events
-  cat7 = Urban Environment
-  cat8 = Local Culture
-  cat9 = Local Businesses
-  cat10 = Documentaries
-  cat11 = Community Services
-  cat12 = Noise Issues
-
-. 
-. * --- 3. Tuning reference ---------------------------------------------------
-> -
-. *
-. *  maxcategories     -- Cap on the number of categories returned. Smaller
-. *                       forces the model to merge similar labels.
-. *  catsperchunk      -- Categories the model proposes per chunk before
-. *                       consolidation. Higher = more variety, more API cost.
-. *  divisions         -- Number of chunks the data is split into per pass.
-. *                       Higher = better coverage of long datasets.
-. *  iterations        -- Number of passes. More = more stable but more
-. *                       expensive. 6-12 is the typical sweet spot.
-. *  pyoptions("specificity='broad'|'specific'")
-. *                    -- Granularity. "broad" for high-level themes,
-. *                       "specific" for finer distinctions.
-. *  pyoptions("research_question=...")
-. *                    -- Free-text framing for the discovery prompt.
-. 
-. di _n "Done."
-
-Done.
-
-. 
-end of do-file
