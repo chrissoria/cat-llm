@@ -1,0 +1,46 @@
+url: https://chrissoria.github.io/cat-llm/cat.llm/
+
+template:
+  bootstrap: 5
+  bootswatch: cosmo
+  bslib:
+    primary: "#00a89a"
+    code_font: {google: "DM Mono"}
+
+navbar:
+  structure:
+    left:  [intro, reference, articles, news]
+    right: [search, github]
+  components:
+    github:
+      icon: fa-github
+      href: https://github.com/chrissoria/cat-llm
+      aria-label: GitHub repository
+
+home:
+  title: cat.llm — The CatLLM R ecosystem meta-package
+  description: >
+    Installs and loads the full CatLLM R ecosystem (cat.stack base +
+    six domain packages) in one step. Re-exports the core classify(),
+    extract(), explore(), summarize() functions and adds
+    domain-suffixed aliases (classify_survey, classify_political, etc.).
+  links:
+  - text: CatLLM ecosystem index
+    href: ../
+
+reference:
+- title: Re-exports from cat.stack
+  desc: Core functions available immediately after `library(cat.llm)`.
+  contents:
+  - reexports
+- title: Domain-suffixed aliases
+  desc: Thin re-exports of each domain package's `classify()` etc.
+  contents:
+  - catllm-aliases
+- title: Ecosystem helpers
+  contents:
+  - catllm_attach
+
+authors:
+  Chris Soria:
+    href: https://christophersoria.com

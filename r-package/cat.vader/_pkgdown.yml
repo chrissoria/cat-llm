@@ -1,0 +1,40 @@
+url: https://chrissoria.github.io/cat-llm/cat.vader/
+
+template:
+  bootstrap: 5
+  bootswatch: cosmo
+  bslib:
+    primary: "#00a89a"
+    code_font: {google: "DM Mono"}
+
+navbar:
+  structure:
+    left:  [intro, reference, articles, news]
+    right: [search, github]
+  components:
+    github:
+      icon: fa-github
+      href: https://github.com/chrissoria/cat-llm
+      aria-label: GitHub repository
+
+home:
+  title: cat.vader — Social media classification for R
+  description: >
+    R interface to the Python catvader package. Domain wrapper around
+    cat.stack that adds platform connectors (Threads, Reddit, Bluesky,
+    Mastodon, YouTube) and prompt framing tuned for short, informal
+    online language.
+  links:
+  - text: CatLLM ecosystem index
+    href: ../
+
+reference:
+- title: Classify & extract social-media content
+  contents:
+  - classify
+  - extract
+  - explore
+
+authors:
+  Chris Soria:
+    href: https://christophersoria.com

@@ -9,7 +9,7 @@ Description: R interface to the Python catpol package. Classifies, extracts,
     fetcher (city ordinances, federal laws, executive orders, presidential
     speeches, social media) and policy-document prompt framing.
 License: GPL (>= 3)
-URL: https://github.com/chrissoria/cat-llm
+URL: https://chrissoria.github.io/cat-llm/cat.pol/, https://github.com/chrissoria/cat-llm
 BugReports: https://github.com/chrissoria/cat-llm/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)

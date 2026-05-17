@@ -1,0 +1,150 @@
+name: pkgdown (R ecosystem)
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'r-package/**'
+      - '.github/workflows/pkgdown.yml'
+  pull_request:
+    branches: [main]
+    paths:
+      - 'r-package/**'
+      - '.github/workflows/pkgdown.yml'
+  workflow_dispatch:
+
+# Allow one concurrent deployment
+concurrency:
+  group: pkgdown-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: write
+
+jobs:
+  pkgdown:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    env:
+      GITHUB_PAT: ${{ secrets.GITHUB_TOKEN }}
+      R_KEEP_PKG_SOURCE: yes
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: r-lib/actions/setup-pandoc@v2
+
+      - uses: r-lib/actions/setup-r@v2
+        with:
+          use-public-rspm: true
+
+      - name: Install system deps (libcurl/openssl)
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libcurl4-openssl-dev libssl-dev libxml2-dev
+
+      - name: Install build R deps
+        run: |
+          install.packages(c(
+            "pkgdown", "devtools", "knitr", "rmarkdown",
+            "reticulate", "testthat", "bslib"
+          ), repos = "https://cloud.r-project.org")
+        shell: Rscript {0}
+
+      - name: Install all cat.* packages from local source
+        run: |
+          # Install in dependency order: cat.stack first, then domain packages,
+          # then the cat.llm meta-package last (it depends on all of them).
+          pkgs <- c(
+            "cat.stack",
+            "cat.survey", "cat.vader", "cat.ademic", "cat.cog",
+            "cat.pol", "cat.web",
+            "cat.llm"
+          )
+          for (p in pkgs) {
+            message("Installing ", p, " from local source")
+            devtools::install_local(
+              file.path("r-package", p),
+              force = TRUE, upgrade = "never",
+              quiet = TRUE, dependencies = FALSE
+            )
+          }
+        shell: Rscript {0}
+
+      - name: Build all 8 pkgdown sites + root index
+        run: |
+          pkgs <- c(
+            "cat.stack",
+            "cat.survey", "cat.vader", "cat.ademic", "cat.cog",
+            "cat.pol", "cat.web",
+            "cat.llm"
+          )
+          dir.create("docs", showWarnings = FALSE)
+          for (p in pkgs) {
+            message("Building pkgdown site for ", p)
+            pkgdown::build_site_github_pages(
+              file.path("r-package", p),
+              dest_dir   = file.path("..", "..", "docs", p),
+              install    = FALSE,
+              new_process = FALSE
+            )
+          }
+
+          # Root landing page listing all 8 packages
+          html <- c(
+            '<!DOCTYPE html>',
+            '<html lang="en"><head><meta charset="UTF-8">',
+            '<meta name="viewport" content="width=device-width, initial-scale=1">',
+            '<title>CatLLM R Ecosystem</title>',
+            '<style>',
+            'body{font-family:system-ui,-apple-system,Segoe UI,sans-serif;max-width:820px;margin:40px auto;padding:0 24px;color:#222;line-height:1.55;}',
+            'h1{color:#00a89a;border-bottom:2px solid #00a89a;padding-bottom:8px;}',
+            'a{color:#00a89a;text-decoration:none;}a:hover{text-decoration:underline;}',
+            'code{background:#f3f4f6;padding:2px 6px;border-radius:3px;font-size:0.9em;}',
+            '.pkg{margin:14px 0;padding:14px 18px;border:1px solid #e5e7eb;border-radius:6px;}',
+            '.pkg h3{margin:0 0 4px;font-size:1.05em;}',
+            '.pkg p{margin:4px 0 0;color:#555;font-size:0.95em;}',
+            'pre{background:#1a1a1a;color:#eee;padding:12px 16px;border-radius:6px;overflow-x:auto;}',
+            '</style></head><body>',
+            '<h1>CatLLM R Ecosystem</h1>',
+            '<p>R interface to the <a href="https://catllm.com">CatLLM</a> Python ecosystem &mdash;',
+            'eight R packages wrapping their Python counterparts via',
+            '<a href="https://rstudio.github.io/reticulate/">reticulate</a>.',
+            'Each package below has its own pkgdown site with reference docs,',
+            'vignettes, and a changelog.</p>',
+            '<h2>Install</h2>',
+            '<pre>install.packages("cat.llm",',
+            '  repos = c("https://chrissoria.r-universe.dev",',
+            '            "https://cloud.r-project.org"))</pre>',
+            '<h2>Packages</h2>',
+            paste0(
+              '<div class="pkg"><h3><a href="', pkgs, '/">', pkgs, '</a></h3>',
+              '<p>', c(
+                "General-purpose classification base.",
+                "Open-ended survey responses.",
+                "Social media posts (Threads, Reddit, Bluesky, etc.).",
+                "Academic papers (OpenAlex fetch + PDFs).",
+                "CERAD cognitive assessment scoring.",
+                "Policy documents (17 built-in sources).",
+                "Web content (URL auto-fetching).",
+                "Meta-package &mdash; installs all 7 sub-packages."
+              ), '</p></div>',
+              collapse = ""
+            ),
+            '<hr>',
+            '<p><small>Generated by <a href="https://pkgdown.r-lib.org">pkgdown</a>. Source:',
+            '<a href="https://github.com/chrissoria/cat-llm">github.com/chrissoria/cat-llm</a></small></p>',
+            '</body></html>'
+          )
+          writeLines(html, "docs/index.html")
+          message("Wrote docs/index.html")
+        shell: Rscript {0}
+
+      - name: Deploy to gh-pages
+        if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: docs
+          branch: gh-pages
+          clean: true
+          single-commit: true

@@ -1,0 +1,47 @@
+url: https://chrissoria.github.io/cat-llm/cat.stack/
+
+template:
+  bootstrap: 5
+  bootswatch: cosmo
+  bslib:
+    primary: "#00a89a"
+    code_font: {google: "DM Mono"}
+
+navbar:
+  structure:
+    left:  [intro, reference, articles, news]
+    right: [search, github]
+  components:
+    github:
+      icon: fa-github
+      href: https://github.com/chrissoria/cat-llm
+      aria-label: GitHub repository
+
+home:
+  title: cat.stack — General-purpose LLM text classification for R
+  description: >
+    R interface to the Python cat-stack package. Domain-agnostic
+    classification, extraction, exploration, and summarization of text,
+    images, and PDFs using large language models. The base engine of the
+    CatLLM ecosystem.
+  links:
+  - text: CatLLM ecosystem index
+    href: ../
+
+reference:
+- title: Classify & extract
+  desc: Assign categories or discover categories from text, images, or PDFs.
+  contents:
+  - classify
+  - extract
+  - explore
+- title: Summarize
+  contents:
+  - summarize
+- title: Installation
+  contents:
+  - install_cat_stack
+
+authors:
+  Chris Soria:
+    href: https://christophersoria.com

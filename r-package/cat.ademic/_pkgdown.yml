@@ -1,0 +1,43 @@
+url: https://chrissoria.github.io/cat-llm/cat.ademic/
+
+template:
+  bootstrap: 5
+  bootswatch: cosmo
+  bslib:
+    primary: "#00a89a"
+    code_font: {google: "DM Mono"}
+
+navbar:
+  structure:
+    left:  [intro, reference, articles, news]
+    right: [search, github]
+  components:
+    github:
+      icon: fa-github
+      href: https://github.com/chrissoria/cat-llm
+      aria-label: GitHub repository
+
+home:
+  title: cat.ademic — Academic paper classification for R
+  description: >
+    R interface to the Python catademic package. Domain wrapper around
+    cat.stack that adds OpenAlex-based journal and topic fetching plus
+    PDF support for classifying, extracting, summarizing, and exploring
+    academic literature.
+  links:
+  - text: CatLLM ecosystem index
+    href: ../
+
+reference:
+- title: Classify & extract academic papers
+  contents:
+  - classify
+  - extract
+  - explore
+- title: Summarize academic papers
+  contents:
+  - summarize
+
+authors:
+  Chris Soria:
+    href: https://christophersoria.com

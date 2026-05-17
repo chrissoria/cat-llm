@@ -1,0 +1,46 @@
+url: https://chrissoria.github.io/cat-llm/cat.pol/
+
+template:
+  bootstrap: 5
+  bootswatch: cosmo
+  bslib:
+    primary: "#00a89a"
+    code_font: {google: "DM Mono"}
+
+navbar:
+  structure:
+    left:  [intro, reference, articles, news]
+    right: [search, github]
+  components:
+    github:
+      icon: fa-github
+      href: https://github.com/chrissoria/cat-llm
+      aria-label: GitHub repository
+
+home:
+  title: cat.pol — Policy and political-text classification for R
+  description: >
+    R interface to the Python catpol package. Domain wrapper around
+    cat.stack adding a registered-source fetcher (city ordinances,
+    federal laws, executive orders, presidential speeches, social
+    media archives) and policy-document prompt framing.
+  links:
+  - text: CatLLM ecosystem index
+    href: ../
+
+reference:
+- title: Classify & extract policy documents
+  contents:
+  - classify
+  - extract
+  - explore
+- title: Summarize policy documents
+  contents:
+  - summarize
+- title: Data sources
+  contents:
+  - list_sources
+
+authors:
+  Chris Soria:
+    href: https://christophersoria.com

@@ -1,0 +1,37 @@
+url: https://chrissoria.github.io/cat-llm/cat.cog/
+
+template:
+  bootstrap: 5
+  bootswatch: cosmo
+  bslib:
+    primary: "#00a89a"
+    code_font: {google: "DM Mono"}
+
+navbar:
+  structure:
+    left:  [intro, reference, articles, news]
+    right: [search, github]
+  components:
+    github:
+      icon: fa-github
+      href: https://github.com/chrissoria/cat-llm
+      aria-label: GitHub repository
+
+home:
+  title: cat.cog — Cognitive assessment scoring with LLMs for R
+  description: >
+    R interface to the Python catcog package. Domain wrapper around
+    cat.stack for scoring CERAD Constructional Praxis (drawn shape)
+    assessments via vision-capable language models.
+  links:
+  - text: CatLLM ecosystem index
+    href: ../
+
+reference:
+- title: Cognitive assessment scoring
+  contents:
+  - cerad_drawn_score
+
+authors:
+  Chris Soria:
+    href: https://christophersoria.com

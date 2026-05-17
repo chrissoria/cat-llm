@@ -1,0 +1,39 @@
+url: https://chrissoria.github.io/cat-llm/cat.survey/
+
+template:
+  bootstrap: 5
+  bootswatch: cosmo
+  bslib:
+    primary: "#00a89a"
+    code_font: {google: "DM Mono"}
+
+navbar:
+  structure:
+    left:  [intro, reference, articles, news]
+    right: [search, github]
+  components:
+    github:
+      icon: fa-github
+      href: https://github.com/chrissoria/cat-llm
+      aria-label: GitHub repository
+
+home:
+  title: cat.survey — Open-ended survey response classification for R
+  description: >
+    R interface to the Python catsurvey package. Domain wrapper around
+    cat.stack that injects survey-question framing for higher-accuracy
+    classification of open-ended survey responses.
+  links:
+  - text: CatLLM ecosystem index
+    href: ../
+
+reference:
+- title: Classify & extract survey responses
+  contents:
+  - classify
+  - extract
+  - explore
+
+authors:
+  Chris Soria:
+    href: https://christophersoria.com
