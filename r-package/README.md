@@ -28,6 +28,12 @@ library(cat.llm)
 install_cat_stack()
 ```
 
+> **Why the dot in `cat.llm`?** R's convention for multi-word package
+> names uses a dot as the separator — like `data.table`, `R.utils`,
+> `R6`. The Python equivalents drop the dot (`catllm`, `catstack`,
+> `catsurvey`, …). R doesn't support package-name aliasing, so use
+> the dotted form in `library()` and `install.packages()` calls.
+
 ## The packages
 
 | Package        | Domain                              | Python backend  | Docs                                                       |
