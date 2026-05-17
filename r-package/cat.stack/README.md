@@ -12,10 +12,15 @@ domain assumptions and can be used for any classification task.
 ## Installation
 
 ```r
-# Install the R package (from source or devtools)
+# From R-universe (recommended)
+install.packages("cat.stack",
+                 repos = c("https://chrissoria.r-universe.dev",
+                          "https://cloud.r-project.org"))
+
+# Or from a local clone
 devtools::install("path/to/cat.stack")
 
-# Install the Python backend
+# Install the Python backend (one-time setup)
 cat.stack::install_cat_stack()
 
 # With PDF support

@@ -135,17 +135,22 @@ No provider-specific SDKs are required at runtime. CatLLM communicates with all 
 
 ### R Package
 
-An R wrapper is available for users who prefer R over Python. It uses [reticulate](https://rstudio.github.io/reticulate/) to call the Python package under the hood.
+An R interface is available for users who prefer R over Python. The R ecosystem mirrors the Python one with 8 packages (`cat.stack`, `cat.survey`, `cat.vader`, `cat.ademic`, `cat.cog`, `cat.pol`, `cat.web`, and the `cat.llm` meta-package) that wrap the Python code via [reticulate](https://rstudio.github.io/reticulate/).
 
 ```r
-# Install from GitHub
-devtools::install_github("chrissoria/cat-llm", subdir = "r-package/catllm")
+# Install everything from R-universe (recommended)
+install.packages("cat.llm",
+                 repos = c("https://chrissoria.r-universe.dev",
+                          "https://cloud.r-project.org"))
 
 # Install the Python backend (one-time setup)
-catllm::install_catllm()
+library(cat.llm)
+install_cat_stack()
 ```
 
-All three core functions — `classify()`, `extract()`, and `explore()` — are available with native R syntax. See the [R package README](r-package/catllm/README.md) for full documentation and examples.
+Or install a single domain package for a lighter footprint (e.g. `install.packages("cat.survey", repos = ...)`).
+
+All core functions — `classify()`, `extract()`, `explore()`, `summarize()`, plus domain-suffixed aliases like `classify_survey()` and `classify_political()` — are available with native R syntax. See the [R package README](r-package/README.md) for the full ecosystem overview and per-package documentation.
 
 -----
 

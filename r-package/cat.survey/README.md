@@ -11,11 +11,17 @@ survey response analysis.
 ## Installation
 
 ```r
+# From R-universe (recommended)
+install.packages("cat.survey",
+                 repos = c("https://chrissoria.r-universe.dev",
+                          "https://cloud.r-project.org"))
+
+# Or from a local clone
 devtools::install("path/to/cat.stack")
 devtools::install("path/to/cat.survey")
 
-# Install the Python backend
-pip install cat-survey
+# Install the Python backend (one-time setup)
+# pip install cat-survey
 ```
 
 ## Quick Start

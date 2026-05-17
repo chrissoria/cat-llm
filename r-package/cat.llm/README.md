@@ -5,18 +5,19 @@
 ## Installation
 
 ```r
-# Install the meta-package (brings everything)
-install.packages("cat.llm")
+# Install the meta-package from R-universe (brings everything)
+install.packages("cat.llm",
+                 repos = c("https://chrissoria.r-universe.dev",
+                          "https://cloud.r-project.org"))
 
 # Or install individual packages
-install.packages("cat.stack")    # General-purpose engine
-install.packages("cat.survey")   # Survey responses
-install.packages("cat.vader")    # Social media
-install.packages("cat.ademic")   # Academic papers
-install.packages("cat.cog")      # Cognitive assessment (CERAD)
+install.packages(c("cat.stack", "cat.survey", "cat.vader",
+                   "cat.ademic", "cat.cog", "cat.pol", "cat.web"),
+                 repos = c("https://chrissoria.r-universe.dev",
+                          "https://cloud.r-project.org"))
 ```
 
-Then install the Python backend:
+Then install the Python backend (one-time):
 
 ```r
 library(cat.llm)
@@ -32,6 +33,8 @@ install_cat_stack()
 | **cat.vader** | Social media | `classify()`, `extract()`, `explore()` with platform metadata |
 | **cat.ademic** | Academic papers | `classify()`, `extract()`, `explore()`, `summarize()` with OpenAlex |
 | **cat.cog** | Cognitive assessment | `cerad_drawn_score()` for CERAD drawings |
+| **cat.pol** | Policy documents | `classify()`, `extract()`, `explore()`, `summarize()`, `list_sources()` for ordinances, federal laws, executive orders, political speech |
+| **cat.web** | Web content | `classify()`, `extract()`, `explore()`, `summarize()` with automatic URL fetching |
 | **cat.llm** | Meta-package | Re-exports everything with domain-suffixed aliases |
 
 ## Usage
@@ -44,6 +47,8 @@ library(cat.llm)
 # v 0.1.0 cat.vader
 # v 0.1.0 cat.ademic
 # v 0.1.0 cat.cog
+# v 0.1.0 cat.pol
+# v 0.1.0 cat.web
 
 # Base classification (from cat.stack)
 results <- classify(

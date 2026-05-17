@@ -10,11 +10,17 @@ package via [reticulate](https://rstudio.github.io/reticulate/).
 ## Installation
 
 ```r
+# From R-universe (recommended)
+install.packages("cat.cog",
+                 repos = c("https://chrissoria.r-universe.dev",
+                          "https://cloud.r-project.org"))
+
+# Or from a local clone
 devtools::install("path/to/cat.stack")
 devtools::install("path/to/cat.cog")
 
-# Install the Python backend
-pip install cat-cog
+# Install the Python backend (one-time setup)
+# pip install cat-cog
 ```
 
 ## Quick Start

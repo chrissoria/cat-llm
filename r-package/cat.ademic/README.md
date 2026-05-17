@@ -11,11 +11,17 @@ for classifying, extracting, exploring, and summarizing academic literature.
 ## Installation
 
 ```r
+# From R-universe (recommended)
+install.packages("cat.ademic",
+                 repos = c("https://chrissoria.r-universe.dev",
+                          "https://cloud.r-project.org"))
+
+# Or from a local clone
 devtools::install("path/to/cat.stack")
 devtools::install("path/to/cat.ademic")
 
-# Install the Python backend
-pip install catademic
+# Install the Python backend (one-time setup)
+# pip install cat-ademic
 ```
 
 ## Quick Start
