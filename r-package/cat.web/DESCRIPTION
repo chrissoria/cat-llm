@@ -8,7 +8,7 @@ Description: R interface to the Python catweb package. Classifies, extracts,
     domain wrapper around cat.stack that adds automatic URL fetching and
     web-context prompt injection (source domain, content type, metadata).
 License: GPL (>= 3)
-URL: https://chrissoria.github.io/cat-llm/cat.web/, https://github.com/chrissoria/cat-llm
+URL: https://christophersoria.com/cat-llm/cat.web/, https://github.com/chrissoria/cat-llm
 BugReports: https://github.com/chrissoria/cat-llm/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)

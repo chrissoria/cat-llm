@@ -7,7 +7,7 @@ Description: R interface to the Python cat-cog package. Scores CERAD
     constructional praxis (drawn shape) assessments using LLMs. A thin domain
     wrapper around cat.stack for cognitive test scoring from images.
 License: GPL (>= 3)
-URL: https://chrissoria.github.io/cat-llm/cat.cog/, https://github.com/chrissoria/cat-llm
+URL: https://christophersoria.com/cat-llm/cat.cog/, https://github.com/chrissoria/cat-llm
 BugReports: https://github.com/chrissoria/cat-llm/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
