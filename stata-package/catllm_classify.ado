@@ -251,6 +251,12 @@ def _catllm_do_classify():
     models = None
     if models_str:
         # Format: "model1 provider1 key1; model2 provider2 key2"
+        # Stata's string-asis keeps the surrounding quotes literal -- strip
+        # one balanced pair so the per-entry split doesn't capture them.
+        models_str = models_str.strip()
+        if len(models_str) >= 2 and models_str[0] == models_str[-1] \
+                and models_str[0] in ('"', "'"):
+            models_str = models_str[1:-1]
         models = []
         for entry in models_str.split(";"):
             parts = entry.strip().split()
@@ -323,19 +329,32 @@ def _catllm_do_classify():
     cols = list(result_df.columns)
 
     # Try consensus columns first (ensemble mode)
+    import re
     consensus_cols = [c for c in cols if c.endswith("_consensus")]
     if consensus_cols:
-        cat_cols = consensus_cols
-        # Map consensus column back to category name
+        # cat-stack emits category_N_consensus -- map by trailing index so
+        # the assigned label is the user's category text, not "category_N".
+        # Fall back to the base name if the column doesn't match the pattern
+        # (e.g. older cat-stack emitted Healthcare_consensus directly).
+        pat = re.compile(r"^category_(\d+)_consensus$")
+        indexed = []
+        other = []
         col_to_cat = {}
         for cc in consensus_cols:
-            base = cc.rsplit("_consensus", 1)[0]
-            col_to_cat[cc] = base
+            m = pat.match(cc)
+            if m:
+                indexed.append((int(m.group(1)), cc))
+            else:
+                other.append(cc)
+                col_to_cat[cc] = cc.rsplit("_consensus", 1)[0]
+        indexed.sort()
+        for n, cc in indexed:
+            col_to_cat[cc] = categories[n-1] if n-1 < len(categories) else cc
+        cat_cols = [cc for _, cc in indexed] + other
     else:
         # Single model: cat-stack emits columns named category_1, category_2, ...
         # Match positively on that pattern; sort by the trailing index so
         # the order is stable regardless of DataFrame column order.
-        import re
         pat = re.compile(r"^category_(\d+)$")
         indexed = []
         for c in cols:

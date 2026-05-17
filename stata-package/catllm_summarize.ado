@@ -219,6 +219,12 @@ def _catllm_do_summarize():
     # --- parse models for ensemble ---
     models = None
     if models_str:
+        # Stata's string-asis keeps the surrounding quotes literal -- strip
+        # one balanced pair so the per-entry split doesn't capture them.
+        models_str = models_str.strip()
+        if len(models_str) >= 2 and models_str[0] == models_str[-1] \
+                and models_str[0] in ('"', "'"):
+            models_str = models_str[1:-1]
         models = []
         for entry in models_str.split(";"):
             parts = entry.strip().split()
