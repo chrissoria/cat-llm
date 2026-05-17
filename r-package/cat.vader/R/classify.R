@@ -205,5 +205,5 @@ classify <- function(
     check_verbosity       = check_verbosity
   )
 
-  reticulate::py_to_r(result)
+  cat.stack::.check_classify_schema(reticulate::py_to_r(result))
 }

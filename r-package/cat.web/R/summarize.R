@@ -145,5 +145,5 @@ summarize <- function(
     batch_timeout       = as.double(batch_timeout)
   )
 
-  reticulate::py_to_r(result)
+  cat.stack::.check_summarize_schema(reticulate::py_to_r(result))
 }

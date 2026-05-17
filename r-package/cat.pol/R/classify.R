@@ -179,5 +179,5 @@ classify <- function(
     auto_download         = auto_download
   )
 
-  cat.stack:::.check_classify_schema(reticulate::py_to_r(result))
+  cat.stack::.check_classify_schema(reticulate::py_to_r(result))
 }

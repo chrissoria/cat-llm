@@ -98,5 +98,5 @@ extract <- function(
     chunk_delay          = as.double(chunk_delay)
   )
 
-  cat.stack:::.check_extract_schema(reticulate::py_to_r(result))
+  cat.stack::.check_extract_schema(reticulate::py_to_r(result))
 }
