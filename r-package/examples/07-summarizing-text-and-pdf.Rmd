@@ -37,7 +37,7 @@ docs <- c(
 
 results <- cat.stack::summarize(
   input_data   = docs,
-  format       = "paragraph",   # "paragraph", "bullets", "one_liner", "structured", "full"
+  format       = "paragraph",   # "paragraph", "bullets", "one-liner", "structured", "few-paragraphs"
   instructions = "Focus on what the policy does and who it affects",
   api_key      = api_key,
   user_model   = "gpt-4o-mini"
@@ -68,13 +68,15 @@ results <- cat.stack::summarize(
 
 ## Output formats
 
-| `format`       | Output style                                                              |
-|----------------|---------------------------------------------------------------------------|
-| `"paragraph"`  | 2–4 sentence prose summary                                                |
-| `"bullets"`    | 3–6 short bullet points                                                   |
-| `"one_liner"`  | Single-sentence headline                                                  |
-| `"structured"` | JSON-like fields (e.g. `topic`, `audience`, `key_finding`)                |
-| `"full"`       | Longer multi-paragraph summary suitable for review                        |
+| `format`            | Output style                                                              |
+|---------------------|---------------------------------------------------------------------------|
+| `"paragraph"`       | 2–4 sentence prose summary                                                |
+| `"bullets"`         | 3–6 short bullet points                                                   |
+| `"one-liner"`       | Single-sentence headline                                                  |
+| `"structured"`      | JSON-like fields (e.g. `topic`, `audience`, `key_finding`)                |
+| `"few-paragraphs"`  | 3–5 paragraph narrative                                                   |
+| `"single-page"`     | One-page structured summary                                               |
+| `"detailed-report"` | Long-form multi-section report                                            |
 
 ## Multi-model ensemble for summaries
 

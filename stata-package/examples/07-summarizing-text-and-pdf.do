@@ -1,5 +1,5 @@
 ********************************************************************************
-* 06-summarizing-text-and-pdf.do
+* 07-summarizing-text-and-pdf.do
 *
 * Produce structured summaries of text (and optionally PDF) inputs with
 * `catllm summarize`. Useful for digesting long policy documents,
@@ -48,11 +48,13 @@ list doc summary_short, separator(0) abbreviate(50)
 
 * --- 2. Try a different output format via pyoptions --------------------------
 * cat-stack's summarize accepts a `format` kwarg with values:
-*   "paragraph"  -- 2-4 sentence prose (default)
-*   "bullets"    -- 3-6 short bullet points
-*   "one_liner"  -- single-sentence headline
-*   "structured" -- JSON-like fields (e.g. topic, audience, key_finding)
-*   "full"       -- longer multi-paragraph summary
+*   "paragraph"       -- 2-4 sentence prose (default)
+*   "bullets"         -- 3-6 short bullet points
+*   "one-liner"       -- single-sentence headline
+*   "structured"      -- JSON-like fields (e.g. topic, audience, key_finding)
+*   "few-paragraphs"  -- 3-5 paragraph narrative
+*   "single-page"     -- one-page structured summary
+*   "detailed-report" -- long-form multi-section report
 di _n "{hline 60}"
 di "2. Bullet-point summary via pyoptions(\"format='bullets'\")"
 di "{hline 60}"
