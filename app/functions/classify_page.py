@@ -157,6 +157,14 @@ def _render_manual_classify(domain_id, input_data, input_type, description, orig
             st.session_state.category_count += 1
             st.rerun()
 
+    if categories_entered and not catllm.has_other_category(categories_entered):
+        st.warning(
+            "No catch-all category detected. Responses that don't fit your categories "
+            "will still be forced into one. Consider adding **\"Other\"** or "
+            "**\"None of the above\"**.",
+            icon="⚠️",
+        )
+
     # Model selection with classify modes
     st.markdown("### Model Selection")
     model_sel = render_model_selector(mode="classify", key_prefix="cls_")
