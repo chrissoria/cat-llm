@@ -18,7 +18,10 @@ The canonical CatLLM workflow when you don't have a pre-defined coding scheme:
 ## Set up
 
 ```{r setup-pkgs}
-library(cat.survey)
+# install.packages("cat.llm",
+#                  repos = c("https://chrissoria.r-universe.dev",
+#                            "https://cloud.r-project.org"))
+library(cat.llm)
 library(readr)
 
 api_key <- Sys.getenv("OPENAI_API_KEY")
@@ -29,8 +32,11 @@ head(df$open_response)
 
 ## Step 1 — Extract a category scheme
 
+`extract_survey()` is cat.llm's survey-domain alias for
+`cat.survey::extract()` — survey-question framing is built in.
+
 ```{r extract}
-cats <- cat.survey::extract(
+cats <- extract_survey(
   input_data           = df$open_response,
   survey_question      = "Why did you move to a new city?",
   max_categories       = 12L,
@@ -56,7 +62,7 @@ verbose_cats <- c(
 ## Step 2 — Classify every row
 
 ```{r classify}
-results <- cat.survey::classify(
+results <- classify_survey(
   input_data      = df$open_response,
   categories      = verbose_cats,
   survey_question = "Why did you move to a new city?",

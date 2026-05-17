@@ -16,7 +16,10 @@ Behind the scenes, `extract()` chunks your data, runs the discovery prompt multi
 ## Set up
 
 ```{r setup-pkgs}
-library(cat.stack)
+# install.packages("cat.llm",
+#                  repos = c("https://chrissoria.r-universe.dev",
+#                            "https://cloud.r-project.org"))
+library(cat.llm)
 api_key <- Sys.getenv("OPENAI_API_KEY")
 ```
 

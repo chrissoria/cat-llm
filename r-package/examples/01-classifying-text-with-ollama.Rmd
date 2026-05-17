@@ -21,13 +21,13 @@ ollama pull qwen2.5:7b
 ollama serve   # runs in the background; one-time
 ```
 
-## 2. Install the R package
+## 2. Install the CatLLM ecosystem
 
 ```{r install}
-install.packages("cat.stack",
+install.packages("cat.llm",
                  repos = c("https://chrissoria.r-universe.dev",
                           "https://cloud.r-project.org"))
-library(cat.stack)
+library(cat.llm)
 ```
 
 ## 3. Classify with the local model

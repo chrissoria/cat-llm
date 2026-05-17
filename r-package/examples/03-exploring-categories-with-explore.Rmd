@@ -18,14 +18,21 @@ You have ~500 open-ended survey responses and want to know: "If I sample 50 of t
 ## Set up
 
 ```{r setup-pkgs}
-library(cat.survey)
+# install.packages("cat.llm",
+#                  repos = c("https://chrissoria.r-universe.dev",
+#                            "https://cloud.r-project.org"))
+library(cat.llm)
 api_key <- Sys.getenv("OPENAI_API_KEY")
 ```
 
 ## Run explore with several iterations
 
+`explore_survey()` is cat.llm's survey-domain alias for
+`cat.survey::explore()` — it injects the survey-question framing into
+the prompt for more accurate theme discovery.
+
 ```{r explore}
-raw_categories <- cat.survey::explore(
+raw_categories <- explore_survey(
   input_data           = df$open_response,
   survey_question      = "Why did you move to this city?",
   iterations           = 12L,         # number of passes
@@ -60,7 +67,7 @@ If the rate of new unique categories per iteration is dropping toward zero, you'
 # Hypothetically split your responses into 4 sample sizes and re-run:
 sample_sizes <- c(50, 100, 250, 500)
 unique_counts <- sapply(sample_sizes, function(n) {
-  raw <- cat.survey::explore(
+  raw <- explore_survey(
     input_data           = sample(df$open_response, n),
     survey_question      = "Why did you move to this city?",
     iterations           = 4L,

@@ -11,12 +11,15 @@ knitr::opts_chunk$set(eval = FALSE, comment = "#>", collapse = TRUE)
 
 `summarize()` produces structured summaries of text, PDFs, or images. Useful for digesting long policy documents, academic abstracts, or a corpus of social media posts into a comparable summary column you can analyze.
 
-> **Note:** Calls below use the namespaced form `cat.stack::summarize()` to avoid collision with `dplyr::summarize()`, `base::summary()`, and other `summarize` aliases. After `library(cat.stack)` only, the bare `summarize()` is unambiguous; the explicit form is safer in mixed sessions.
+> **Note:** Calls below use the namespaced form `cat.stack::summarize()` to avoid collision with `dplyr::summarize()`, `base::summary()`, and other `summarize` aliases. After `library(cat.llm)` only, the bare `summarize()` (re-exported from `cat.stack`) is unambiguous; the explicit form is safer in mixed sessions.
 
 ## Set up
 
 ```{r setup-pkgs}
-library(cat.stack)
+# install.packages("cat.llm",
+#                  repos = c("https://chrissoria.r-universe.dev",
+#                            "https://cloud.r-project.org"))
+library(cat.llm)
 api_key <- Sys.getenv("OPENAI_API_KEY")
 ```
 

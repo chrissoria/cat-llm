@@ -14,7 +14,10 @@ Running the same input through multiple models and combining via majority voting
 ## Set up
 
 ```{r setup-pkgs}
-library(cat.stack)
+# install.packages("cat.llm",
+#                  repos = c("https://chrissoria.r-universe.dev",
+#                            "https://cloud.r-project.org"))
+library(cat.llm)
 # Have OPENAI_API_KEY, ANTHROPIC_API_KEY, GOOGLE_API_KEY in .Renviron
 ```
 
