@@ -18,12 +18,14 @@ di "{hline 60}"
 catllm setup, check
 
 * --- Set API key ---
-* Set OPENAI_API_KEY as a global before running, e.g.:
+* Either set it as a Stata global before running:
 *   global OPENAI_API_KEY "sk-..."
-* or pass via command line:
-*   stata-se -b do test_stata_package.do OPENAI_API_KEY=sk-...
+* or export OPENAI_API_KEY in your shell and the next line will pull it in.
 if "$OPENAI_API_KEY" == "" {
-    di as error "OPENAI_API_KEY global not set. Set it and re-run."
+    global OPENAI_API_KEY : env OPENAI_API_KEY
+}
+if "$OPENAI_API_KEY" == "" {
+    di as error "OPENAI_API_KEY not set (neither global nor env var)."
     exit 198
 }
 

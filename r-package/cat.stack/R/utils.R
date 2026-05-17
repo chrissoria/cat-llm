@@ -156,3 +156,103 @@
   }
   add_other
 }
+
+
+# ---- Schema canaries ---------------------------------------------------------
+#
+# Each verb wrapper calls .check_<verb>_schema() on the py_to_r-converted
+# result. If cat-stack ever changes its output shape (e.g. renames the
+# category_N columns, drops top_categories from extract's return list,
+# or changes summarize's column name), the canary emits a clear warning
+# pointing at a likely schema-version mismatch -- so downstream R code
+# that assumes a specific shape fails fast with a useful message rather
+# than producing silently-wrong data.
+#
+# The canaries do NOT alter the result. They return the input unchanged
+# so they can chain with the rest of the call.
+
+.canary_msg <- function(fn, expected, got) {
+  paste0(
+    "Unexpected return shape from cat_stack$", fn, "(): ", expected,
+    " Got: ", got, ". This usually means cat-stack changed its output ",
+    "schema -- pin to a known-good version or report at ",
+    "https://github.com/chrissoria/cat-llm/issues."
+  )
+}
+
+#' Schema canary for classify() output
+#' @keywords internal
+#' @export
+.check_classify_schema <- function(result) {
+  if (!is.data.frame(result)) {
+    warning(.canary_msg(
+      "classify",
+      "expected a data.frame.",
+      paste(class(result), collapse = "/")
+    ), call. = FALSE)
+    return(result)
+  }
+  pat <- "^category_[0-9]+(_consensus)?$"
+  if (!any(grepl(pat, names(result)))) {
+    warning(.canary_msg(
+      "classify",
+      "no category_N or category_N_consensus columns found.",
+      paste(names(result), collapse = ", ")
+    ), call. = FALSE)
+  }
+  result
+}
+
+#' Schema canary for extract() output
+#' @keywords internal
+#' @export
+.check_extract_schema <- function(result) {
+  if (!is.list(result) || !"top_categories" %in% names(result)) {
+    warning(.canary_msg(
+      "extract",
+      "expected a named list with a 'top_categories' element.",
+      paste(class(result), collapse = "/")
+    ), call. = FALSE)
+  }
+  result
+}
+
+#' Schema canary for explore() output
+#' @keywords internal
+#' @export
+.check_explore_schema <- function(result) {
+  if (is.null(result) || !is.character(result)) {
+    warning(.canary_msg(
+      "explore",
+      "expected a character vector of category strings.",
+      paste(class(result), collapse = "/")
+    ), call. = FALSE)
+  }
+  result
+}
+
+#' Schema canary for summarize() output
+#' @keywords internal
+#' @export
+.check_summarize_schema <- function(result) {
+  if (!is.data.frame(result)) {
+    warning(.canary_msg(
+      "summarize",
+      "expected a data.frame.",
+      paste(class(result), collapse = "/")
+    ), call. = FALSE)
+    return(result)
+  }
+  meta <- c("input_index", "input_data", "processing_status",
+            "failed_models", "pdf_path", "page_index")
+  has_summary_col <- "summary" %in% names(result) ||
+                     any(!names(result) %in% meta)
+  if (!has_summary_col) {
+    warning(.canary_msg(
+      "summarize",
+      "no 'summary' column and no fallback non-metadata column.",
+      paste(names(result), collapse = ", ")
+    ), call. = FALSE)
+  }
+  result
+}

@@ -98,5 +98,5 @@ explore <- function(
     chunk_delay          = as.double(chunk_delay)
   )
 
-  reticulate::py_to_r(result)
+  .check_explore_schema(reticulate::py_to_r(result))
 }

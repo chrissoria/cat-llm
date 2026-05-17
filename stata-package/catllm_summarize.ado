@@ -285,15 +285,30 @@ def _catllm_do_summarize():
         return
 
     # --- write summaries back to Stata ---
-    # Find the summary column
-    summ_col = "summary"
-    if summ_col not in result_df.columns:
-        # Fall back to first non-input column
+    # Find the summary column. Try the canonical name first, then any
+    # non-metadata column. Fail loudly if neither path finds anything.
+    summ_col = None
+    if "summary" in result_df.columns:
+        summ_col = "summary"
+    else:
         for col in result_df.columns:
             if col not in ("input_index", "input_data", "processing_status",
                            "failed_models", "pdf_path", "page_index"):
                 summ_col = col
                 break
+
+    if summ_col is None:
+        SFIToolkit.errprintln(
+            "{err}Unexpected return shape from " + module.__name__
+            + ".summarize(): no 'summary' column and no fallback "
+            "non-metadata column. Columns: "
+            + ", ".join(map(str, result_df.columns)) + ". "
+            "This usually means cat-stack changed its output schema -- "
+            "pin to a known-good version or report at "
+            "https://github.com/chrissoria/cat-llm/issues."
+        )
+        Macro.setLocal("_catllm_failed", "1")
+        return
 
     for row_i in range(len(result_df)):
         stata_obs = obs_map[row_i]

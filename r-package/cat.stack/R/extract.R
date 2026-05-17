@@ -106,5 +106,5 @@ extract <- function(
     chunk_delay          = as.double(chunk_delay)
   )
 
-  reticulate::py_to_r(result)
+  .check_extract_schema(reticulate::py_to_r(result))
 }

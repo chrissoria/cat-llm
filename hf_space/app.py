@@ -12,12 +12,17 @@ import sys
 from datetime import datetime
 import matplotlib.pyplot as plt
 
+# Brand theme — shared with the desktop app and catllm.com.
+from theme import inject_css, render_wordmark
+
 # Import catllm
 try:
     import catllm
+    from catllm import has_other_category
     CATLLM_AVAILABLE = True
 except ImportError as e:
     print(f"Warning: Could not import catllm: {e}")
+    has_other_category = None
     CATLLM_AVAILABLE = False
 
 MAX_CATEGORIES = 10
@@ -92,15 +97,18 @@ def extract_pdf_pages(pdf_paths, pdf_name_map, mode="image"):
 
     return pages
 
-# Free models - display name -> actual API model name
+# Free models - display name -> actual API model name.
+# Ordered so the cheapest-for-the-Space option lands first (Streamlit
+# selectboxes default to index 0). Llama 3.3 70B is routed through HF's
+# Inference API via Groq and is effectively free at low volume.
 FREE_MODELS_MAP = {
+    "Llama 3.3 70B": "meta-llama/Llama-3.3-70B-Instruct:groq",
+    "Mistral Medium": "mistral-medium-2505",
     "GPT-4o Mini": "gpt-4o-mini",
     "Gemini 2.5 Flash": "gemini-2.5-flash",
     "Claude 3 Haiku": "claude-3-haiku-20240307",
-    "Llama 3.3 70B": "meta-llama/Llama-3.3-70B-Instruct:groq",
     "Qwen 2.5": "Qwen/Qwen2.5-72B-Instruct",
     "DeepSeek R1": "deepseek-ai/DeepSeek-R1:novita",
-    "Mistral Medium": "mistral-medium-2505",
     "Grok 4 Fast": "grok-4-fast-non-reasoning",
 }
 FREE_MODEL_DISPLAY_NAMES = list(FREE_MODELS_MAP.keys())
@@ -1096,209 +1104,17 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom CSS for enhanced styling
-st.markdown("""
-<style>
-/* Import Garamond font and apply globally */
-@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:wght@400;500;600;700&display=swap');
+# Brand theme — IBM Plex Sans / DM Sans / DM Mono, dark mode.
+# Same theme as the desktop app and catllm.com (theme.py).
+inject_css()
 
-*:not([class*="icon"]):not([data-testid="stIconMaterial"]):not(svg):not(path) {
-    font-family: 'EB Garamond', Garamond, Georgia, serif !important;
-    font-size: 17px !important;
-}
-
-/* Preserve Streamlit icon fonts */
-[data-testid="stIconMaterial"], .material-icons, .material-symbols-rounded {
-    font-family: 'Material Symbols Rounded', 'Material Icons' !important;
-    font-size: 24px !important;
-}
-
-/* Main container styling */
-.main .block-container {
-    padding-top: 2rem;
-    padding-bottom: 2rem;
-}
-
-/* Headers with gradient accent */
-h1 {
-    background: linear-gradient(90deg, #E8A33C 0%, #D4872C 100%);
-    -webkit-background-clip: text;
-    -webkit-text-fill-color: transparent;
-    background-clip: text;
-    font-weight: 700;
-}
-
-/* Card-like sections */
-.stExpander {
-    border: 1px solid #E8D5B5;
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(232, 163, 60, 0.08);
-}
-
-/* File uploader styling */
-.stFileUploader {
-    border-radius: 12px;
-}
-
-.stFileUploader > div > div {
-    border: 2px dashed #E8A33C;
-    border-radius: 12px;
-    background: linear-gradient(135deg, #FEFCF9 0%, #F5EFE6 100%);
-}
-
-/* Button styling */
-.stButton > button {
-    border-radius: 8px;
-    font-weight: 600;
-    transition: all 0.2s ease;
-    border: 2px solid #E8A33C;
-    background: #FEFCF9;
-    color: #D4872C;
-}
-
-/* Tall button for example dataset (matches file uploader height) */
-.tall-button .stButton > button {
-    min-height: 107px;
-    border-radius: 12px;
-}
-
-.stButton > button:hover {
-    transform: translateY(-1px);
-    box-shadow: 0 4px 12px rgba(232, 163, 60, 0.3);
-    background: #F5EFE6;
-}
-
-/* Primary button */
-.stButton > button[kind="primary"] {
-    background: linear-gradient(135deg, #E8A33C 0%, #D4872C 100%);
-    border: none;
-    color: white;
-}
-
-/* Success/info messages */
-.stSuccess {
-    background-color: #E8F5E9;
-    border-left: 4px solid #4CAF50;
-    border-radius: 0 8px 8px 0;
-}
-
-.stInfo {
-    background-color: #FFF8E8;
-    border-left: 4px solid #E8A33C;
-    border-radius: 0 8px 8px 0;
-}
-
-/* Radio buttons */
-.stRadio > div {
-    gap: 0.5rem;
-    display: flex;
-    width: 100%;
-}
-
-.stRadio > div > label {
-    background: #F5EFE6;
-    padding: 0.5rem 1rem;
-    border-radius: 20px;
-    border: 1px solid transparent;
-    transition: all 0.2s ease;
-    flex: 1;
-    text-align: center;
-    justify-content: center;
-}
-
-.stRadio > div > label:hover {
-    border-color: #E8A33C;
-}
-
-/* Text inputs */
-.stTextInput > div > div > input {
-    border-radius: 8px;
-    border: 1px solid #E8D5B5;
-}
-
-.stTextInput > div > div > input:focus {
-    border-color: #E8A33C;
-    box-shadow: 0 0 0 2px rgba(232, 163, 60, 0.2);
-}
-
-/* Select boxes */
-.stSelectbox > div > div {
-    border-radius: 8px;
-}
-
-/* Dataframe styling */
-.stDataFrame {
-    border-radius: 12px;
-    overflow: hidden;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
-}
-
-/* Progress bar */
-.stProgress > div > div {
-    background: linear-gradient(90deg, #E8A33C 0%, #D4872C 100%);
-    border-radius: 10px;
-}
-
-/* Slider */
-.stSlider > div > div > div {
-    background: #E8A33C;
-}
-
-/* Divider */
-hr {
-    border: none;
-    height: 1px;
-    background: linear-gradient(90deg, transparent, #E8D5B5, transparent);
-    margin: 1.5rem 0;
-}
-
-/* Code blocks */
-.stCodeBlock {
-    border-radius: 12px;
-    border: 1px solid #E8D5B5;
-}
-
-/* Metric cards */
-.stMetric {
-    background: linear-gradient(135deg, #FEFCF9 0%, #F5EFE6 100%);
-    padding: 1rem;
-    border-radius: 12px;
-    border: 1px solid #E8D5B5;
-}
-
-/* Download buttons */
-.stDownloadButton > button {
-    background: #F5EFE6;
-    border: 1px solid #E8A33C;
-    color: #D4872C;
-}
-
-.stDownloadButton > button:hover {
-    background: #E8A33C;
-    color: white;
-}
-
-/* Multiselect */
-.stMultiSelect > div > div {
-    border-radius: 8px;
-}
-
-/* Status indicator */
-.stStatus {
-    border-radius: 12px;
-}
-
-/* Column gaps */
-[data-testid="column"] {
-    padding: 0 0.5rem;
-}
-
-/* Logo and title alignment */
-[data-testid="column"]:first-child img {
-    border-radius: 8px;
-}
-</style>
-""", unsafe_allow_html=True)
+# Sidebar width CSS
+st.markdown(
+    """<style>
+    [data-testid="stSidebar"] { min-width: 300px !important; max-width: 300px !important; }
+    </style>""",
+    unsafe_allow_html=True,
+)
 
 # Initialize session state
 if 'categories' not in st.session_state:
@@ -1321,23 +1137,19 @@ if 'image_data' not in st.session_state:
     st.session_state.image_data = None
 if 'extraction_params' not in st.session_state:
     st.session_state.extraction_params = None  # Stores params when categories are auto-extracted
+if 'verbosity_check' not in st.session_state:
+    st.session_state.verbosity_check = None  # {'categories': [...], 'result': [...]}
 
-# Logo and title - use HTML for better alignment
-st.markdown("""
-<div style="display: flex; align-items: center; gap: 20px; margin-bottom: 10px;">
-    <img src="https://huggingface.co/spaces/CatLLM/survey-classifier/resolve/main/logo.png" width="100" style="border-radius: 8px;">
-    <div>
-        <div style="font-size: 2.2rem; font-weight: 700; color: #333; font-family: 'EB Garamond', Garamond, Georgia, serif; line-height: 1.1;">CatLLM</div>
-        <div style="font-size: 1.1rem; font-weight: 500; color: #E8A33C; font-family: 'EB Garamond', Garamond, Georgia, serif; margin-bottom: 4px;">NLP for Survey Research</div>
-        <div style="font-size: 1rem; font-weight: 400; color: #666; font-family: 'EB Garamond', Garamond, Georgia, serif;">Research-grade categorization of survey responses, PDFs, and images using AI models.</div>
-        <div style="font-size: 0.85rem; font-weight: 400; color: #888; font-family: 'EB Garamond', Garamond, Georgia, serif; margin-top: 4px;">Developed at UC Berkeley</div>
-    </div>
-</div>
-""", unsafe_allow_html=True)
+# -----------------------------------------------------------------------
+# SIDEBAR
+# -----------------------------------------------------------------------
+with st.sidebar:
+    # Wordmark: cat-shield mark + IBM Plex Sans "CatLLM" + mono subtitle.
+    render_wordmark("NLP for survey research · UC Berkeley")
 
-# About section
-with st.expander("About This App"):
-    st.markdown("""
+    # About section
+    with st.expander("About This App"):
+        st.markdown("""
 **Privacy Notice:** Your data is sent to third-party LLM APIs for classification. Do not upload sensitive, confidential, or personally identifiable information (PII).
 
 ---
@@ -1376,7 +1188,216 @@ Soria, C. (2025). CatLLM: A Python package for LLM-based text classification. DO
 ```
 """)
 
-# Main layout
+    st.markdown("---")
+
+    # ------------------------------------------------------------------
+    # Classification Mode — only shown when task_mode == "manual"
+    # ------------------------------------------------------------------
+    if st.session_state.task_mode == "manual":
+        classify_mode = st.radio(
+            "Classification Mode",
+            options=["Single Model", "Model Comparison", "Ensemble"],
+            horizontal=False,
+            key="classify_mode",
+            help="Single: one model. Comparison: see results from multiple models side-by-side. Ensemble: multiple models vote for consensus."
+        )
+    else:
+        # Default value when not in manual mode (auto-extract always uses single model)
+        classify_mode = "Single Model"
+
+    # ------------------------------------------------------------------
+    # Model Tier
+    # ------------------------------------------------------------------
+    if st.session_state.task_mode == "auto_extract":
+        model_tier = st.radio(
+            "Model Tier",
+            options=["Free Models", "Bring Your Own Key"],
+            key="extract_model_tier"
+        )
+    else:
+        model_tier = st.radio(
+            "Model Tier",
+            options=["Free Models", "Bring Your Own Key"],
+            key="classify_model_tier"
+        )
+
+    # ------------------------------------------------------------------
+    # Model selection — varies by classify_mode
+    # ------------------------------------------------------------------
+    is_multi_model = classify_mode in ["Model Comparison", "Ensemble"]
+    min_models = 3 if classify_mode == "Ensemble" else 2
+
+    # Track per-run temperatures
+    model_temperatures = {}
+    ensemble_runs = []
+
+    if st.session_state.task_mode == "auto_extract":
+        # Auto-extract: always single model
+        if model_tier == "Free Models":
+            model_display = st.selectbox("Model", options=FREE_MODEL_DISPLAY_NAMES, key="extract_model")
+            model = FREE_MODELS_MAP[model_display]
+            api_key = ""
+        else:
+            model = st.selectbox("Model", options=PAID_MODEL_CHOICES, key="extract_model_paid")
+            api_key = st.text_input("API Key", type="password", key="extract_api_key")
+        models_list = [model]
+
+    elif classify_mode == "Ensemble":
+        # Ensemble mode: dynamic rows allowing same model multiple times with different temps
+        if "ensemble_num_runs" not in st.session_state:
+            st.session_state.ensemble_num_runs = 3
+
+        if model_tier == "Free Models":
+            model_options = FREE_MODEL_DISPLAY_NAMES
+            is_free = True
+        else:
+            model_options = PAID_MODEL_CHOICES
+            is_free = False
+
+        st.markdown(f"**Model Runs** (select {min_models}+ runs)")
+        for i in range(st.session_state.ensemble_num_runs):
+            cols = st.columns([3, 1, 0.5])
+            with cols[0]:
+                default_idx = 0 if i < len(model_options) else i % len(model_options)
+                selected = st.selectbox(
+                    f"Run {i+1}", options=model_options,
+                    index=default_idx, key=f"ensemble_model_{i}",
+                    label_visibility="collapsed"
+                )
+            with cols[1]:
+                temp = st.number_input(
+                    "Temp", min_value=0.0, max_value=2.0, value=round(i * 0.25, 2),
+                    step=0.25, key=f"ensemble_temp_{i}", label_visibility="collapsed"
+                )
+            with cols[2]:
+                if st.session_state.ensemble_num_runs > 3:
+                    if st.button("✕", key=f"ensemble_remove_{i}"):
+                        st.session_state.ensemble_num_runs -= 1
+                        st.rerun()
+
+            model_name = FREE_MODELS_MAP[selected] if is_free else selected
+            ensemble_runs.append((model_name, temp))
+
+        if st.button("Add Run", key="add_ensemble_run"):
+            st.session_state.ensemble_num_runs += 1
+            st.rerun()
+
+        models_list = [r[0] for r in ensemble_runs]
+        model_temperatures = {f"{r[0]}__run{i}": r[1] for i, r in enumerate(ensemble_runs)}
+        model = models_list[0] if models_list else ""
+        api_key = "" if model_tier == "Free Models" else st.text_input("API Key", type="password", key="classify_api_key")
+
+    elif is_multi_model:
+        # Model Comparison mode: multiselect (each model unique) + temperature row
+        if model_tier == "Free Models":
+            default_models = FREE_MODEL_DISPLAY_NAMES[:min_models] if len(FREE_MODEL_DISPLAY_NAMES) >= min_models else FREE_MODEL_DISPLAY_NAMES
+            model_displays = st.multiselect(
+                f"Models (select {min_models}+)",
+                options=FREE_MODEL_DISPLAY_NAMES,
+                default=default_models,
+                key="classify_models_multi"
+            )
+            models_list = [FREE_MODELS_MAP[d] for d in model_displays]
+            api_key = ""
+        else:
+            default_models = PAID_MODEL_CHOICES[:min_models] if len(PAID_MODEL_CHOICES) >= min_models else PAID_MODEL_CHOICES
+            models_list = st.multiselect(
+                f"Models (select {min_models}+)",
+                options=PAID_MODEL_CHOICES,
+                default=default_models,
+                key="classify_models_multi_paid"
+            )
+            api_key = st.text_input("API Key", type="password", key="classify_api_key")
+
+        if models_list:
+            st.markdown("**Model Temperature**")
+            temp_cols = st.columns(len(models_list))
+            for idx, (col, m) in enumerate(zip(temp_cols, models_list)):
+                short_name = m.split('/')[-1].split(':')[0][:20]
+                model_temperatures[m] = col.number_input(
+                    short_name,
+                    min_value=0.0,
+                    max_value=2.0,
+                    value=0.0,
+                    step=0.25,
+                    key=f"temp_{idx}",
+                    help=f"Temperature for {m} (0 = deterministic, higher = more creative)"
+                )
+        model = models_list[0] if models_list else ""
+
+    else:
+        # Single model mode
+        if model_tier == "Free Models":
+            model_display = st.selectbox("Model", options=FREE_MODEL_DISPLAY_NAMES, key="classify_model")
+            model = FREE_MODELS_MAP[model_display]
+            models_list = [model]
+            api_key = ""
+        else:
+            model = st.selectbox("Model", options=PAID_MODEL_CHOICES, key="classify_model_paid")
+            models_list = [model]
+            api_key = st.text_input("API Key", type="password", key="classify_api_key")
+
+    # ------------------------------------------------------------------
+    # Ensemble consensus rule
+    # ------------------------------------------------------------------
+    consensus_threshold = 0.5  # Default
+    if classify_mode == "Ensemble":
+        consensus_options = {
+            "Majority (50%+)": 0.5,
+            "Two-Thirds (67%+)": 0.67,
+            "Unanimous (100%)": 1.0,
+        }
+        consensus_choice = st.radio(
+            "Consensus Rule",
+            options=list(consensus_options.keys()),
+            horizontal=False,
+            key="consensus_choice",
+            help="How many models must agree for a category to be marked present"
+        )
+        consensus_threshold = consensus_options[consensus_choice]
+
+    st.markdown("---")
+
+    # ------------------------------------------------------------------
+    # "See in Code" button — visible only when results exist
+    # ------------------------------------------------------------------
+    if st.session_state.results:
+        if st.button("See in Code", use_container_width=True):
+            st.session_state.show_code_modal = True
+
+    # ------------------------------------------------------------------
+    # Reset button at bottom of sidebar
+    # ------------------------------------------------------------------
+    if st.button("Reset", type="secondary", use_container_width=True):
+        st.session_state.categories = [''] * MAX_CATEGORIES
+        st.session_state.category_count = INITIAL_CATEGORIES
+        st.session_state.task_mode = None
+        st.session_state.extracted_categories = None
+        st.session_state.extraction_params = None
+        st.session_state.verbosity_check = None
+        st.session_state.results = None
+        if hasattr(st.session_state, 'example_loaded'):
+            del st.session_state.example_loaded
+        st.rerun()
+
+    st.markdown(
+        """
+        <div style="margin-top:auto; padding-top:1.5rem; border-top:1px solid rgba(232,237,245,0.10);">
+          <p style="font-size:0.75rem; color:#4E5A6D; line-height:1.5; margin:0;">
+            Classifying PDFs, images, or non-survey text?<br>
+            <a href="https://catllm.com" target="_blank"
+               style="color:#00A89A; text-decoration:none;">
+              Download the desktop app →
+            </a>
+          </p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+# -----------------------------------------------------------------------
+# MAIN AREA — 2-column layout
+# -----------------------------------------------------------------------
 col_input, col_output = st.columns([1, 1])
 
 with col_input:
@@ -1398,19 +1419,13 @@ with col_input:
     if input_type_choice == "Survey Responses":
         input_type_selected = "text"
 
-        upload_col, example_col = st.columns([3, 1])
-        with upload_col:
-            uploaded_file = st.file_uploader(
-                "Upload Data (CSV or Excel)",
-                type=['csv', 'xlsx', 'xls'],
-                key="survey_file"
-            )
-        with example_col:
-            st.markdown("<div style='height: 27px;'></div>", unsafe_allow_html=True)  # Match "Upload Data" label height
-            st.markdown('<div class="tall-button">', unsafe_allow_html=True)
-            if st.button("Try Example Dataset", key="example_btn", use_container_width=True):
-                st.session_state.example_loaded = True
-            st.markdown('</div>', unsafe_allow_html=True)
+        uploaded_file = st.file_uploader(
+            "Upload Data (CSV or Excel)",
+            type=['csv', 'xlsx', 'xls'],
+            key="survey_file"
+        )
+        if st.button("Try Example Dataset", key="example_btn", use_container_width=True):
+            st.session_state.example_loaded = True
 
         columns = []
         df = None
@@ -1534,7 +1549,7 @@ with col_input:
     if auto_mode:
         st.session_state.task_mode = "auto_extract"
 
-    # Auto-extract settings
+    # Auto-extract settings (data settings stay in col_input; model selection is in sidebar)
     if st.session_state.task_mode == "auto_extract":
         st.markdown("### Auto-extract Categories")
         st.markdown("We'll analyze your data to discover the main categories.")
@@ -1559,22 +1574,6 @@ with col_input:
             placeholder="e.g., 'decisions to move', 'emotional responses', 'financial factors'",
             help="Guide the model to prioritize extracting categories related to this focus"
         )
-
-        # Model selection for extraction
-        st.markdown("### Model Selection")
-        model_tier = st.radio(
-            "Model Tier",
-            options=["Free Models", "Bring Your Own Key"],
-            key="extract_model_tier"
-        )
-
-        if model_tier == "Free Models":
-            model_display = st.selectbox("Model", options=FREE_MODEL_DISPLAY_NAMES, key="extract_model")
-            model = FREE_MODELS_MAP[model_display]  # Convert to actual model name
-            api_key = ""
-        else:
-            model = st.selectbox("Model", options=PAID_MODEL_CHOICES, key="extract_model_paid")
-            api_key = st.text_input("API Key", type="password", key="extract_api_key")
 
         if st.button("Extract Categories", type="primary"):
             if input_data is None:
@@ -1706,145 +1705,56 @@ with col_input:
                 categories_entered.append(cat_value.strip())
 
         if st.session_state.category_count < MAX_CATEGORIES:
-            if st.button("+ Add More"):
+            if st.button("+ Add More", use_container_width=True):
+                # Run a verbosity check on what's been entered so far so the
+                # user gets feedback as they iteratively build their categories.
+                if categories_entered:
+                    actual_api_key, provider = get_api_key(model, model_tier, api_key)
+                    if actual_api_key:
+                        with st.spinner("Checking categories…"):
+                            try:
+                                verbosity_result = catllm.check_category_verbosity(
+                                    categories_entered,
+                                    api_key=actual_api_key,
+                                    user_model=model,
+                                    model_source=get_model_source(model),
+                                )
+                                st.session_state.verbosity_check = {
+                                    'categories': list(categories_entered),
+                                    'result': verbosity_result,
+                                }
+                            except Exception:
+                                # Don't block the user from adding a category if the
+                                # verbosity check fails (e.g., transient API error).
+                                pass
                 st.session_state.category_count += 1
                 st.rerun()
 
-        st.markdown("### Model Selection")
+        if categories_entered and has_other_category and not has_other_category(categories_entered):
+            st.caption("An **\"Other\"** catch-all category will be added automatically when you classify.")
 
-        # Classification mode selector
-        classify_mode = st.radio(
-            "Classification Mode",
-            options=["Single Model", "Model Comparison", "Ensemble"],
-            horizontal=True,
-            key="classify_mode",
-            help="Single: one model. Comparison: see results from multiple models side-by-side. Ensemble: multiple models vote for consensus."
-        )
-
-        model_tier = st.radio(
-            "Model Tier",
-            options=["Free Models", "Bring Your Own Key"],
-            key="classify_model_tier"
-        )
-
-        # Multi-model mode uses multiselect
-        is_multi_model = classify_mode in ["Model Comparison", "Ensemble"]
-        min_models = 3 if classify_mode == "Ensemble" else 2
-
-        # Track per-run temperatures: list of (model_name, temperature) for ensemble,
-        # or dict {model_name: temperature} for model comparison
-        model_temperatures = {}
-        # ensemble_runs stores list of (model_name, temperature) allowing duplicate models
-        ensemble_runs = []
-
-        if classify_mode == "Ensemble":
-            # Ensemble mode: dynamic rows allowing same model multiple times with different temps
-            if "ensemble_num_runs" not in st.session_state:
-                st.session_state.ensemble_num_runs = 3
-
-            if model_tier == "Free Models":
-                model_options = FREE_MODEL_DISPLAY_NAMES
-                is_free = True
-            else:
-                model_options = PAID_MODEL_CHOICES
-                is_free = False
-
-            st.markdown(f"**Model Runs** (select {min_models}+ runs)")
-            for i in range(st.session_state.ensemble_num_runs):
-                cols = st.columns([3, 1, 0.5])
-                with cols[0]:
-                    default_idx = 0 if i < len(model_options) else i % len(model_options)
-                    selected = st.selectbox(
-                        f"Run {i+1}", options=model_options,
-                        index=default_idx, key=f"ensemble_model_{i}",
-                        label_visibility="collapsed"
-                    )
-                with cols[1]:
-                    temp = st.number_input(
-                        "Temp", min_value=0.0, max_value=2.0, value=round(i * 0.25, 2),
-                        step=0.25, key=f"ensemble_temp_{i}", label_visibility="collapsed"
-                    )
-                with cols[2]:
-                    if st.session_state.ensemble_num_runs > 3:
-                        if st.button("✕", key=f"ensemble_remove_{i}"):
-                            st.session_state.ensemble_num_runs -= 1
-                            st.rerun()
-
-                model_name = FREE_MODELS_MAP[selected] if is_free else selected
-                ensemble_runs.append((model_name, temp))
-
-            if st.button("Add Run", key="add_ensemble_run"):
-                st.session_state.ensemble_num_runs += 1
-                st.rerun()
-
-            models_list = [r[0] for r in ensemble_runs]
-            model_temperatures = {f"{r[0]}__run{i}": r[1] for i, r in enumerate(ensemble_runs)}
-            api_key = "" if model_tier == "Free Models" else st.text_input("API Key", type="password", key="classify_api_key")
-
-        elif is_multi_model:
-            # Model Comparison mode: multiselect (each model unique) + temperature row
-            if model_tier == "Free Models":
-                default_models = FREE_MODEL_DISPLAY_NAMES[:min_models] if len(FREE_MODEL_DISPLAY_NAMES) >= min_models else FREE_MODEL_DISPLAY_NAMES
-                model_displays = st.multiselect(
-                    f"Models (select {min_models}+)",
-                    options=FREE_MODEL_DISPLAY_NAMES,
-                    default=default_models,
-                    key="classify_models_multi"
+        # Verbosity check results — only show if it matches the current categories.
+        vc = st.session_state.verbosity_check
+        if vc and vc['categories'] == categories_entered:
+            thin = [v for v in vc['result'] if not v['is_verbose']]
+            if not thin:
+                st.success(
+                    f"All {len(vc['result'])} categories include a description and examples.",
+                    icon="✅",
                 )
-                models_list = [FREE_MODELS_MAP[d] for d in model_displays]
-                api_key = ""
             else:
-                default_models = PAID_MODEL_CHOICES[:min_models] if len(PAID_MODEL_CHOICES) >= min_models else PAID_MODEL_CHOICES
-                models_list = st.multiselect(
-                    f"Models (select {min_models}+)",
-                    options=PAID_MODEL_CHOICES,
-                    default=default_models,
-                    key="classify_models_multi_paid"
+                lines = []
+                for v in thin:
+                    missing = []
+                    if not v.get('has_description'): missing.append("description")
+                    if not v.get('has_examples'): missing.append("example")
+                    lines.append(f"- **{v['category']}** — add a {' and '.join(missing)}")
+                st.warning(
+                    f"{len(thin)} of {len(vc['result'])} categories could be more detailed. "
+                    "Verbose categories with descriptions and examples typically improve "
+                    "classification accuracy.\n\n" + "\n".join(lines),
+                    icon="⚠️",
                 )
-                api_key = st.text_input("API Key", type="password", key="classify_api_key")
-
-            if models_list:
-                st.markdown("**Model Temperature**")
-                temp_cols = st.columns(len(models_list))
-                for idx, (col, m) in enumerate(zip(temp_cols, models_list)):
-                    short_name = m.split('/')[-1].split(':')[0][:20]
-                    model_temperatures[m] = col.number_input(
-                        short_name,
-                        min_value=0.0,
-                        max_value=2.0,
-                        value=0.0,
-                        step=0.25,
-                        key=f"temp_{idx}",
-                        help=f"Temperature for {m} (0 = deterministic, higher = more creative)"
-                    )
-        else:
-            # Single model mode
-            if model_tier == "Free Models":
-                model_display = st.selectbox("Model", options=FREE_MODEL_DISPLAY_NAMES, key="classify_model")
-                model = FREE_MODELS_MAP[model_display]  # Convert to actual model name
-                models_list = [model]
-                api_key = ""
-            else:
-                model = st.selectbox("Model", options=PAID_MODEL_CHOICES, key="classify_model_paid")
-                models_list = [model]
-                api_key = st.text_input("API Key", type="password", key="classify_api_key")
-
-        # Ensemble-specific options
-        consensus_threshold = 0.5  # Default
-        if classify_mode == "Ensemble":
-            consensus_options = {
-                "Majority (50%+)": 0.5,
-                "Two-Thirds (67%+)": 0.67,
-                "Unanimous (100%)": 1.0,
-            }
-            consensus_choice = st.radio(
-                "Consensus Rule",
-                options=list(consensus_options.keys()),
-                horizontal=True,
-                key="consensus_choice",
-                help="How many models must agree for a category to be marked present"
-            )
-            consensus_threshold = consensus_options[consensus_choice]
 
         if st.button("Categorize Data", type="primary", use_container_width=True):
             if input_data is None:
@@ -1856,6 +1766,11 @@ with col_input:
             elif classify_mode == "Ensemble" and len(models_list) < 3:
                 st.error("Please select at least 3 models for ensemble mode (needed for majority voting)")
             else:
+                # Auto-append "Other" catch-all if the user didn't include one,
+                # so responses that don't fit are captured rather than force-fit.
+                if has_other_category and not has_other_category(categories_entered):
+                    categories_entered.append("Other")
+
                 # Set up progress tracking
                 mode = None
                 if input_type_selected == "pdf":
@@ -2191,31 +2106,13 @@ with col_output:
                 mime="application/pdf"
             )
 
-        # Code
+        # Code inline expander (always available in results panel)
         with st.expander("See the Code"):
             st.code(results['code'], language='python')
     else:
         st.info("Upload data, select categories, and click 'Categorize Data' to see results here.")
 
-# Bottom buttons
-col_reset, col_code = st.columns(2)
-with col_reset:
-    if st.button("Reset", type="secondary", use_container_width=True):
-        st.session_state.categories = [''] * MAX_CATEGORIES
-        st.session_state.category_count = INITIAL_CATEGORIES
-        st.session_state.task_mode = None
-        st.session_state.extracted_categories = None
-        st.session_state.extraction_params = None
-        st.session_state.results = None
-        if hasattr(st.session_state, 'example_loaded'):
-            del st.session_state.example_loaded
-        st.rerun()
-
-with col_code:
-    if st.button("See in Code", use_container_width=True):
-        st.session_state.show_code_modal = True
-
-# Code modal/dialog
+# Code modal/dialog (triggered from sidebar "See in Code" button)
 if st.session_state.get('show_code_modal'):
     st.markdown("---")
     st.markdown("### Reproducibility Code")
@@ -2273,7 +2170,7 @@ if st.session_state.get('show_code_modal'):
         if current_categories:
             # Check if categories were auto-extracted
             if st.session_state.extraction_params:
-                current_temperatures = results.get('model_temperatures', {})
+                current_temperatures = results.get('model_temperatures', {}) if st.session_state.results else {}
                 classify_params = {
                     'model': current_model,
                     'description': current_description,
@@ -2282,18 +2179,18 @@ if st.session_state.get('show_code_modal'):
                     'models_list': current_models_list,
                     'consensus_threshold': current_consensus,
                     'model_temperatures': current_temperatures,
-                    'ensemble_runs': results.get('ensemble_runs'),
+                    'ensemble_runs': st.session_state.results.get('ensemble_runs') if st.session_state.results else None,
                 }
                 code_to_show = generate_full_code(st.session_state.extraction_params, classify_params)
             else:
-                current_temperatures = results.get('model_temperatures', {})
+                current_temperatures = st.session_state.results.get('model_temperatures', {}) if st.session_state.results else {}
                 code_to_show = generate_classify_code(
                     current_input_type, current_description, current_categories,
                     current_model, current_model_source, current_mode,
                     classify_mode=current_classify_mode, models_list=current_models_list,
                     consensus_threshold=current_consensus,
                     model_temperatures=current_temperatures,
-                    ensemble_runs=results.get('ensemble_runs'),
+                    ensemble_runs=st.session_state.results.get('ensemble_runs') if st.session_state.results else None,
                 )
         else:
             code_to_show = '''import catllm

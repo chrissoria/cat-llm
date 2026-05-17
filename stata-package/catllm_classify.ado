@@ -323,6 +323,24 @@ def _catllm_do_classify():
         Macro.setLocal("_catllm_failed", "1")
         return
 
+    # --- schema canary: confirm cat-stack's return shape still matches ---
+    # Single-model results have category_N columns; ensemble has *_consensus.
+    # If neither family exists, the underlying schema has changed and this
+    # wrapper can't safely map columns back to user category names.
+    import re as _re
+    _canary = _re.compile(r"^category_\d+(_consensus)?$")
+    if not any(_canary.match(c) for c in result_df.columns):
+        SFIToolkit.errprintln(
+            "{err}Unexpected return shape from " + module.__name__
+            + ".classify(): no category_N or category_N_consensus columns. "
+            "Columns: " + ", ".join(map(str, result_df.columns)) + ". "
+            "This usually means cat-stack changed its output schema -- "
+            "pin to a known-good version or report at "
+            "https://github.com/chrissoria/cat-llm/issues."
+        )
+        Macro.setLocal("_catllm_failed", "1")
+        return
+
     # --- determine classification per row ---
     # Single model: columns are category names with 0/1
     # Ensemble: columns are {cat}_consensus with 0/1

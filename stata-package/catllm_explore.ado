@@ -268,6 +268,19 @@ def _catllm_do_explore():
         Macro.setLocal("_catllm_failed", "1")
         return
 
+    # --- schema canary: confirm cat-stack returns an iterable of strings ---
+    if raw_cats is None or isinstance(raw_cats, str) or not hasattr(raw_cats, "__iter__"):
+        SFIToolkit.errprintln(
+            "{err}Unexpected return shape from " + module.__name__
+            + ".explore(): expected an iterable of category strings. "
+            "Got: " + type(raw_cats).__name__ + ". "
+            "This usually means cat-stack changed its output schema -- "
+            "pin to a known-good version or report at "
+            "https://github.com/chrissoria/cat-llm/issues."
+        )
+        Macro.setLocal("_catllm_failed", "1")
+        return
+
     # --- store results in locals for the .ado to return ---
     unique_cats = list(set(raw_cats))
     capped = unique_cats[:100]

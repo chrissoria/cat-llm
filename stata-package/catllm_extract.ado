@@ -259,6 +259,19 @@ def _catllm_do_extract():
         Macro.setLocal("_catllm_failed", "1")
         return
 
+    # --- schema canary: confirm cat-stack's return shape still matches ---
+    if not isinstance(result, dict) or "top_categories" not in result:
+        SFIToolkit.errprintln(
+            "{err}Unexpected return shape from " + module.__name__
+            + ".extract(): expected dict with 'top_categories' key. "
+            "Got: " + type(result).__name__ + ". "
+            "This usually means cat-stack changed its output schema -- "
+            "pin to a known-good version or report at "
+            "https://github.com/chrissoria/cat-llm/issues."
+        )
+        Macro.setLocal("_catllm_failed", "1")
+        return
+
     # --- store results in locals for the .ado to return ---
     top_cats = result.get("top_categories", [])
     counts_df = result.get("counts_df", None)
