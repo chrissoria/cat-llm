@@ -1,5 +1,5 @@
 ********************************************************************************
-* 04-extracting-categories-from-columns.do
+* 05-extracting-categories-from-columns.do
 *
 * End-to-end workflow: take a Stata variable of open-ended text, discover
 * a category scheme with `catllm extract`, classify every row against

@@ -8,10 +8,12 @@
 *   - You need fully reproducible runs (cloud models change underneath you)
 *
 * Requires: Ollama installed (https://ollama.com/download) and at least
-* one model pulled. Example: `ollama pull qwen2.5:7b` in a terminal.
+* one model pulled:
+*     ollama pull qwen2.5:14b   // recommended (~9 GB disk, ~10 GB RAM)
+*     ollama pull qwen2.5:7b    // fallback if RAM is limited (~4.7 GB)
 *
 * Cost:     $0 (runs entirely on your local machine)
-* Runtime:  ~30 seconds for 10 rows on Apple Silicon with qwen2.5:7b
+* Runtime:  ~30-60 seconds for 10 rows on Apple Silicon with qwen2.5:14b
 ********************************************************************************
 
 clear all
@@ -26,7 +28,8 @@ catllm setup, check
 * You do NOT need `ollama serve` running manually -- cat-stack's Ollama path
 * will check connectivity and surface a clear error if it can't reach Ollama.
 * Pull the model once, in a terminal:
-*     ollama pull qwen2.5:7b
+*     ollama pull qwen2.5:14b   // recommended
+*     ollama pull qwen2.5:7b    // if RAM is limited
 
 * --- 3. Example data ----------------------------------------------------------
 input str200 response
@@ -46,11 +49,19 @@ end
 * No real API key is needed for Ollama, but Stata's syntax parser requires
 * a non-empty string for the apikey() option -- pass any placeholder.
 * `provider("ollama")` tells cat-stack which backend to use.
-catllm classify response,                           ///
-    categories("Positive" "Negative" "Neutral")     ///
-    apikey("_")                                     ///
-    model("qwen2.5:7b")                             ///
-    provider("ollama")                              ///
+*
+* Verbose, definition-style labels classify several percentage points more
+* accurately than one-word labels on small local models.
+* Use qwen2.5:14b for best accuracy; substitute qwen2.5:7b if RAM is limited.
+catllm classify response,                                                              ///
+    categories(                                                                        ///
+        "Positive: The respondent expresses satisfaction, approval, or favorable sentiment." ///
+        "Negative: The respondent expresses dissatisfaction, frustration, or criticism."    ///
+        "Neutral: The respondent is factual, ambivalent, or does not express clear sentiment." ///
+        "Other: The response does not fit any of the above categories.")               ///
+    apikey("_")                                                                        ///
+    model("qwen2.5:14b")                                                               ///
+    provider("ollama")                                                                 ///
     generate(sentiment)
 
 list response sentiment, separator(0) abbreviate(20)
@@ -66,9 +77,9 @@ tab sentiment
 * hand-labeled subsample.
 
 * --- 6. Suggested local models -----------------------------------------------
-* qwen2.5:7b    -- Good baseline, fast on Apple Silicon
-* qwen2.5:14b   -- Higher accuracy, ~10 GB RAM
-* llama3.1:8b   -- Solid generalist
-* gpt-oss:20b   -- Strong for English, slower
+* qwen2.5:14b   -- Recommended: best accuracy/size tradeoff (~10 GB RAM)
+* qwen2.5:7b    -- Faster, lower RAM, noticeably weaker (~5 GB RAM)
+* llama3.2      -- Good generalist, smaller footprint (~2 GB)
+* mistral:7b    -- Solid English, fast on Apple Silicon
 *
 * See https://ollama.com/library for the full catalog.

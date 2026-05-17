@@ -1,5 +1,5 @@
 ********************************************************************************
-* 03-exploring-categories-with-explore.do
+* 04-exploring-categories-with-explore.do
 *
 * Use `catllm explore` for SATURATION ANALYSIS. Unlike `catllm extract`
 * (which de-duplicates and merges similar labels), `catllm explore`
@@ -68,7 +68,7 @@ catllm explore open_response,                       ///
     catsperchunk(10)                                ///
     maxcategories(15)                               ///
     description("Reasons people gave for moving to a new city")  ///
-    pyoptions("survey_question='Why did you move to this city?'")
+    pyoptions("research_question='Why did you move to this city?'")
 
 return list
 

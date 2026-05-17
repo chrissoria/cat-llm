@@ -1,0 +1,134 @@
+
+  ___  ____  ____  ____  ____ ®
+ /__    /   ____/   /   ____/      StataNow 19.5
+___/   /   /___/   /   /___/       SE—Standard Edition
+
+ Statistics and Data Science       Copyright 1985-2025 StataCorp LLC
+                                   StataCorp
+                                   4905 Lakeway Drive
+                                   College Station, Texas 77845 USA
+                                   800-782-8272        https://www.stata.com
+                                   979-696-4600        service@stata.com
+
+Stata license: Single-user , expiring  6 Aug 2026
+Serial number: 401909206182
+  Licensed to: Chris Soria
+               UC Berkeley
+
+Notes:
+      1. Stata is running in batch mode.
+      2. Unicode is supported; see help unicode_advice.
+      3. Maximum number of variables is set to 5,000 but can be increased;
+          see help set_maxvar.
+
+. do 04-exploring-categories-with-explore.do 
+
+. *****************************************************************************
+> ***
+. * 04-exploring-categories-with-explore.do
+. *
+. * Use `catllm explore` for SATURATION ANALYSIS. Unlike `catllm extract`
+. * (which de-duplicates and merges similar labels), `catllm explore`
+. * returns every raw category string from every chunk across every
+. * iteration -- with duplicates intact. That makes it the right tool for
+. * understanding category stability: do the same themes keep appearing,
+. * or are new ones still being discovered with each iteration?
+. *
+. * Use case: you have ~500 open-ended survey responses and want to know,
+. * "If I sample 50 of them, am I capturing most of the themes? Or do I
+. * need to look at all 500?"
+. *
+. * Requires: OPENAI_API_KEY (or set provider() to your preferred backend)
+. * Cost:     ~$0.05 across the two runs below
+. * Runtime:  ~30 seconds for the basic run + ~30 seconds for the iteration
+. *           sweep
+. *****************************************************************************
+> ***
+. 
+. clear all
+
+. set more off
+
+. 
+. adopath + "`c(pwd)'/.."
+  [1]  (BASE)      "/Applications/StataNow/ado/base/"
+  [2]  (SITE)      "/Applications/StataNow/ado/site/"
+  [3]              "."
+  [4]  (PERSONAL)  "/Users/chrissoria/Documents/Stata/ado/personal/"
+  [5]  (PLUS)      "/Users/chrissoria/Library/Application Support/Stata/ado/plu
+> s/"
+  [6]  (OLDPLACE)  "~/ado/"
+  [7]              "/Users/chrissoria/Documents/Research/cat-llm/stata-package/
+> examples/.."
+
+. 
+. global OPENAI_API_KEY : env OPENAI_API_KEY
+
+. if "$OPENAI_API_KEY" == "" {
+.     di as error "OPENAI_API_KEY not set."
+.     exit 198
+. }
+
+. 
+. * --- Example data: reasons people gave for moving --------------------------
+> --
+. input str200 open_response
+
+                                                                               
+>                                                                              
+>                                     open_response
+  1. "The weather was just too hot where I lived"
+  2. "I could no longer afford the rent in my old neighborhood"
+  3. "My company offered me a promotion but it required relocating"
+  4. "I wanted to be closer to my aging parents"
+  5. "The schools in my old district were underperforming"
+  6. "I needed a fresh start after my divorce"
+  7. "The cost of living was eating up most of my paycheck"
+  8. "I got accepted to a great university here"
+  9. "My spouse got a new job in this city"
+ 10. "The crime rate where I lived was getting worse"
+ 11. "I wanted access to better healthcare"
+ 12. "The job market in my field was much better here"
+ 13. "I retired and wanted somewhere quieter"
+ 14. "My family kept asking me to move back home"
+ 15. "The political climate in my old state didn't fit me"
+ 16. "I wanted to be closer to nature and the outdoors"
+ 17. "My apartment building was sold and I had to leave"
+ 18. "I followed my partner who is doing a residency here"
+ 19. "The public transportation here is much better"
+ 20. "I always wanted to live in a city this size"
+ 21. end
+
+. 
+. * --- 1. Basic explore run with survey-question framing ---------------------
+> --
+. * domain(survey) routes through cat-survey which injects the survey question
+. * into the prompt for more accurate theme discovery.
+. di _n "{hline 60}"
+
+------------------------------------------------------------
+
+. di "1. Raw category extraction (12 iterations, 8 divisions)"
+1. Raw category extraction (12 iterations, 8 divisions)
+
+. di "{hline 60}"
+------------------------------------------------------------
+
+. 
+. catllm explore open_response,                       ///
+>     apikey($OPENAI_API_KEY)                         ///
+>     model("gpt-4o-mini")                            ///
+>     iterations(12)                                  ///
+>     divisions(8)                                    ///
+>     catsperchunk(10)                                ///
+>     maxcategories(15)                               ///
+>     description("Reasons people gave for moving to a new city")  ///
+>     pyoptions("survey_question='Why did you move to this city?'")
+Exploring categories from 20 observations...
+(raw extraction, no deduplication -- for saturation analysis)
+catstack.explore() failed: explore() got an unexpected keyword argument 'survey
+> _question'
+r(198);
+
+end of do-file
+r(198);

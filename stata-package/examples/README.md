@@ -11,6 +11,7 @@ Stata `.do` walkthroughs mirroring the [Python `examples/` notebooks](../../exam
 | [05-extracting-categories-from-columns.do](05-extracting-categories-from-columns.do) | End-to-end: extract a category scheme from a Stata variable, then classify |
 | [06-extracting-categories-with-extract.do](06-extracting-categories-with-extract.do) | Discover and de-duplicate categories with `catllm extract` when you have no predefined scheme |
 | [07-summarizing-text-and-pdf.do](07-summarizing-text-and-pdf.do) | Use `catllm summarize` on text and (optionally) PDF inputs |
+| [08-extracting-and-exploring-with-ollama.do](08-extracting-and-exploring-with-ollama.do) | Run `catllm extract` and `catllm explore` entirely on a local Ollama model — no API keys, saturation analysis included |
 
 The regression-test file [`test_stata_package.do`](test_stata_package.do) exercises the whole package surface in one run (error paths, `domain()`, `pyoptions()`, etc.) and is the smoke-test we use before tagging a release.
 

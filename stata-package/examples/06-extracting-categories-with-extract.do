@@ -1,5 +1,5 @@
 ********************************************************************************
-* 05-extracting-categories-with-extract.do
+* 06-extracting-categories-with-extract.do
 *
 * Discover a category scheme with `catllm extract`. Use this when you
 * have free-text data and no pre-defined coding scheme -- let the model

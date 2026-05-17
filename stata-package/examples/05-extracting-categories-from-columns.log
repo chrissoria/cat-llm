@@ -1,0 +1,568 @@
+
+  ___  ____  ____  ____  ____ ®
+ /__    /   ____/   /   ____/      StataNow 19.5
+___/   /   /___/   /   /___/       SE—Standard Edition
+
+ Statistics and Data Science       Copyright 1985-2025 StataCorp LLC
+                                   StataCorp
+                                   4905 Lakeway Drive
+                                   College Station, Texas 77845 USA
+                                   800-782-8272        https://www.stata.com
+                                   979-696-4600        service@stata.com
+
+Stata license: Single-user , expiring  6 Aug 2026
+Serial number: 401909206182
+  Licensed to: Chris Soria
+               UC Berkeley
+
+Notes:
+      1. Stata is running in batch mode.
+      2. Unicode is supported; see help unicode_advice.
+      3. Maximum number of variables is set to 5,000 but can be increased;
+          see help set_maxvar.
+
+. do 05-extracting-categories-from-columns.do 
+
+. *****************************************************************************
+> ***
+. * 05-extracting-categories-from-columns.do
+. *
+. * End-to-end workflow: take a Stata variable of open-ended text, discover
+. * a category scheme with `catllm extract`, classify every row against
+. * those categories, then export the labeled dataset.
+. *
+. * Canonical CatLLM workflow when you don't have a pre-defined coding
+. * scheme:
+. *   1. `catllm extract` to discover the categories
+. *   2. (optional) hand-curate the labels so they're verbose
+. *   3. `catllm classify` to assign every row
+. *   4. Export to CSV or save as .dta for analysis
+. *
+. * Requires: OPENAI_API_KEY
+. * Cost:     ~$0.10 (one extract + one classify against 20 rows)
+. * Runtime:  ~1-2 minutes
+. *****************************************************************************
+> ***
+. 
+. clear all
+
+. set more off
+
+. 
+. adopath + "`c(pwd)'/.."
+  [1]  (BASE)      "/Applications/StataNow/ado/base/"
+  [2]  (SITE)      "/Applications/StataNow/ado/site/"
+  [3]              "."
+  [4]  (PERSONAL)  "/Users/chrissoria/Documents/Stata/ado/personal/"
+  [5]  (PLUS)      "/Users/chrissoria/Library/Application Support/Stata/ado/plu
+> s/"
+  [6]  (OLDPLACE)  "~/ado/"
+  [7]              "/Users/chrissoria/Documents/Research/cat-llm/stata-package/
+> examples/.."
+
+. 
+. global OPENAI_API_KEY : env OPENAI_API_KEY
+
+. if "$OPENAI_API_KEY" == "" {
+.     di as error "OPENAI_API_KEY not set."
+.     exit 198
+. }
+
+. 
+. * --- Load data -------------------------------------------------------------
+> --
+. * Replace this block with your own data. For the example, we inline 20
+. * responses to a "why did you move?" question.
+. input str200 open_response
+
+                                                                               
+>                                                                              
+>                                     open_response
+  1. "The weather was just too hot where I lived"
+  2. "I could no longer afford the rent in my old neighborhood"
+  3. "My company offered me a promotion but it required relocating"
+  4. "I wanted to be closer to my aging parents"
+  5. "The schools in my old district were underperforming"
+  6. "I needed a fresh start after my divorce"
+  7. "The cost of living was eating up most of my paycheck"
+  8. "I got accepted to a great university here"
+  9. "My spouse got a new job in this city"
+ 10. "The crime rate where I lived was getting worse"
+ 11. "I wanted access to better healthcare"
+ 12. "The job market in my field was much better here"
+ 13. "I retired and wanted somewhere quieter"
+ 14. "My family kept asking me to move back home"
+ 15. "The political climate in my old state didn't fit me"
+ 16. "I wanted to be closer to nature and the outdoors"
+ 17. "My apartment building was sold and I had to leave"
+ 18. "I followed my partner who is doing a residency here"
+ 19. "The public transportation here is much better"
+ 20. "I always wanted to live in a city this size"
+ 21. end
+
+. 
+. di "Loaded `c(N)' responses."
+Loaded 20 responses.
+
+. list open_response in 1/5, separator(0) abbreviate(40)
+
+     +--------------------------------------------------------------+
+     |                                                open_response |
+     |--------------------------------------------------------------|
+  1. |                   The weather was just too hot where I lived |
+  2. |     I could no longer afford the rent in my old neighborhood |
+  3. | My company offered me a promotion but it required relocating |
+  4. |                    I wanted to be closer to my aging parents |
+  5. |          The schools in my old district were underperforming |
+     +--------------------------------------------------------------+
+
+. 
+. * --- Step 1: Extract a category scheme -------------------------------------
+> --
+. * domain(survey) routes through cat-survey which builds survey-question
+. * framing into the prompt. `pyoptions("survey_question=...")` forwards
+. * the question text to the Python call.
+. di _n "{hline 60}"
+
+------------------------------------------------------------
+
+. di "Step 1: Discover categories with catllm extract"
+Step 1: Discover categories with catllm extract
+
+. di "{hline 60}"
+------------------------------------------------------------
+
+. 
+. catllm extract open_response,                                          ///
+>     apikey($OPENAI_API_KEY)                                            ///
+>     model("gpt-4o-mini")                                               ///
+>     maxcategories(12)                                                  ///
+>     iterations(6)                                                      ///
+>     description("Reasons people gave for moving to a new city")        ///
+>     pyoptions("survey_question='Why did you move to a new city?'")
+Extracting categories from 20 observations...
+Auto-adjusted divisions from 12 to 6 for 20 responses.
+Auto-adjusted categories_per_chunk from 10 to 6 for chunk size 3.
+Exploring categories for question: 'Why did you move to a new city?'
+Using provider: openai, model: gpt-4o-mini
+          216 total category extractions across 6 iterations.
+          Top 12 categories will be identified.
+
+Processing chunks (pass 1/6):   0%|          | 0/6 [00:00<?, ?it/s]Processing
+>  chunks (pass 1/6):  17%|#6        | 1/6 [00:01<00:09,  1.89s/it]Processing 
+> chunks (pass 1/6):  33%|###3      | 2/6 [00:03<00:06,  1.63s/it]Processing c
+> hunks (pass 1/6):  50%|#####     | 3/6 [00:04<00:04,  1.42s/it]Processing ch
+> unks (pass 1/6):  67%|######6   | 4/6 [00:06<00:03,  1.56s/it]Processing chu
+> nks (pass 1/6):  83%|########3 | 5/6 [00:07<00:01,  1.26s/it]Processing chun
+> ks (pass 1/6): 100%|##########| 6/6 [00:08<00:00,  1.20s/it]Processing chunk
+> s (pass 1/6): 100%|##########| 6/6 [00:08<00:00,  1.35s/it]
+Processing chunks (pass 2/6):   0%|          | 0/6 [00:00<?, ?it/s]Processing
+>  chunks (pass 2/6):  17%|#6        | 1/6 [00:01<00:07,  1.58s/it]Processing 
+> chunks (pass 2/6):  33%|###3      | 2/6 [00:02<00:04,  1.24s/it]Processing c
+> hunks (pass 2/6):  50%|#####     | 3/6 [00:03<00:03,  1.13s/it]Processing ch
+> unks (pass 2/6):  67%|######6   | 4/6 [00:04<00:02,  1.05s/it]Processing chu
+> nks (pass 2/6):  83%|########3 | 5/6 [00:05<00:01,  1.00s/it]Processing chun
+> ks (pass 2/6): 100%|##########| 6/6 [00:06<00:00,  1.01it/s]Processing chunk
+> s (pass 2/6): 100%|##########| 6/6 [00:06<00:00,  1.07s/it]
+Processing chunks (pass 3/6):   0%|          | 0/6 [00:00<?, ?it/s]Processing
+>  chunks (pass 3/6):  17%|#6        | 1/6 [00:00<00:03,  1.49it/s]Processing 
+> chunks (pass 3/6):  33%|###3      | 2/6 [00:01<00:03,  1.22it/s]Processing c
+> hunks (pass 3/6):  50%|#####     | 3/6 [00:02<00:02,  1.04it/s]Processing ch
+> unks (pass 3/6):  67%|######6   | 4/6 [00:03<00:01,  1.07it/s]Processing chu
+> nks (pass 3/6):  83%|########3 | 5/6 [00:05<00:01,  1.16s/it]Processing chun
+> ks (pass 3/6): 100%|##########| 6/6 [00:06<00:00,  1.07s/it]Processing chunk
+> s (pass 3/6): 100%|##########| 6/6 [00:06<00:00,  1.01s/it]
+Processing chunks (pass 4/6):   0%|          | 0/6 [00:00<?, ?it/s]Processing
+>  chunks (pass 4/6):  17%|#6        | 1/6 [00:00<00:03,  1.48it/s]Processing 
+> chunks (pass 4/6):  33%|###3      | 2/6 [00:01<00:03,  1.15it/s]Processing c
+> hunks (pass 4/6):  50%|#####     | 3/6 [00:02<00:03,  1.07s/it]Processing ch
+> unks (pass 4/6):  67%|######6   | 4/6 [00:04<00:02,  1.10s/it]Processing chu
+> nks (pass 4/6):  83%|########3 | 5/6 [00:05<00:01,  1.07s/it]Processing chun
+> ks (pass 4/6): 100%|##########| 6/6 [00:06<00:00,  1.17s/it]Processing chunk
+> s (pass 4/6): 100%|##########| 6/6 [00:06<00:00,  1.09s/it]
+Processing chunks (pass 5/6):   0%|          | 0/6 [00:00<?, ?it/s]Processing
+>  chunks (pass 5/6):  17%|#6        | 1/6 [00:01<00:05,  1.03s/it]Processing 
+> chunks (pass 5/6):  33%|###3      | 2/6 [00:01<00:03,  1.12it/s]Processing c
+> hunks (pass 5/6):  50%|#####     | 3/6 [00:03<00:03,  1.11s/it]Processing ch
+> unks (pass 5/6):  67%|######6   | 4/6 [00:03<00:01,  1.07it/s]Processing chu
+> nks (pass 5/6):  83%|########3 | 5/6 [00:04<00:00,  1.12it/s]Processing chun
+> ks (pass 5/6): 100%|##########| 6/6 [00:05<00:00,  1.15it/s]Processing chunk
+> s (pass 5/6): 100%|##########| 6/6 [00:05<00:00,  1.09it/s]
+Processing chunks (pass 6/6):   0%|          | 0/6 [00:00<?, ?it/s]Processing
+>  chunks (pass 6/6):  17%|#6        | 1/6 [00:02<00:10,  2.04s/it]Processing 
+> chunks (pass 6/6):  33%|###3      | 2/6 [00:03<00:06,  1.57s/it]Processing c
+> hunks (pass 6/6):  50%|#####     | 3/6 [00:04<00:03,  1.23s/it]Processing ch
+> unks (pass 6/6):  67%|######6   | 4/6 [00:04<00:02,  1.02s/it]Processing chu
+> nks (pass 6/6):  83%|########3 | 5/6 [00:05<00:01,  1.08s/it]Processing chun
+> ks (pass 6/6): 100%|##########| 6/6 [00:06<00:00,  1.01s/it]Processing chunk
+> s (pass 6/6): 100%|##########| 6/6 [00:06<00:00,  1.14s/it]
+
+Top categories:
+1. Quality of Life
+2. Career Opportunities
+3. Cost of Living
+4. Education
+5. Family Reasons
+6. Lifestyle Preferences
+7. Personal Growth
+8. Healthcare
+9. Retirement
+10. Employment Opportunities
+11. Climate Preferences
+12. Relationship Factors
+
+Discovered categories:
+  1. Quality of Life  (n=14)
+  2. Career Opportunities  (n=12)
+  3. Cost of Living  (n=11)
+  4. Education  (n=9)
+  5. Family Reasons  (n=9)
+  6. Lifestyle Preferences  (n=8)
+  7. Personal Growth  (n=8)
+  8. Healthcare  (n=6)
+  9. Retirement  (n=6)
+  10. Employment Opportunities  (n=6)
+  11. Climate Preferences  (n=5)
+  12. Relationship Factors  (n=4)
+
+Extraction complete. Categories stored in r().
+Use return list to see results.
+
+. 
+. return list
+
+scalars:
+       r(n_categories) =  12
+
+macros:
+              r(cat12) : "Relationship Factors"
+              r(cat11) : "Climate Preferences"
+              r(cat10) : "Employment Opportunities"
+               r(cat9) : "Retirement"
+               r(cat8) : "Healthcare"
+               r(cat7) : "Personal Growth"
+               r(cat6) : "Lifestyle Preferences"
+               r(cat5) : "Family Reasons"
+               r(cat4) : "Education"
+               r(cat3) : "Cost of Living"
+               r(cat2) : "Career Opportunities"
+               r(cat1) : "Quality of Life"
+         r(categories) : ""Quality of Life" "Career Opportunities" "Cost of.."
+
+. 
+. * Grab the discovered scheme into a local for later use
+. local discovered = `"`r(categories)'"'
+
+. di _n `"Discovered scheme: `discovered'"'
+
+Discovered scheme: "Quality of Life" "Career Opportunities" "Cost of Living" "E
+> ducation" "Family Reasons" "Lifestyle Preferences" "Personal Growth" "Healthc
+> are" "Retirement" "Employment Opportunities" "Climate Preferences" "Relations
+> hip Factors"
+
+. 
+. * --- Step 2: Curate the categories (optional but recommended) --------------
+> --
+. * Verbose, definition-style labels classify several percentage points more
+. * accurately than one-word labels. Edit `verbose_cats` to whatever scheme
+. * you decided to use after reviewing r(categories) from step 1.
+. di _n "{hline 60}"
+
+------------------------------------------------------------
+
+. di "Step 2: Curate the scheme (verbose labels classify better)"
+Step 2: Curate the scheme (verbose labels classify better)
+
+. di "{hline 60}"
+------------------------------------------------------------
+
+. 
+. local verbose_cats                                                           
+>           ///
+>     `""Job/school: A change in employment, education, or career, including tr
+> ansfers and retirement." "' ///
+>     `""Family: Relationship changes, having children, supporting relatives, o
+> r relocating to be near family." "' ///
+>     `""Cost of living: Housing affordability, cost of goods, or general econo
+> mic pressure." "' ///
+>     `""Lifestyle: Climate, recreation, cultural fit, or change of scenery." "
+> ' ///
+>     `""Other: The response does not fit any of the above categories.""'
+
+. 
+. * --- Step 3: Classify every row against the curated scheme -----------------
+> --
+. di _n "{hline 60}"
+
+------------------------------------------------------------
+
+. di "Step 3: Classify every row"
+Step 3: Classify every row
+
+. di "{hline 60}"
+------------------------------------------------------------
+
+. 
+. catllm classify open_response,                                         ///
+>     categories(`verbose_cats')                                         ///
+>     apikey($OPENAI_API_KEY)                                            ///
+>     model("gpt-4o-mini")                                               ///
+>     generate(category)                                                 ///
+>     surveyquestion("Why did you move to a new city?")
+Classifying 20 observations...
+Validating 1 model configuration(s)...
+
+Models to use:
+  - gpt-4o-mini (openai) -> column suffix: gpt_4o_mini
+
+File type detected: TEXT
+Input mode: text
+
+Parallel workers: 1
+
+Categories to classify (5 total):
+  1. Job/school: A change in employment, education, or career, including transf
+> ers and retirement.
+  2. '     `Family: Relationship changes, having children, supporting relatives
+> , or relocating to be near family.
+  3. '     `Cost of living: Housing affordability, cost of goods, or general ec
+> onomic pressure.
+  4. '     `Lifestyle: Climate, recreation, cultural fit, or change of scenery.
+  5. '     `Other: The response does not fit any of the above categories.
+
+Classifying responses:   0%|          | 0/20 [00:00<?, ?it/s]Classifying resp
+> onses:   5%|5         | 1/20 [00:01<00:31,  1.65s/it]Classifying responses: 
+>  10%|#         | 2/20 [00:02<00:18,  1.05s/it]Classifying responses:  15%|#5
+>         | 3/20 [00:03<00:16,  1.06it/s]Classifying responses:  20%|##       
+>  | 4/20 [00:03<00:12,  1.26it/s]Classifying responses:  25%|##5       | 5/20
+>  [00:04<00:10,  1.43it/s]Classifying responses:  30%|###       | 6/20 [00:04
+> <00:10,  1.39it/s]Classifying responses:  35%|###5      | 7/20 [00:05<00:08,
+>   1.47it/s]Classifying responses:  40%|####      | 8/20 [00:06<00:07,  1.51i
+> t/s]Classifying responses:  45%|####5     | 9/20 [00:06<00:07,  1.55it/s]Cl
+> assifying responses:  50%|#####     | 10/20 [00:07<00:06,  1.54it/s]Classify
+> ing responses:  55%|#####5    | 11/20 [00:08<00:06,  1.45it/s]Classifying re
+> sponses:  60%|######    | 12/20 [00:08<00:05,  1.41it/s]Classifying response
+> s:  65%|######5   | 13/20 [00:09<00:05,  1.34it/s]Classifying responses:  70
+> %|#######   | 14/20 [00:10<00:04,  1.32it/s]Classifying responses:  75%|####
+> ###5  | 15/20 [00:11<00:03,  1.41it/s]Classifying responses:  80%|########  
+> | 16/20 [00:12<00:02,  1.34it/s]Classifying responses:  85%|########5 | 17/2
+> 0 [00:12<00:02,  1.41it/s]Classifying responses:  90%|######### | 18/20 [00:
+> 13<00:01,  1.36it/s]Classifying responses:  95%|#########5| 19/20 [00:14<00:
+> 00,  1.37it/s]Classifying responses: 100%|##########| 20/20 [00:14<00:00,  1
+> .38it/s]Classifying responses: 100%|##########| 20/20 [00:14<00:00,  1.35it/
+> s]
+Building output DataFrames...
+Python classification complete.
+
+Classification complete.
+  Observations: 20
+  Classified:   20
+  Variable:     category
+
+. 
+. list open_response category, separator(0) abbreviate(20)
+
+     +------------------------------------------------------------------------+
+  1. |                                                     open_response      |
+     |                        The weather was just too hot where I lived      |
+     |------------------------------------------------------------------------|
+     | category                                                               |
+     | '     `Lifestyle: Climate, recreation, cultural fit, or change of sc.. |
+     +------------------------------------------------------------------------+
+
+     +------------------------------------------------------------------------+
+  2. |                                                     open_response      |
+     |          I could no longer afford the rent in my old neighborhood      |
+     |------------------------------------------------------------------------|
+     | category                                                               |
+     | '     `Cost of living: Housing affordability, cost of goods, or gene.. |
+     +------------------------------------------------------------------------+
+
+     +------------------------------------------------------------------------+
+  3. |                                                     open_response      |
+     |      My company offered me a promotion but it required relocating      |
+     |------------------------------------------------------------------------|
+     | category                                                               |
+     | Job/school: A change in employment, education, or career, including .. |
+     +------------------------------------------------------------------------+
+
+     +------------------------------------------------------------------------+
+  4. |                                                     open_response      |
+     |                         I wanted to be closer to my aging parents      |
+     |------------------------------------------------------------------------|
+     | category                                                               |
+     | '     `Family: Relationship changes, having children, supporting rel.. |
+     +------------------------------------------------------------------------+
+
+     +------------------------------------------------------------------------+
+  5. |                                                     open_response      |
+     |               The schools in my old district were underperforming      |
+     |------------------------------------------------------------------------|
+     | category                                                               |
+     | Job/school: A change in employment, education, or career, including .. |
+     +------------------------------------------------------------------------+
+
+     +------------------------------------------------------------------------+
+  6. |                                                     open_response      |
+     |                           I needed a fresh start after my divorce      |
+     |------------------------------------------------------------------------|
+     | category                                                               |
+     | '     `Family: Relationship changes, having children, supporting rel.. |
+     +------------------------------------------------------------------------+
+
+     +------------------------------------------------------------------------+
+  7. |                                                     open_response      |
+     |              The cost of living was eating up most of my paycheck      |
+     |------------------------------------------------------------------------|
+     | category                                                               |
+     | '     `Cost of living: Housing affordability, cost of goods, or gene.. |
+     +------------------------------------------------------------------------+
+
+     +------------------------------------------------------------------------+
+  8. |                                                     open_response      |
+     |                         I got accepted to a great university here      |
+     |------------------------------------------------------------------------|
+     | category                                                               |
+     | Job/school: A change in employment, education, or career, including .. |
+     +------------------------------------------------------------------------+
+
+     +------------------------------------------------------------------------+
+  9. |                                                     open_response      |
+     |                              My spouse got a new job in this city      |
+     |------------------------------------------------------------------------|
+     | category                                                               |
+     | Job/school: A change in employment, education, or career, including .. |
+     +------------------------------------------------------------------------+
+
+     +------------------------------------------------------------------------+
+ 10. |                                                     open_response      |
+     |                    The crime rate where I lived was getting worse      |
+     |------------------------------------------------------------------------|
+     | category                                                               |
+     | '     `Lifestyle: Climate, recreation, cultural fit, or change of sc.. |
+     +------------------------------------------------------------------------+
+
+     +------------------------------------------------------------------------+
+ 11. |                                                     open_response      |
+     |                              I wanted access to better healthcare      |
+     |------------------------------------------------------------------------|
+     | category                                                               |
+     | '     `Other: The response does not fit any of the above categories.   |
+     +------------------------------------------------------------------------+
+
+     +------------------------------------------------------------------------+
+ 12. |                                                     open_response      |
+     |                   The job market in my field was much better here      |
+     |------------------------------------------------------------------------|
+     | category                                                               |
+     | Job/school: A change in employment, education, or career, including .. |
+     +------------------------------------------------------------------------+
+
+     +------------------------------------------------------------------------+
+ 13. |                                                     open_response      |
+     |                            I retired and wanted somewhere quieter      |
+     |------------------------------------------------------------------------|
+     | category                                                               |
+     | Job/school: A change in employment, education, or career, including .. |
+     +------------------------------------------------------------------------+
+
+     +------------------------------------------------------------------------+
+ 14. |                                                     open_response      |
+     |                        My family kept asking me to move back home      |
+     |------------------------------------------------------------------------|
+     | category                                                               |
+     | '     `Family: Relationship changes, having children, supporting rel.. |
+     +------------------------------------------------------------------------+
+
+     +------------------------------------------------------------------------+
+ 15. |                                                     open_response      |
+     |               The political climate in my old state didn't fit me      |
+     |------------------------------------------------------------------------|
+     | category                                                               |
+     | '     `Lifestyle: Climate, recreation, cultural fit, or change of sc.. |
+     +------------------------------------------------------------------------+
+
+     +------------------------------------------------------------------------+
+ 16. |                                                     open_response      |
+     |                  I wanted to be closer to nature and the outdoors      |
+     |------------------------------------------------------------------------|
+     | category                                                               |
+     | '     `Lifestyle: Climate, recreation, cultural fit, or change of sc.. |
+     +------------------------------------------------------------------------+
+
+     +------------------------------------------------------------------------+
+ 17. |                                                     open_response      |
+     |                 My apartment building was sold and I had to leave      |
+     |------------------------------------------------------------------------|
+     | category                                                               |
+     | '     `Cost of living: Housing affordability, cost of goods, or gene.. |
+     +------------------------------------------------------------------------+
+
+     +------------------------------------------------------------------------+
+ 18. |                                                     open_response      |
+     |               I followed my partner who is doing a residency here      |
+     |------------------------------------------------------------------------|
+     | category                                                               |
+     | Job/school: A change in employment, education, or career, including .. |
+     +------------------------------------------------------------------------+
+
+     +------------------------------------------------------------------------+
+ 19. |                                                     open_response      |
+     |                     The public transportation here is much better      |
+     |------------------------------------------------------------------------|
+     | category                                                               |
+     | '     `Lifestyle: Climate, recreation, cultural fit, or change of sc.. |
+     +------------------------------------------------------------------------+
+
+     +------------------------------------------------------------------------+
+ 20. |                                                     open_response      |
+     |                       I always wanted to live in a city this size      |
+     |------------------------------------------------------------------------|
+     | category                                                               |
+     | '     `Lifestyle: Climate, recreation, cultural fit, or change of sc.. |
+     +------------------------------------------------------------------------+
+
+. tab category
+
+                               category |      Freq.     Percent        Cum.
+----------------------------------------+-----------------------------------
+'     `Cost of living: Housing afford.. |          3       15.00       15.00
+'     `Family: Relationship changes, .. |          3       15.00       30.00
+'     `Lifestyle: Climate, recreation.. |          6       30.00       60.00
+'     `Other: The response does not f.. |          1        5.00       65.00
+Job/school: A change in employment, e.. |          7       35.00      100.00
+----------------------------------------+-----------------------------------
+                                  Total |         20      100.00
+
+. 
+. * --- Step 4: Export or save ------------------------------------------------
+> --
+. di _n "{hline 60}"
+
+------------------------------------------------------------
+
+. di "Step 4: Export"
+Step 4: Export
+
+. di "{hline 60}"
+------------------------------------------------------------
+
+. 
+. * Save as a Stata dataset:
+. * save survey_classified.dta, replace
+. 
+. * Or export to CSV:
+. * export delimited survey_classified.csv, replace
+. 
+. * Tips:
+. *  - Run on a subsample first to verify the category scheme makes sense
+. *    before classifying thousands of rows.
+. *  - Use ensemble mode (see example 02) for high-stakes coding.
+. *  - Validate against a hand-labeled subsample for any published research.
+. 
+. di _n "Done."
+
+Done.
+
+. 
+end of do-file

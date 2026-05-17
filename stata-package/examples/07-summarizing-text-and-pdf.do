@@ -56,7 +56,7 @@ list doc summary_short, separator(0) abbreviate(50)
 *   "single-page"     -- one-page structured summary
 *   "detailed-report" -- long-form multi-section report
 di _n "{hline 60}"
-di "2. Bullet-point summary via pyoptions(\"format='bullets'\")"
+di `"2. Bullet-point summary via pyoptions("format='bullets'")"'
 di "{hline 60}"
 
 catllm summarize doc,                                                  ///
