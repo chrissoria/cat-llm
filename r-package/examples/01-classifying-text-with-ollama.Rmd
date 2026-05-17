@@ -17,8 +17,18 @@ In a terminal:
 
 ```bash
 # Install: see https://ollama.com/download
-ollama pull qwen2.5:14b   # ~10 GB; recommended over 7b for accuracy
+
+# Recommended (larger, more accurate):
+ollama pull qwen2.5:14b   # ~9 GB on disk, ~10 GB RAM to run
+
+# OR smaller fallback if you're tight on disk / RAM:
+# ollama pull qwen2.5:7b  # ~4.7 GB; faster but noticeably weaker
 ```
+
+> ⚠️ **Disk-space heads-up:** `qwen2.5:14b` is **~9 GB** and Ollama
+> needs roughly that much *free* disk space during the download.
+> Check `df -h /` first — if you're under ~12 GB free, pull
+> `qwen2.5:7b` instead.
 
 (You do **not** need to run `ollama serve` manually — see step 3.)
 See the model table at the bottom for smaller/larger alternatives.
@@ -60,7 +70,7 @@ verbose_cats <- c(
 results <- classify(
   input_data    = responses,
   categories    = verbose_cats,
-  user_model    = "qwen2.5:14b",
+  user_model    = "qwen2.5:14b",   # or "qwen2.5:7b" if you pulled the smaller one
   model_source  = "ollama"
 )
 

@@ -261,15 +261,23 @@ After saving, restart R for the changes to take effect.
 For sensitive data, free use, or air-gapped environments, run against a local model via [Ollama](https://ollama.com):
 
 ```{r config-ollama}
-# In a separate terminal: install Ollama, then `ollama pull qwen2.5:7b`
+# In a separate terminal: install Ollama, then pull a model.
+# Recommended (larger, more accurate, ~9 GB):
+#   ollama pull qwen2.5:14b
+# Smaller fallback if disk/RAM constrained (~4.7 GB):
+#   ollama pull qwen2.5:7b
 
 results <- classify(
   input_data    = df$responses,
   categories    = c("Positive", "Negative", "Neutral"),
-  user_model    = "qwen2.5:7b",
+  user_model    = "qwen2.5:14b",   # or "qwen2.5:7b" if you pulled the smaller one
   model_source  = "ollama"
 )
 ```
+
+> ⚠️ **Disk-space heads-up:** `qwen2.5:14b` is ~9 GB on disk and Ollama
+> needs roughly that much *free* during the download. Check
+> `df -h /` first — if under ~12 GB free, use `qwen2.5:7b`.
 
 No API key needed; your data never leaves the machine.
 
@@ -286,7 +294,7 @@ Specify any of these via `user_model = "..."`:
 - **xAI**: `grok-2`, ...
 - **Mistral**: `mistral-large-latest`, `pixtral-large-latest`, ...
 - **Perplexity**: `sonar-large`, `sonar-small`, ...
-- **Ollama (local)**: `qwen2.5:7b`, `llama3.1:8b`, ... (set `model_source = "ollama"`)
+- **Ollama (local)**: `qwen2.5:14b` (recommended, ~9 GB), `qwen2.5:7b` (smaller fallback, ~4.7 GB), `llama3.1:8b`, ... (set `model_source = "ollama"`)
 
 **Fully tested:** OpenAI, Anthropic, Perplexity, Google Gemini (free tier has 5 RPM limit), HuggingFace, xAI, Mistral.
 

@@ -65,7 +65,7 @@ results <- classify(
   models = list(
     c("gpt-4o-mini",              "openai",    Sys.getenv("OPENAI_API_KEY")),
     c("claude-3-5-haiku-20241022", "anthropic", Sys.getenv("ANTHROPIC_API_KEY")),
-    c("qwen2.5:7b",               "ollama",    "")           # local, no key
+    c("qwen2.5:14b",              "ollama",    "")           # local, no key (or "qwen2.5:7b" for ~4.7 GB)
   ),
   consensus_threshold = "majority"   # 2 of 3 agree
 )
