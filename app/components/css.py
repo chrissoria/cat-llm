@@ -142,6 +142,20 @@ html, body,
     transform: translateY(1px) !important;
 }
 
+/* Disabled state — keep dark surface, dim the text. */
+.stButton > button:disabled,
+.stDownloadButton > button:disabled,
+.stFormSubmitButton > button:disabled,
+.stButton > button[disabled],
+.stDownloadButton > button[disabled],
+.stFormSubmitButton > button[disabled] {
+    background: var(--bg-2) !important;
+    color: var(--text-3) !important;
+    border-color: var(--hairline) !important;
+    box-shadow: none !important;
+    cursor: not-allowed !important;
+}
+
 .stButton > button[kind="primary"],
 .stFormSubmitButton > button[kind="primary"] {
     background: var(--teal) !important;

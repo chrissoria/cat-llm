@@ -158,12 +158,7 @@ def _render_manual_classify(domain_id, input_data, input_type, description, orig
             st.rerun()
 
     if categories_entered and not catllm.has_other_category(categories_entered):
-        st.warning(
-            "No catch-all category detected. Responses that don't fit your categories "
-            "will still be forced into one. Consider adding **\"Other\"** or "
-            "**\"None of the above\"**.",
-            icon="⚠️",
-        )
+        st.caption("An **\"Other\"** catch-all category will be added automatically when you classify.")
 
     # Model selection with classify modes
     st.markdown("### Model Selection")
@@ -235,6 +230,9 @@ def _render_manual_classify(domain_id, input_data, input_type, description, orig
         elif classify_mode == "Ensemble" and len(models_list) < 3:
             st.error("Please select at least 3 models for ensemble mode")
         else:
+            # Auto-append "Other" catch-all if the user didn't include one.
+            if not catllm.has_other_category(categories_entered):
+                categories_entered.append("Other")
             _run_classify(
                 domain_id, input_data, input_type, description, original_filename,
                 mode, categories_entered, models_tuples, models_list, classify_mode,
