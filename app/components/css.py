@@ -325,13 +325,25 @@ ul[role="listbox"] {
     border: 1px solid var(--hairline-strong);
     transition: all 150ms ease;
     flex: 1;
-    min-width: 0;
+    min-width: min-content;
     text-align: center;
     justify-content: center;
     font-family: 'DM Sans', sans-serif !important;
     font-size: 0.92rem !important;
     cursor: pointer;
     color: var(--text-2) !important;
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+    hyphens: none !important;
+}
+
+.stRadio > div > label *,
+.stRadio [data-baseweb="radio"] p,
+.stRadio [data-testid="stMarkdownContainer"] p {
+    word-break: normal !important;
+    overflow-wrap: normal !important;
+    hyphens: none !important;
+    white-space: normal !important;
 }
 
 .stRadio > div > label:hover {
