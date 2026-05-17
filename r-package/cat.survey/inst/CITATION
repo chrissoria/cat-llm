@@ -1,0 +1,32 @@
+citHeader("To cite the CatLLM R ecosystem in publications, please cite both the methodology paper and the software:")
+
+bibentry(
+  bibtype  = "Article",
+  title    = "Scaling Open-Ended Survey Coding: An {LLM} Pipeline Where Definitions Do the Heavy Lifting",
+  author   = person("Chris", "Soria", email = "chrissoria@berkeley.edu"),
+  journal  = "SocArXiv",
+  year     = "2026",
+  url      = "https://osf.io/preprints/socarxiv/gjvcf_v1",
+  textVersion = paste(
+    "Soria, C. (2026).",
+    "Scaling Open-Ended Survey Coding: An LLM Pipeline Where Definitions Do the Heavy Lifting.",
+    "SocArXiv. https://osf.io/preprints/socarxiv/gjvcf_v1"
+  )
+)
+
+bibentry(
+  bibtype  = "Misc",
+  title    = paste0("{", meta$Package, "}: ", meta$Title),
+  author   = person("Chris", "Soria", email = "chrissoria@berkeley.edu"),
+  year     = format(Sys.Date(), "%Y"),
+  publisher = "Zenodo",
+  doi      = "10.5281/zenodo.19960067",
+  url      = "https://doi.org/10.5281/zenodo.19960067",
+  note     = paste0("R package version ", meta$Version, ". Part of the CatLLM ecosystem."),
+  textVersion = paste0(
+    "Soria, C. (2026). CatLLM: A Reproducible Python Ecosystem for ",
+    "Generating, Assigning, and Scoring Open-Ended Text, Images, and ",
+    "Documents Across Research Domains (v3.0.0) [Software]. Zenodo. ",
+    "https://doi.org/10.5281/zenodo.19960067"
+  )
+)
