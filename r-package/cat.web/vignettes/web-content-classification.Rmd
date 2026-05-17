@@ -1,0 +1,145 @@
+---
+title: "Classifying Web Content"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Classifying Web Content}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(eval = FALSE, comment = "#>", collapse = TRUE)
+```
+
+# What `cat.web` adds
+
+`cat.web` is a thin domain wrapper around `cat.stack` that adds:
+
+1. **Automatic URL fetching** — pass a vector of URLs as `input_data`
+   and `cat.web` downloads each page, strips boilerplate, and
+   classifies the body text in a single call.
+2. **Web-context prompt injection** — `source_domain`, `content_type`,
+   and `web_metadata` arguments inject relevant context into the
+   classification prompt ("This is a news article from nytimes.com…").
+
+Everything else — supported models, output format, ensemble voting —
+is identical to `cat.stack`.
+
+# Install
+
+```{r install}
+install.packages(
+  "cat.web",
+  repos = c("https://chrissoria.r-universe.dev",
+            "https://cloud.r-project.org")
+)
+library(cat.web)
+```
+
+# Classify a list of URLs
+
+```{r classify-urls}
+urls <- c(
+  "https://www.nytimes.com/2025/01/15/opinion/some-essay.html",
+  "https://www.nytimes.com/2025/01/16/us/breaking-news.html",
+  "https://www.nytimes.com/2025/01/17/technology/product-review.html"
+)
+
+results <- classify(
+  categories    = c("News", "Opinion", "Tutorial/Review", "Other"),
+  input_data    = urls,
+  source_domain = "nytimes.com",
+  content_type  = "news article",
+  api_key       = Sys.getenv("OPENAI_API_KEY"),
+  user_model    = "gpt-4o-mini"
+)
+```
+
+`cat.web` fetches each URL with a polite User-Agent, extracts the main
+content (dropping navigation, footers, comment sections), and then runs
+the LLM classifier. The output `data.frame` includes the original URL,
+the extracted body text (or a snippet of it), and one 0/1 column per
+category.
+
+# Classify raw text instead
+
+If you already have the page content (perhaps from a scraping pipeline),
+skip the fetch and pass strings directly:
+
+```{r classify-text}
+results <- classify(
+  categories    = c("News", "Opinion", "Tutorial", "Other"),
+  input_data    = df$article_text,
+  source_domain = "example.com",
+  content_type  = "blog post",
+  api_key       = Sys.getenv("OPENAI_API_KEY")
+)
+```
+
+# Use web context to disambiguate
+
+The `source_domain`, `content_type`, and `web_metadata` arguments
+inject context the model wouldn't otherwise have. This matters most for
+short pages or pages where the domain affects meaning (an opinion on
+nytimes.com vs. a personal blog).
+
+```{r web-context}
+results <- classify(
+  categories    = c("Pro-policy", "Critical", "Neutral-explainer"),
+  input_data    = urls,
+  source_domain = "vox.com",
+  content_type  = "explainer article",
+  web_metadata  = list(
+    section = "Policy",
+    audience = "general public",
+    style = "long-form explainer"
+  ),
+  api_key       = Sys.getenv("OPENAI_API_KEY"),
+  user_model    = "gpt-4o-mini"
+)
+```
+
+# Summarize before classifying
+
+For long pages, summarize first to cut tokens and improve focus:
+
+```{r summarize-first}
+summaries <- summarize(
+  input_data    = urls,
+  source_domain = "nytimes.com",
+  content_type  = "news article",
+  format        = "bullets",
+  api_key       = Sys.getenv("OPENAI_API_KEY"),
+  user_model    = "gpt-4o-mini"
+)
+
+results <- classify(
+  categories = c("Domestic", "International", "Business", "Other"),
+  input_data = summaries$summary,
+  api_key    = Sys.getenv("OPENAI_API_KEY")
+)
+```
+
+# Tips for web-data work
+
+1. **Respect robots.txt and rate limits.** `cat.web` doesn't enforce
+   crawl politeness — that's on you. For large jobs, add `row_delay = 1`
+   (or higher) to space out requests.
+2. **Validate the extracted text.** Boilerplate stripping isn't
+   perfect; for some sites the model may end up classifying a cookie
+   banner. Spot-check a sample of inputs before scaling.
+3. **Cache aggressively.** Fetching the same URLs repeatedly during
+   development wastes bandwidth and bumps you up against rate limits.
+   Save the intermediate `input_data` from one fetch and re-use it.
+4. **Set `timeout`** if you're hitting slow or large pages — the
+   default (30s) is short for some sites.
+
+# Where to learn more
+
+- Full Getting Started guide:
+  `vignette("getting-started", package = "cat.llm")`
+- Per-function reference: `?cat.web::classify`, `?cat.web::extract`,
+  `?cat.web::explore`, `?cat.web::summarize`
+- Companion R-only package for higher-precision retrieval:
+  [llm-web-research](https://pypi.org/project/llm-web-research/)
+  (Python only currently).
