@@ -25,7 +25,10 @@ Imports:
     cat.web (>= 0.1.0),
     reticulate (>= 1.28)
 Suggests:
-    testthat (>= 3.0.0)
+    testthat (>= 3.0.0),
+    knitr,
+    rmarkdown
+VignetteBuilder: knitr
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2

@@ -5,63 +5,43 @@ Python ecosystem — eight R packages that wrap their Python counterparts via
 [reticulate](https://rstudio.github.io/reticulate/) so R users can do
 LLM-powered text classification with the same API as Python users.
 
+> **📖 Full guide:** the canonical R user guide is the **Getting Started
+> vignette** in `cat.llm`. Read it online at
+> <https://chrissoria.r-universe.dev/cat.llm> (Vignettes tab), or inside R
+> after install:
+>
+> ```r
+> vignette("getting-started", package = "cat.llm")
+> ```
+
 ## Install
 
-The whole ecosystem is published to **R-universe**:
-
 ```r
-# Install the meta-package — pulls everything in
-install.packages("cat.llm",
-                 repos = c("https://chrissoria.r-universe.dev",
-                          "https://cloud.r-project.org"))
+install.packages(
+  "cat.llm",
+  repos = c("https://chrissoria.r-universe.dev",
+            "https://cloud.r-project.org")
+)
 
-# Install the Python backend (one-time setup)
+# One-time Python backend setup
 library(cat.llm)
 install_cat_stack()
 ```
 
-Or install a single domain package for a lighter footprint:
-
-```r
-install.packages(c("cat.stack", "cat.survey"),
-                 repos = c("https://chrissoria.r-universe.dev",
-                          "https://cloud.r-project.org"))
-```
-
 ## The packages
 
-| Package        | Domain                        | Python backend  | Wraps                                                       |
-|----------------|-------------------------------|-----------------|-------------------------------------------------------------|
-| **cat.stack**  | General-purpose classification base | `catstack`      | `classify`, `extract`, `explore`, `summarize`               |
-| **cat.survey** | Open-ended survey responses   | `catsurvey`     | `classify`, `extract`, `explore` (with `survey_question=`)  |
-| **cat.vader**  | Social media posts            | `catvader`      | `classify`, `extract`, `explore` (platform connectors)      |
-| **cat.ademic** | Academic papers (OpenAlex)    | `catademic`     | `classify`, `extract`, `explore`, `summarize`               |
-| **cat.cog**    | Cognitive assessment scoring  | `catcog`        | `cerad_drawn_score`                                          |
-| **cat.pol**    | Policy documents              | `catpol`        | `classify`, `extract`, `explore`, `summarize`, `list_sources` |
-| **cat.web**    | Web content (URL fetching)    | `catweb`        | `classify`, `extract`, `explore`, `summarize`               |
-| **cat.llm**    | Meta-package (installs all)   | —               | Re-exports + domain-suffixed aliases (`classify_survey()`, `classify_political()`, etc.) |
+| Package        | Domain                              | Python backend  |
+|----------------|-------------------------------------|-----------------|
+| **cat.stack**  | General-purpose classification base | `catstack`      |
+| **cat.survey** | Open-ended survey responses         | `catsurvey`     |
+| **cat.vader**  | Social media posts                  | `catvader`      |
+| **cat.ademic** | Academic papers (OpenAlex)          | `catademic`     |
+| **cat.cog**    | Cognitive assessment scoring        | `catcog`        |
+| **cat.pol**    | Policy documents                    | `catpol`        |
+| **cat.web**    | Web content (URL fetching)          | `catweb`        |
+| **cat.llm**    | Meta-package (installs all 7)       | —               |
 
-Each domain package depends on `cat.stack`, which holds the shared
-classification engine.
-
-## Quick example
-
-```r
-library(cat.survey)
-
-results <- classify(
-  input_data      = df$open_ended_response,
-  categories      = c("Cost", "Quality", "Service", "Other"),
-  survey_question = "Why did you choose us?",
-  api_key         = Sys.getenv("OPENAI_API_KEY"),
-  user_model      = "gpt-4o-mini"
-)
-
-write.csv(results, "coded.csv", row.names = FALSE)
-```
-
-The output is a regular `data.frame` ready for downstream analysis in R,
-Stata, or Python.
+Each domain package depends on `cat.stack` (the shared classification engine).
 
 ## Source layout
 
@@ -74,7 +54,7 @@ r-package/
 ├── cat.cog/             ← Cognitive assessment (CERAD)
 ├── cat.pol/             ← Policy documents
 ├── cat.web/             ← Web content
-├── cat.llm/             ← Meta-package
+├── cat.llm/             ← Meta-package + Getting Started vignette
 └── test-all-packages.R  ← End-to-end smoke test (8/8 PASS expected)
 ```
 
@@ -86,16 +66,16 @@ After cloning the parent `cat-llm` repo:
 OPENAI_API_KEY=sk-... Rscript r-package/test-all-packages.R
 ```
 
-This installs all 8 R packages from local source, installs the Python
-backends via reticulate, and runs a minimal classification call against
-each. Expected output: `8 / 8 passed (0 failed, 0 skipped)`.
+Installs all 8 R packages from local source, installs the Python backends
+via reticulate, and runs a minimal classification per package. Expected
+output: `8 / 8 passed (0 failed, 0 skipped)`.
 
-## Reproducible research citation
+## Citation
 
-See the [parent README](../README.md#academic-research) for the BibTeX
-citation. The R wrappers are versioned alongside the Python packages, so
-results obtained via the R interface are bitwise-equivalent to those from
-Python (the R layer is a thin reticulate shim).
+If you use CatLLM in published research, see the [parent
+README](../README.md#academic-research) for the BibTeX. R results are
+bitwise-equivalent to Python results — the R layer is a thin reticulate
+shim with no language-specific logic.
 
 ## License
 
