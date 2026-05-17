@@ -104,7 +104,7 @@ catllm classify open_response,                                         ///
     apikey($OPENAI_API_KEY)                                            ///
     model("gpt-4o-mini")                                               ///
     generate(category)                                                 ///
-    pyoptions("survey_question='Why did you move to a new city?'")
+    surveyquestion("Why did you move to a new city?")
 
 list open_response category, separator(0) abbreviate(20)
 tab category

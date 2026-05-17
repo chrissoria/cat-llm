@@ -66,23 +66,20 @@ If the `catllm` package is installed via `ssc` or `net install`, the `adopath +`
 
 ## Verbose categories classify more accurately
 
-The single biggest accuracy improvement is writing **verbose, definition-style** category labels rather than one-word labels. Compare:
+The single biggest accuracy improvement is writing **verbose, definition-style** category labels rather than one-word labels. Each category must be **one quoted string** — Stata splits on whitespace between quote pairs, so if you wrap a single definition across two strings it will be parsed as two categories.
 
 ```stata
 * Less accurate
-catllm classify response,                    ///
+catllm classify response,                                       ///
     categories("Job" "Family" "Cost" "Other") ...
 
-* More accurate
-catllm classify response,                                       ///
-    categories(                                                 ///
-        "Job/school: A change in employment, education, or"     ///
-        "       career, including transfers and retirement."    ///
-        "Family: Relationship changes, having children,"        ///
-        "       supporting relatives, or relocating near family."///
-        "Cost of living: Housing affordability, cost of goods," ///
-        "       or general economic pressure."                  ///
-        "Other: The response does not fit any of the above.")   ///
+* More accurate -- one definition per quoted string
+catllm classify response,                                                                    ///
+    categories(                                                                              ///
+        "Job/school: A change in employment, education, or career, including retirement."   ///
+        "Family: Relationship changes, having children, or relocating to be near family."   ///
+        "Cost of living: Housing affordability, cost of goods, or general economic pressure." ///
+        "Other: The response does not fit any of the above categories.")                     ///
     ...
 ```
 
