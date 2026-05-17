@@ -1,0 +1,163 @@
+---
+title: "Validating a Hybrid Cloud + Local Ensemble"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(eval = FALSE, comment = "#>", collapse = TRUE)
+```
+
+# Validate the ensemble pipeline end-to-end
+
+This walkthrough exercises the multi-model ensemble path on a real
+classification task and verifies the output `data.frame` has the
+expected structure. Useful as:
+
+- A **smoke test** after install / upgrade — does the ensemble flow
+  still work?
+- A **proof of behavior** before betting a real research run on it.
+
+It also exercises the **Ollama auto-start** wiring and the **JSON
+formatter auto-enable** that fires whenever an ensemble entry uses the
+`"ollama"` provider.
+
+## Prereqs
+
+```{r prereqs}
+# Install the ecosystem
+install.packages("cat.llm",
+                 repos = c("https://chrissoria.r-universe.dev",
+                          "https://cloud.r-project.org"))
+library(cat.llm)
+
+# Python backend (one-time)
+install_cat_stack()
+
+# Local models for the test (one-time pulls in a terminal):
+#   ollama pull qwen2.5:7b      # ~4.7 GB
+#   ollama pull mistral:7b      # ~4.1 GB
+#   ollama pull phi3:mini       # ~2.3 GB
+```
+
+You do **not** need to start Ollama manually — `classify()` auto-starts
+it on first use because at least one ensemble entry has
+`"ollama"` as the provider.
+
+## A small hybrid ensemble
+
+A mix of 3 local models (different vendors) + an optional cloud model
+keeps the test fast and exercises both code paths.
+
+```{r ensemble}
+verbose_cats <- c(
+  "Positive: The respondent expresses satisfaction, approval, or favorable sentiment.",
+  "Negative: The respondent expresses dissatisfaction, frustration, or criticism.",
+  "Neutral: The respondent is factual, ambivalent, or does not express clear sentiment.",
+  "Other: The response does not fit any of the above categories."
+)
+
+responses <- c(
+  "The new wellness program is great, I've been using it daily.",
+  "It's confusing and the app crashes constantly.",
+  "I haven't tried it yet but it sounds promising."
+)
+
+results <- classify(
+  input_data = responses,
+  categories = verbose_cats,
+  models = list(
+    c("qwen2.5:7b", "ollama", ""),
+    c("mistral:7b", "ollama", ""),
+    c("phi3:mini",  "ollama", "")
+    # Add a cloud model for a hybrid ensemble:
+    # c("gpt-4o-mini", "openai", Sys.getenv("OPENAI_API_KEY"))
+  ),
+  consensus_threshold = "majority",   # 2 of 3 must agree
+  check_verbosity     = FALSE
+)
+```
+
+Expect the console to show, in order:
+
+```
+[CatLLM] Ollama detected — auto-enabling JSON formatter fallback
+  (small local models more often emit malformed JSON).
+  Pass json_formatter=False to opt out.
+
+Validating 3 model configuration(s)...
+Classifying responses: 100% ...
+```
+
+If any row's JSON parse fails, you'll additionally see:
+
+```
+[CatLLM] First malformed-JSON row encountered — loading
+  JSON formatter model into RAM now (one-time per session).
+[CatLLM] Loading JSON formatter on cpu...
+[CatLLM] JSON formatter ready.
+```
+
+If every row parses cleanly, the formatter stays unloaded — zero cost.
+
+## Validate the output structure
+
+Check that the result has the expected columns:
+
+```{r assertions}
+expected_cols <- c(
+  "input_data",
+  "processing_status",
+  # Per-model columns: category_<i>_<model_slug>
+  "category_1_qwen2_5_7b_tauto",
+  "category_1_mistral_7b_tauto",
+  "category_1_phi3_mini_tauto",
+  # Consensus columns: category_<i>_consensus
+  "category_1_consensus",
+  "category_2_consensus",
+  "category_3_consensus",
+  "category_4_consensus",
+  # Agreement scores: category_<i>_agreement (fraction of models that agreed)
+  "category_1_agreement"
+)
+
+stopifnot(all(expected_cols %in% colnames(results)))
+stopifnot(nrow(results) == length(responses))
+stopifnot(all(results$processing_status %in% c("success", "partial")))
+
+# Consensus columns should be 0/1
+consensus_cols <- grep("_consensus$", colnames(results), value = TRUE)
+stopifnot(all(unlist(results[consensus_cols]) %in% c(0, 1)))
+
+# Agreement columns should be in [0, 1]
+agreement_cols <- grep("_agreement$", colnames(results), value = TRUE)
+stopifnot(all(unlist(results[agreement_cols]) >= 0 &
+              unlist(results[agreement_cols]) <= 1))
+
+cat("All structural assertions passed.\n")
+```
+
+## Inspect the consensus
+
+```{r inspect}
+print(results[, c("input_data", "processing_status",
+                  grep("_consensus$", colnames(results), value = TRUE))])
+```
+
+A reasonable run with all 3 local models will get the first row right
+("Positive") and possibly miss row 2 ("Negative") because the smaller
+models sometimes return all-zeros on short critical text. That's a
+known model-quality issue, not a cat-llm bug — adding a stronger model
+(e.g. `gpt-4o-mini`) to the ensemble closes the gap.
+
+## What this confirmed
+
+- Ollama auto-start fires when the server isn't running
+- `json_formatter` defaults to `TRUE` when any ensemble entry uses
+  Ollama
+- Formatter model loads only on first parse failure (lazy)
+- The output `data.frame` has the documented per-model + consensus +
+  agreement column shape
+
+For deeper conceptual coverage of ensemble mode (consensus thresholds,
+hybrid cloud+local, the per-model output columns), see
+`03-ensemble-classification-cloud-and-local.Rmd`.

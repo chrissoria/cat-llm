@@ -98,5 +98,5 @@ df_classified %>%
 ## Tips
 
 - **Run on a subsample first** to verify the category scheme makes sense before classifying thousands of rows.
-- **Use ensemble mode** (see `02-ensemble-classification-cloud-and-local.Rmd`) for high-stakes coding.
+- **Use ensemble mode** (see `03-ensemble-classification-cloud-and-local.Rmd`) for high-stakes coding.
 - **Validate against a hand-labeled subsample** for any published research — see the Python README's "Best Practices" section for guidance.
