@@ -66,7 +66,11 @@ catllm extract response,                    ///
 di _n "Top categories returned by extract():"
 local n_cats = `r(n_categories)'
 forvalues i = 1/`n_cats' {
-    di "  `i'. `r(cat`i')'"
+    * Display via compound quotes so backticks / quotes inside the
+    * category text (markdown remnants from local models) don't trigger
+    * Stata's macro expander.
+    local _cat_disp `"`r(cat`i')'"'
+    di `"  `i'. `_cat_disp'"'
 }
 
 * Save the discovered scheme to classify in step 4
@@ -96,7 +100,10 @@ di "Unique categories:     `r(n_unique)'"
 di _n "Sample raw categories (up to 20):"
 local show = min(`r(n_raw)', 20)
 forvalues i = 1/`show' {
-    di "  - `r(cat`i')'"
+    * Compound-quote the display so backticks in raw model output don't
+    * trip Stata's macro expander.
+    local _cat_disp `"`r(cat`i')'"'
+    di `"  - `_cat_disp'"'
 }
 
 * --- 3. Saturation note -------------------------------------------------------
