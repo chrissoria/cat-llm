@@ -86,6 +86,21 @@
 #'   ensemble entry uses the `"ollama"` provider. Set `FALSE` to skip
 #'   the check (e.g. on CI runners where you don't want to launch
 #'   Ollama).
+#' @param prompt_tune Integer or `NULL`. If set, enables Automatic Prompt
+#'   Optimization (APO). The value is the number of rows sampled per
+#'   correction round. A browser window opens so you can correct
+#'   misclassifications; the meta-LLM then rewrites the system prompt and
+#'   re-classifies until accuracy converges or `tune_iterations` is reached.
+#'   Categories are never modified — only the system prompt changes.
+#'   Default `NULL` (disabled).
+#' @param tune_iterations Integer. Number of APO optimization passes.
+#'   Default `1L`.
+#' @param tune_ui Character. Correction UI: `"browser"` (default) opens an
+#'   interactive browser window; `"terminal"` uses the console.
+#' @param tune_optimize Character. Metric to optimize: `"balanced"` (default,
+#'   maximizes average of accuracy, sensitivity, and precision),
+#'   `"sensitivity"` (minimize false negatives), or `"precision"` (minimize
+#'   false positives).
 #'
 #' @return A `data.frame` with one row per input item and classification
 #'   columns. In single-model mode the columns are the category names. In
@@ -156,7 +171,11 @@ classify <- function(
     auto_download        = FALSE,
     add_other            = "prompt",
     check_verbosity      = TRUE,
-    auto_start_ollama    = TRUE
+    auto_start_ollama    = TRUE,
+    prompt_tune          = NULL,
+    tune_iterations      = 1L,
+    tune_ui              = "browser",
+    tune_optimize        = "balanced"
 ) {
   cat_py <- .get_cat_stack()
 
@@ -212,7 +231,11 @@ classify <- function(
     pdf_dpi               = .as_py_int(pdf_dpi),
     auto_download         = auto_download,
     add_other             = add_other,
-    check_verbosity       = check_verbosity
+    check_verbosity       = check_verbosity,
+    prompt_tune           = reticulate::r_to_py(prompt_tune),
+    tune_iterations       = .as_py_int(tune_iterations),
+    tune_ui               = tune_ui,
+    tune_optimize         = tune_optimize
   )
 
   .check_classify_schema(reticulate::py_to_r(result))

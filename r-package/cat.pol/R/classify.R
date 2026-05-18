@@ -120,7 +120,11 @@ classify <- function(
     pdf_dpi              = 150L,
     auto_download        = FALSE,
     add_other            = "prompt",
-    check_verbosity      = TRUE
+    check_verbosity      = TRUE,
+    prompt_tune          = NULL,
+    tune_iterations      = 1L,
+    tune_ui              = "browser",
+    tune_optimize        = "balanced"
 ) {
   mod <- .get_catpol()
 
@@ -176,7 +180,11 @@ classify <- function(
     retry_delay           = as.double(retry_delay),
     row_delay             = as.double(row_delay),
     pdf_dpi               = cat.stack::.as_py_int(pdf_dpi),
-    auto_download         = auto_download
+    auto_download         = auto_download,
+    prompt_tune           = reticulate::r_to_py(prompt_tune),
+    tune_iterations       = cat.stack::.as_py_int(tune_iterations),
+    tune_ui               = tune_ui,
+    tune_optimize         = tune_optimize
   )
 
   cat.stack::.check_classify_schema(reticulate::py_to_r(result))

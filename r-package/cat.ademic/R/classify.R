@@ -52,6 +52,10 @@
 #' @param auto_download Logical. Default `FALSE`.
 #' @param add_other Logical or `"prompt"`. Default `"prompt"`.
 #' @param check_verbosity Logical. Default `TRUE`.
+#' @param prompt_tune Integer or `NULL`. Rows sampled per APO correction round. Default `NULL`.
+#' @param tune_iterations Integer. APO optimization passes. Default `1L`.
+#' @param tune_ui Character. Correction UI: `"browser"` or `"terminal"`. Default `"browser"`.
+#' @param tune_optimize Character. Metric to optimize: `"balanced"`, `"sensitivity"`, or `"precision"`. Default `"balanced"`.
 #'
 #' @return A `data.frame` with classification results.
 #' @examples
@@ -127,7 +131,11 @@ classify <- function(
     pdf_dpi              = 150L,
     auto_download        = FALSE,
     add_other            = "prompt",
-    check_verbosity      = TRUE
+    check_verbosity      = TRUE,
+    prompt_tune          = NULL,
+    tune_iterations      = 1L,
+    tune_ui              = "browser",
+    tune_optimize        = "balanced"
 ) {
   mod <- .get_catademic()
 
@@ -191,7 +199,11 @@ classify <- function(
     pdf_dpi               = cat.stack::.as_py_int(pdf_dpi),
     auto_download         = auto_download,
     add_other             = add_other,
-    check_verbosity       = check_verbosity
+    check_verbosity       = check_verbosity,
+    prompt_tune           = reticulate::r_to_py(prompt_tune),
+    tune_iterations       = cat.stack::.as_py_int(tune_iterations),
+    tune_ui               = tune_ui,
+    tune_optimize         = tune_optimize
   )
 
   cat.stack::.check_classify_schema(reticulate::py_to_r(result))
