@@ -5,6 +5,9 @@ export(summarize)
 export(prompt_tune)
 export(install_cat_stack)
 export(ensure_ollama_running)
+export(list_ollama_models)
+export(check_ollama_model)
+export(pull_ollama_model)
 
 # Internal helpers re-used by sibling domain packages (cat.survey, cat.ademic,
 # cat.pol, cat.web, etc.). Exported so they can be reached via :: instead of
