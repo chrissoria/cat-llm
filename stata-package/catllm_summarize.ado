@@ -1,4 +1,4 @@
-*! version 1.1.0  17may2026
+*! version 1.2.0  17may2026
 *! catllm_summarize -- Summarize text or PDFs using LLMs
 
 program define catllm_summarize, rclass
@@ -103,91 +103,15 @@ program define catllm_summarize, rclass
 end
 
 python:
-def _catllm_resolve_backend(domain):
-    """Return the python module to call. Empty domain -> cat_stack."""
-    from sfi import SFIToolkit
-    if not domain:
-        try:
-            import cat_stack
-        except ImportError:
-            SFIToolkit.errprintln(
-                "{err}cat-stack is not installed. Run: catllm setup"
-            )
-            raise
-        return cat_stack
-    d = domain.lower().strip()
-    pkg_map = {
-        "pol":    ("cat_pol",    "cat-pol"),
-        "vader":  ("catvader",   "cat-vader"),
-        "ademic": ("catademic",  "cat-ademic"),
-        "survey": ("cat_survey", "cat-survey"),
-        "cog":    ("cat_cog",    "cat-cog"),
-        "web":    ("catweb",     "cat-web"),
-    }
-    if d not in pkg_map:
-        SFIToolkit.errprintln(
-            "{err}Unknown domain: '" + domain + "'. "
-            "Valid: pol, vader, ademic, survey, cog, web."
-        )
-        raise ValueError("unknown domain: " + domain)
-    mod_name, pkg_name = pkg_map[d]
-    try:
-        return __import__(mod_name)
-    except ImportError:
-        SFIToolkit.errprintln(
-            "{err}Domain package '" + pkg_name + "' is not installed. "
-            "Run: catllm setup, domain(" + d + ")"
-        )
-        raise
-
-def _catllm_parse_pyoptions(s):
-    """Parse 'key=val, key=val' into a dict. Values run through ast.literal_eval."""
-    import ast
-    out = {}
-    if not s or not s.strip():
-        return out
-    s = s.strip()
-    if len(s) >= 2 and s[0] == s[-1] and s[0] in ('"', "'"):
-        s = s[1:-1]
-    parts, buf, depth, quote = [], "", 0, None
-    for ch in s:
-        if quote:
-            buf += ch
-            if ch == quote:
-                quote = None
-            continue
-        if ch in ('"', "'"):
-            quote = ch
-            buf += ch
-            continue
-        if ch in "([{":
-            depth += 1
-        elif ch in ")]}":
-            depth -= 1
-        if ch == "," and depth == 0:
-            parts.append(buf)
-            buf = ""
-        else:
-            buf += ch
-    if buf:
-        parts.append(buf)
-    for piece in parts:
-        if "=" not in piece:
-            continue
-        k, v = piece.split("=", 1)
-        k, v = k.strip(), v.strip()
-        if not k:
-            continue
-        try:
-            out[k] = ast.literal_eval(v)
-        except (ValueError, SyntaxError):
-            out[k] = v
-    return out
-
 def _catllm_do_summarize():
+    """Thin wrapper over catstack.summarize.
+
+    Domain resolution, pyoptions parsing, and models parsing live
+    server-side in cat-stack >= 1.2.0.
+    """
     from sfi import Data, Macro, SFIToolkit
 
-    # --- read Stata parameters ---
+    # --- read Stata locals ---
     varname    = Macro.getLocal("_catllm_var")
     genname    = Macro.getLocal("_catllm_gen")
     api_key    = Macro.getLocal("_catllm_key")
@@ -206,32 +130,33 @@ def _catllm_do_summarize():
     pyopts_str = Macro.getLocal("_catllm_pyopts")
     creat_str  = Macro.getLocal("_catllm_creat")
 
+    # --- version guard: this .ado requires cat-stack >= 1.2.0 ---
+    try:
+        import cat_stack
+        _v = tuple(int(x) for x in cat_stack.__version__.split(".")[:2])
+        if _v < (1, 2):
+            raise ImportError(
+                "catllm_summarize 1.2 requires cat-stack >= 1.2.0 "
+                "(installed: " + cat_stack.__version__ + "). "
+                "Run: catllm setup, upgrade"
+            )
+    except Exception as e:
+        SFIToolkit.errprintln("{err}" + str(e))
+        Macro.setLocal("_catllm_failed", "1")
+        return
+
     creativity = float(creat_str) if creat_str else None
     maxlen = int(maxlen_str) if maxlen_str and int(maxlen_str) > 0 else None
 
+    # --- delegate string parsing + domain resolution to cat-stack ---
     try:
-        module = _catllm_resolve_backend(domain)
-    except Exception:
+        module       = cat_stack.get_backend(domain)
+        extra_kwargs = cat_stack.parse_kwargs_string(pyopts_str)
+        models       = cat_stack.parse_models_string(models_str, api_key)
+    except Exception as e:
+        SFIToolkit.errprintln("{err}" + str(e))
         Macro.setLocal("_catllm_failed", "1")
         return
-    extra_kwargs = _catllm_parse_pyoptions(pyopts_str)
-
-    # --- parse models for ensemble ---
-    models = None
-    if models_str:
-        # Stata's string-asis keeps the surrounding quotes literal -- strip
-        # one balanced pair so the per-entry split doesn't capture them.
-        models_str = models_str.strip()
-        if len(models_str) >= 2 and models_str[0] == models_str[-1] \
-                and models_str[0] in ('"', "'"):
-            models_str = models_str[1:-1]
-        models = []
-        for entry in models_str.split(";"):
-            parts = entry.strip().split()
-            if len(parts) >= 3:
-                models.append(tuple(parts[:3]))
-            elif len(parts) == 2:
-                models.append((parts[0], parts[1], api_key))
 
     # --- read text data ---
     var_idx   = Data.getVarIndex(varname)

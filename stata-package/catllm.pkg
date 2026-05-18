@@ -9,12 +9,12 @@ d (political, sentiment, academic, survey, cognitive, web) are available
 d via the domain() option. Works with 8+ LLM providers (OpenAI, Anthropic,
 d Google, and more).
 d
-d Requires: Stata 16+ with Python integration, Python 3.8+
+d Requires: Stata 16+ with Python integration, Python 3.8+, cat-stack >= 1.2.0
 d
 d Author: Christopher Soria
 d Support: chrissoria@berkeley.edu
 d
-d Distribution-Date: 20260516
+d Distribution-Date: 20260517
 
 F catllm.ado
 F catllm_classify.ado

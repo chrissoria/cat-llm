@@ -1,4 +1,4 @@
-*! version 1.1.0  17may2026
+*! version 1.2.0  17may2026
 *! catllm_extract -- Discover categories from unstructured text using LLMs
 
 program define catllm_extract, rclass
@@ -97,91 +97,16 @@ program define catllm_extract, rclass
 end
 
 python:
-def _catllm_resolve_backend(domain):
-    """Return the python module to call. Empty domain -> cat_stack."""
-    from sfi import SFIToolkit
-    if not domain:
-        try:
-            import cat_stack
-        except ImportError:
-            SFIToolkit.errprintln(
-                "{err}cat-stack is not installed. Run: catllm setup"
-            )
-            raise
-        return cat_stack
-    d = domain.lower().strip()
-    pkg_map = {
-        "pol":    ("cat_pol",    "cat-pol"),
-        "vader":  ("catvader",   "cat-vader"),
-        "ademic": ("catademic",  "cat-ademic"),
-        "survey": ("cat_survey", "cat-survey"),
-        "cog":    ("cat_cog",    "cat-cog"),
-        "web":    ("catweb",     "cat-web"),
-    }
-    if d not in pkg_map:
-        SFIToolkit.errprintln(
-            "{err}Unknown domain: '" + domain + "'. "
-            "Valid: pol, vader, ademic, survey, cog, web."
-        )
-        raise ValueError("unknown domain: " + domain)
-    mod_name, pkg_name = pkg_map[d]
-    try:
-        return __import__(mod_name)
-    except ImportError:
-        SFIToolkit.errprintln(
-            "{err}Domain package '" + pkg_name + "' is not installed. "
-            "Run: catllm setup, domain(" + d + ")"
-        )
-        raise
-
-def _catllm_parse_pyoptions(s):
-    """Parse 'key=val, key=val' into a dict. Values run through ast.literal_eval."""
-    import ast
-    out = {}
-    if not s or not s.strip():
-        return out
-    s = s.strip()
-    if len(s) >= 2 and s[0] == s[-1] and s[0] in ('"', "'"):
-        s = s[1:-1]
-    parts, buf, depth, quote = [], "", 0, None
-    for ch in s:
-        if quote:
-            buf += ch
-            if ch == quote:
-                quote = None
-            continue
-        if ch in ('"', "'"):
-            quote = ch
-            buf += ch
-            continue
-        if ch in "([{":
-            depth += 1
-        elif ch in ")]}":
-            depth -= 1
-        if ch == "," and depth == 0:
-            parts.append(buf)
-            buf = ""
-        else:
-            buf += ch
-    if buf:
-        parts.append(buf)
-    for piece in parts:
-        if "=" not in piece:
-            continue
-        k, v = piece.split("=", 1)
-        k, v = k.strip(), v.strip()
-        if not k:
-            continue
-        try:
-            out[k] = ast.literal_eval(v)
-        except (ValueError, SyntaxError):
-            out[k] = v
-    return out
-
 def _catllm_do_extract():
+    """Thin wrapper over catstack.extract.
+
+    Domain resolution and pyoptions parsing live server-side in
+    cat-stack >= 1.2.0.  This function reads Stata locals, calls extract(),
+    and shapes the dict result into r() macros / matrix.
+    """
     from sfi import Data, Macro, Scalar, Matrix, SFIToolkit
 
-    # --- read Stata parameters ---
+    # --- read Stata locals ---
     varname   = Macro.getLocal("_catllm_var")
     api_key   = Macro.getLocal("_catllm_key")
     model     = Macro.getLocal("_catllm_model")
@@ -200,17 +125,34 @@ def _catllm_do_extract():
     creat_str = Macro.getLocal("_catllm_creat")
     seed_str  = Macro.getLocal("_catllm_seed")
 
+    # --- version guard: this .ado requires cat-stack >= 1.2.0 ---
+    try:
+        import cat_stack
+        _v = tuple(int(x) for x in cat_stack.__version__.split(".")[:2])
+        if _v < (1, 2):
+            raise ImportError(
+                "catllm_extract 1.2 requires cat-stack >= 1.2.0 "
+                "(installed: " + cat_stack.__version__ + "). "
+                "Run: catllm setup, upgrade"
+            )
+    except Exception as e:
+        SFIToolkit.errprintln("{err}" + str(e))
+        Macro.setLocal("_catllm_failed", "1")
+        return
+
     creativity = float(creat_str) if creat_str else None
     random_state = int(seed_str) if seed_str else None
 
+    # --- delegate domain resolution + pyoptions parsing to cat-stack ---
     try:
-        module = _catllm_resolve_backend(domain)
-    except Exception:
+        module       = cat_stack.get_backend(domain)
+        extra_kwargs = cat_stack.parse_kwargs_string(pyopts_str)
+    except Exception as e:
+        SFIToolkit.errprintln("{err}" + str(e))
         Macro.setLocal("_catllm_failed", "1")
         return
-    extra_kwargs = _catllm_parse_pyoptions(pyopts_str)
 
-    # --- read text data from Stata ---
+    # --- read text column from Stata ---
     var_idx   = Data.getVarIndex(varname)
     touse_idx = Data.getVarIndex(touse)
     n         = Data.getObsTotal()
@@ -227,7 +169,7 @@ def _catllm_do_extract():
         Macro.setLocal("_catllm_failed", "1")
         return
 
-    # --- call catllm.extract ---
+    # --- build kwargs ---
     kwargs = dict(
         input_data=texts,
         api_key=api_key,
@@ -240,7 +182,6 @@ def _catllm_do_extract():
         iterations=iters,
         specificity=spec,
     )
-
     if rq:
         kwargs["research_question"] = rq
     if focus:
@@ -249,28 +190,21 @@ def _catllm_do_extract():
         kwargs["creativity"] = creativity
     if random_state is not None:
         kwargs["random_state"] = random_state
-
     kwargs.update(extra_kwargs)
 
+    # --- ONE cat-stack call ---
     try:
         result = module.extract(**kwargs)
     except Exception as e:
-        SFIToolkit.errprintln("{err}" + module.__name__ + ".extract() failed: " + str(e))
-        Macro.setLocal("_catllm_failed", "1")
-        return
-
-    # --- schema canary: confirm cat-stack's return shape still matches ---
-    if not isinstance(result, dict) or "top_categories" not in result:
         SFIToolkit.errprintln(
-            "{err}Unexpected return shape from " + module.__name__
-            + ".extract(): expected dict with 'top_categories' key. "
-            "Got: " + type(result).__name__ + ". "
-            "This usually means cat-stack changed its output schema -- "
-            "pin to a known-good version or report at "
-            "https://github.com/chrissoria/cat-llm/issues."
+            "{err}" + module.__name__ + ".extract() failed: " + str(e)
         )
         Macro.setLocal("_catllm_failed", "1")
         return
+
+    # The schema canary now lives implicitly in the result[...] lookups
+    # below: if cat-stack changes the shape, a KeyError propagates and the
+    # top-level Stata try/except surfaces it.
 
     # --- store results in locals for the .ado to return ---
     top_cats = result.get("top_categories", [])

@@ -1,2 +1,4 @@
 *.log
 stata.log
+01-classified.csv
+01-classified.dta

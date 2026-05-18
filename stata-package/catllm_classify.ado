@@ -1,4 +1,4 @@
-*! version 1.2.0  17may2026
+*! version 1.3.0  17may2026
 *! catllm_classify -- Classify text into categories using LLMs
 
 program define catllm_classify, rclass
@@ -130,91 +130,19 @@ program define catllm_classify, rclass
 end
 
 python:
-def _catllm_resolve_backend(domain):
-    """Return the python module to call. Empty domain -> cat_stack."""
-    from sfi import SFIToolkit
-    if not domain:
-        try:
-            import cat_stack
-        except ImportError:
-            SFIToolkit.errprintln(
-                "{err}cat-stack is not installed. Run: catllm setup"
-            )
-            raise
-        return cat_stack
-    d = domain.lower().strip()
-    pkg_map = {
-        "pol":    ("cat_pol",    "cat-pol"),
-        "vader":  ("catvader",   "cat-vader"),
-        "ademic": ("catademic",  "cat-ademic"),
-        "survey": ("cat_survey", "cat-survey"),
-        "cog":    ("cat_cog",    "cat-cog"),
-        "web":    ("catweb",     "cat-web"),
-    }
-    if d not in pkg_map:
-        SFIToolkit.errprintln(
-            "{err}Unknown domain: '" + domain + "'. "
-            "Valid: pol, vader, ademic, survey, cog, web."
-        )
-        raise ValueError("unknown domain: " + domain)
-    mod_name, pkg_name = pkg_map[d]
-    try:
-        return __import__(mod_name)
-    except ImportError:
-        SFIToolkit.errprintln(
-            "{err}Domain package '" + pkg_name + "' is not installed. "
-            "Run: catllm setup, domain(" + d + ")"
-        )
-        raise
-
-def _catllm_parse_pyoptions(s):
-    """Parse 'key=val, key=val' into a dict. Values run through ast.literal_eval."""
-    import ast
-    out = {}
-    if not s or not s.strip():
-        return out
-    s = s.strip()
-    if len(s) >= 2 and s[0] == s[-1] and s[0] in ('"', "'"):
-        s = s[1:-1]
-    parts, buf, depth, quote = [], "", 0, None
-    for ch in s:
-        if quote:
-            buf += ch
-            if ch == quote:
-                quote = None
-            continue
-        if ch in ('"', "'"):
-            quote = ch
-            buf += ch
-            continue
-        if ch in "([{":
-            depth += 1
-        elif ch in ")]}":
-            depth -= 1
-        if ch == "," and depth == 0:
-            parts.append(buf)
-            buf = ""
-        else:
-            buf += ch
-    if buf:
-        parts.append(buf)
-    for piece in parts:
-        if "=" not in piece:
-            continue
-        k, v = piece.split("=", 1)
-        k, v = k.strip(), v.strip()
-        if not k:
-            continue
-        try:
-            out[k] = ast.literal_eval(v)
-        except (ValueError, SyntaxError):
-            out[k] = v
-    return out
-
 def _catllm_do_classify():
+    """Thin wrapper over catstack.classify_labels.
+
+    All helper logic (domain resolution, kwargs parsing, models parsing,
+    short-label collapse, schema canary, column->label mapping) lives
+    server-side in cat-stack >= 1.2.0.  This function does only:
+      1. read inputs from Stata via sfi
+      2. call one cat-stack function
+      3. write one label per row back to Stata
+    """
     from sfi import Data, Macro, SFIToolkit
 
-    # --- read Stata parameters ---
+    # --- read Stata locals ---
     varname    = Macro.getLocal("_catllm_var")
     genname    = Macro.getLocal("_catllm_gen")
     cats_str   = Macro.getLocal("_catllm_cats")
@@ -245,7 +173,22 @@ def _catllm_do_classify():
     pyopts_str = Macro.getLocal("_catllm_pyopts")
     creat_str  = Macro.getLocal("_catllm_creat")
 
-    # twostep: accept "true"/"false"/"" (unset) — map to bool/None
+    # --- version guard: this .ado requires cat-stack >= 1.2.0 ---
+    try:
+        import cat_stack
+        _v = tuple(int(x) for x in cat_stack.__version__.split(".")[:2])
+        if _v < (1, 2):
+            raise ImportError(
+                "catllm_classify 1.3 requires cat-stack >= 1.2.0 "
+                "(installed: " + cat_stack.__version__ + "). "
+                "Run: catllm setup, upgrade"
+            )
+    except Exception as e:
+        SFIToolkit.errprintln("{err}" + str(e))
+        Macro.setLocal("_catllm_failed", "1")
+        return
+
+    # --- twostep: "true"/"false"/"" (unset) -> bool/None ---
     two_step_classify = None
     if twostep_s:
         s = twostep_s.strip().lower()
@@ -263,47 +206,28 @@ def _catllm_do_classify():
 
     creativity = float(creat_str) if creat_str else None
 
+    # --- delegate string parsing + domain resolution to cat-stack ---
     try:
-        module = _catllm_resolve_backend(domain)
-    except Exception:
+        module       = cat_stack.get_backend(domain)
+        extra_kwargs = cat_stack.parse_kwargs_string(pyopts_str)
+        models       = cat_stack.parse_models_string(models_str, api_key)
+        import shlex
+        try:
+            categories = shlex.split(cats_str)
+        except ValueError:
+            categories = cats_str.split()
+    except Exception as e:
+        SFIToolkit.errprintln("{err}" + str(e))
         Macro.setLocal("_catllm_failed", "1")
         return
-    extra_kwargs = _catllm_parse_pyoptions(pyopts_str)
 
-    # --- parse categories ---
-    # Accepts: "Cat A" "Cat B" "Cat C"  or  Cat_A Cat_B Cat_C
-    import shlex
-    try:
-        categories = shlex.split(cats_str)
-    except ValueError:
-        categories = cats_str.split()
-
-    # --- parse models for ensemble ---
-    models = None
-    if models_str:
-        # Format: "model1 provider1 key1; model2 provider2 key2"
-        # Stata's string-asis keeps the surrounding quotes literal -- strip
-        # one balanced pair so the per-entry split doesn't capture them.
-        models_str = models_str.strip()
-        if len(models_str) >= 2 and models_str[0] == models_str[-1] \
-                and models_str[0] in ('"', "'"):
-            models_str = models_str[1:-1]
-        models = []
-        for entry in models_str.split(";"):
-            parts = entry.strip().split()
-            if len(parts) >= 3:
-                models.append(tuple(parts[:3]))
-            elif len(parts) == 2:
-                models.append((parts[0], parts[1], api_key))
-
-    # --- read text data from Stata ---
+    # --- read text column from Stata (sfi-only — stays) ---
     var_idx   = Data.getVarIndex(varname)
     gen_idx   = Data.getVarIndex(genname)
     touse_idx = Data.getVarIndex(touse)
     n         = Data.getObsTotal()
 
-    texts = []
-    obs_map = []  # maps position in texts[] back to Stata obs number
+    texts, obs_map = [], []
     for i in range(n):
         if Data.getAt(touse_idx, i) == 1:
             val = Data.getAt(var_idx, i)
@@ -315,7 +239,7 @@ def _catllm_do_classify():
         Macro.setLocal("_catllm_failed", "1")
         return
 
-    # --- call catllm ---
+    # --- build kwargs ---
     kwargs = dict(
         input_data=texts,
         categories=categories,
@@ -337,7 +261,6 @@ def _catllm_do_classify():
         add_other=False,
         check_verbosity=False,
     )
-
     if models:
         kwargs["models"] = models
     if workers > 0:
@@ -353,95 +276,22 @@ def _catllm_do_classify():
             kwargs["tune_optimize"] = tune_opt
     if creativity is not None:
         kwargs["creativity"] = creativity
-
     kwargs.update(extra_kwargs)
 
+    # --- ONE cat-stack call: classify and collapse to one label per row ---
     try:
-        result_df = module.classify(**kwargs)
+        labels = module.classify_labels(short_labels=True, **kwargs)
     except Exception as e:
-        SFIToolkit.errprintln("{err}" + module.__name__ + ".classify() failed: " + str(e))
-        Macro.setLocal("_catllm_failed", "1")
-        return
-
-    # --- schema canary: confirm cat-stack's return shape still matches ---
-    # Single-model results have category_N columns; ensemble has *_consensus.
-    # If neither family exists, the underlying schema has changed and this
-    # wrapper can't safely map columns back to user category names.
-    import re as _re
-    _canary = _re.compile(r"^category_\d+(_consensus)?$")
-    if not any(_canary.match(c) for c in result_df.columns):
         SFIToolkit.errprintln(
-            "{err}Unexpected return shape from " + module.__name__
-            + ".classify(): no category_N or category_N_consensus columns. "
-            "Columns: " + ", ".join(map(str, result_df.columns)) + ". "
-            "This usually means cat-stack changed its output schema -- "
-            "pin to a known-good version or report at "
-            "https://github.com/chrissoria/cat-llm/issues."
+            "{err}" + module.__name__ + ".classify_labels() failed: " + str(e)
         )
         Macro.setLocal("_catllm_failed", "1")
         return
 
-    # --- determine classification per row ---
-    # Single model: columns are category names with 0/1
-    # Ensemble: columns are {cat}_consensus with 0/1
-    cols = list(result_df.columns)
-
-    # Try consensus columns first (ensemble mode)
-    import re
-    consensus_cols = [c for c in cols if c.endswith("_consensus")]
-    if consensus_cols:
-        # cat-stack emits category_N_consensus -- map by trailing index so
-        # the assigned label is the user's category text, not "category_N".
-        # Fall back to the base name if the column doesn't match the pattern
-        # (e.g. older cat-stack emitted Healthcare_consensus directly).
-        pat = re.compile(r"^category_(\d+)_consensus$")
-        indexed = []
-        other = []
-        col_to_cat = {}
-        for cc in consensus_cols:
-            m = pat.match(cc)
-            if m:
-                indexed.append((int(m.group(1)), cc))
-            else:
-                other.append(cc)
-                col_to_cat[cc] = cc.rsplit("_consensus", 1)[0]
-        indexed.sort()
-        for n, cc in indexed:
-            col_to_cat[cc] = categories[n-1] if n-1 < len(categories) else cc
-        cat_cols = [cc for _, cc in indexed] + other
-    else:
-        # Single model: cat-stack emits columns named category_1, category_2, ...
-        # Match positively on that pattern; sort by the trailing index so
-        # the order is stable regardless of DataFrame column order.
-        pat = re.compile(r"^category_(\d+)$")
-        indexed = []
-        for c in cols:
-            m = pat.match(c)
-            if m:
-                indexed.append((int(m.group(1)), c))
-        indexed.sort()
-        cat_cols = [c for _, c in indexed]
-        col_to_cat = {}
-        for i, cc in enumerate(cat_cols):
-            col_to_cat[cc] = categories[i] if i < len(categories) else cc
-
-    # --- write results back to Stata ---
-    for row_i in range(len(result_df)):
-        stata_obs = obs_map[row_i]
-        row = result_df.iloc[row_i]
-
-        # Find which category is assigned (value == 1)
-        assigned = ""
-        for cc in cat_cols:
-            try:
-                if int(row[cc]) == 1:
-                    assigned = col_to_cat.get(cc, cc)
-                    break
-            except (ValueError, TypeError):
-                continue
-
-        if assigned:
-            Data.storeAt(gen_idx, stata_obs, assigned)
+    # --- write labels back to Stata (sfi-only — stays) ---
+    for row_i, label in enumerate(labels):
+        if label:
+            Data.storeAt(gen_idx, obs_map[row_i], label)
 
     SFIToolkit.displayln("{txt}Python classification complete.")
 end
