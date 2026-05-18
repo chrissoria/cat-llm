@@ -1,5 +1,5 @@
+*! version 1.1.0  17may2026
 *! catllm_explore -- Raw category extraction for saturation analysis
-*! Version 1.1.0
 
 program define catllm_explore, rclass
     version 16

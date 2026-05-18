@@ -99,7 +99,7 @@ the first step before `classify()`.
 ```{r extract}
 extract_results <- extract(
   input_data      = responses,
-  survey_question = SURVEY_QUESTION,
+  research_question = SURVEY_QUESTION,
   user_model      = MODEL,
   model_source    = "ollama",
   max_categories  = 10L,
@@ -133,7 +133,7 @@ categories).
 ```{r explore}
 raw_categories <- explore(
   input_data      = responses,
-  survey_question = SURVEY_QUESTION,
+  research_question = SURVEY_QUESTION,
   user_model      = MODEL,
   model_source    = "ollama",
   iterations      = 3L
@@ -185,7 +185,7 @@ verbose_cats <- c(
 results <- classify(
   input_data      = responses,
   categories      = verbose_cats,
-  survey_question = SURVEY_QUESTION,
+  research_question = SURVEY_QUESTION,
   user_model      = MODEL,
   model_source    = "ollama"
 )

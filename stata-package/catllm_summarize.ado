@@ -1,5 +1,5 @@
+*! version 1.1.0  17may2026
 *! catllm_summarize -- Summarize text or PDFs using LLMs
-*! Version 1.1.0
 
 program define catllm_summarize, rclass
     version 16

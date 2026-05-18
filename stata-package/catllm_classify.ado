@@ -1,5 +1,5 @@
+*! version 1.1.0  17may2026
 *! catllm_classify -- Classify text into categories using LLMs
-*! Version 1.1.0
 
 program define catllm_classify, rclass
     version 16

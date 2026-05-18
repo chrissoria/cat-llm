@@ -1,5 +1,5 @@
+*! version 2.0.0  17may2026
 *! catllm_setup -- Install the cat-stack Python backend (and optional domain packages)
-*! Version 2.0.0
 
 program define catllm_setup
     version 16

@@ -1,5 +1,5 @@
+*! version 2.0.0  17may2026
 *! catllm -- LLM-powered classification and extraction for text data
-*! Version 2.0.0
 *! Author: Christopher Soria (chrissoria@berkeley.edu)
 
 program define catllm

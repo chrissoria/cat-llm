@@ -1,5 +1,5 @@
+*! version 1.0.0  17may2026
 *! catllm_cerad -- Score CERAD drawn shapes using cat_cog
-*! Version 1.0.0
 
 program define catllm_cerad, rclass
     version 16
