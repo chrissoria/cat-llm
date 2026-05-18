@@ -1,12 +1,15 @@
 # SSC submission: catllm
 
-This file is the cover-note draft for the SSC submission email. Send to
-**kit.baum@bc.edu** with the subject line:
+**Draft cover note. Last revised: 2026-05-18.**
+
+Send to **kit.baum@bc.edu** with the subject line:
 
 > SSC submission: catllm
 
-Attach a zip of the entire `stata-package/` directory (the `.pkg`, `.toc`,
+Attach a zip of the package's runnable contents (the `.pkg`, `.toc`,
 `.ado`, and `.sthlp` files — not the `examples/` subdirectory).
+Distribution-Date in `catllm.pkg` and `stata.toc` should match the day
+you actually send the email; update both if the send date slips.
 
 ---
 
@@ -38,6 +41,13 @@ a fine-tuned JSON-formatter fallback makes it usable with small local
 models (e.g. `qwen2.5:7b` via Ollama) for cost-free or privacy-sensitive
 workflows.
 
+**Output shape.** `catllm classify` produces one byte indicator variable
+per category, named `<prefix>_<short_label>` (0/1), matching the wide
+DataFrame shape Python and R users see from `cat-stack`'s `classify()`.
+Multi-label classification is first-class: a single response can have
+multiple indicators set to 1. Standard Stata verbs (`tab1`, `summarize`,
+`regress`, `egen`) work directly on the resulting variables.
+
 **Originality.** I have searched the SSC archive and other Stata package
 repositories and am not aware of any existing package named `catllm` or
 providing equivalent LLM-classification functionality. The closest
@@ -48,9 +58,13 @@ optional domain-specific prompts.
 
 **Requirements.** Stata 16+ with Python integration (`python query` to
 verify), Python 3.8+, and an API key from a supported provider (or a local
-Ollama install for no-API-key workflows). The user runs `catllm setup`
-once after installation to install the `cat-stack` Python backend from
-PyPI.
+Ollama install for no-API-key workflows). The Python backend is
+[`cat-stack`](https://pypi.org/project/cat-stack/) **≥ 1.4.0**; the user
+runs `catllm setup` once after installation to install it from PyPI. The
+Stata wrapper is intentionally thin — string parsing, domain resolution,
+output shaping, and schema validation all live server-side in `cat-stack`,
+which means new Python features become usable from Stata without a
+package update.
 
 **Package contents.** 7 `.ado` files and 7 matching `.sthlp` files, plus
 `catllm.pkg` and `stata.toc`. License: GPL-3.0 (LICENSE file in the

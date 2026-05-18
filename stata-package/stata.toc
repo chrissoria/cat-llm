@@ -6,6 +6,6 @@ d https://github.com/chrissoria/cat-llm
 d
 d Requires: Stata 16+, Python 3.8+, cat-stack >= 1.2.0
 d
-d Distribution-Date: 20260517
+d Distribution-Date: 20260518
 
 p catllm LLM-powered text classification, extraction, and summarization with optional domain-specific prompts
