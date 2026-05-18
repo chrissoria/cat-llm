@@ -59,7 +59,7 @@ catllm extract response,                    ///
     apikey("_")                             ///
     model("`MODEL'")                        ///
     provider("ollama")                      ///
-    surveyquestion("`SURVEY_Q'")            ///
+    researchquestion("`SURVEY_Q'")          ///
     maxcategories(10)                       ///
     iterations(3)
 
@@ -87,7 +87,7 @@ catllm explore response,                    ///
     apikey("_")                             ///
     model("`MODEL'")                        ///
     provider("ollama")                      ///
-    surveyquestion("`SURVEY_Q'")            ///
+    researchquestion("`SURVEY_Q'")          ///
     iterations(3)
 
 di _n "Total raw extractions: `r(n_raw)'"
