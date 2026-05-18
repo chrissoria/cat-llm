@@ -28,8 +28,8 @@
 {synopt:{cmdab:api:key(}{it:string}{cmd:)}}API key for the LLM provider{p_end}
 
 {syntab:Output}
-{synopt:{cmdab:gen:erate(}{it:newvar}{cmd:)}}name for the classification variable; default {bf:_catllm_class}{p_end}
-{synopt:{cmd:replace}}overwrite {it:generate} if it already exists{p_end}
+{synopt:{cmdab:gen:erate(}{it:prefix}{cmd:)}}prefix for one byte indicator variable per category; default {bf:cat}{p_end}
+{synopt:{cmd:replace}}overwrite existing {it:prefix}{cmd:_*} variables if they exist{p_end}
 
 {syntab:Model}
 {synopt:{cmdab:mod:el(}{it:string}{cmd:)}}model name; default {bf:gpt-4o}{p_end}
@@ -73,14 +73,22 @@
 {title:Description}
 
 {pstd}
-{cmd:catllm classify} assigns each text observation in {varname} to one of
-the specified categories using a large language model. The result is stored
-as a new string variable.
+{cmd:catllm classify} classifies each text observation in {varname} against
+the specified categories using a large language model. For each category,
+one byte indicator variable is created in the dataset: {it:prefix}{cmd:_}{it:short_label},
+holding 0/1 per row. {opt generate()} sets the prefix; the suffix is
+derived from each category's short label (the part before any colon).
+
+{pstd}
+Example: {cmd:categories("Positive: ..." "Negative: ..." "Neutral: ...")
+generate(sent)} creates {cmd:sent_Positive}, {cmd:sent_Negative},
+{cmd:sent_Neutral} as 0/1 byte variables. This matches the wide-DataFrame
+shape Python and R users see from {cmd:cat-stack}'s {cmd:classify()}.
 
 {pstd}
 In single-model mode, one LLM classifies all observations. In ensemble mode
 (when {opt models()} is specified), multiple LLMs classify independently
-and a consensus vote determines the final category.
+and a consensus vote determines the final 0/1 per category.
 
 
 {marker options}{...}
@@ -173,7 +181,8 @@ option.
 {synopt:{cmd:r(N_classified)}}number successfully classified{p_end}
 
 {p2col 5 20 24 2: Macros}{p_end}
-{synopt:{cmd:r(variable)}}name of the generated variable{p_end}
+{synopt:{cmd:r(prefix)}}prefix passed to {cmd:generate()}{p_end}
+{synopt:{cmd:r(variables)}}space-separated list of indicator variables created{p_end}
 {synopt:{cmd:r(model)}}model used{p_end}
 {synopt:{cmd:r(provider)}}provider used{p_end}
 
@@ -181,11 +190,15 @@ option.
 {marker examples}{...}
 {title:Examples}
 
-{pstd}Basic classification:{p_end}
+{pstd}Basic classification (creates cat_Positive cat_Negative cat_Neutral):{p_end}
 {phang2}{cmd:. catllm classify open_ended, categories("Positive" "Negative" "Neutral") apikey($OPENAI_API_KEY)}{p_end}
 
-{pstd}With custom variable name and chain-of-thought:{p_end}
+{pstd}With custom prefix and chain-of-thought (creates topic_Health, topic_Education, ...):{p_end}
 {phang2}{cmd:. catllm classify response, categories("Health" "Education" "Economy" "Other") apikey($OPENAI_API_KEY) generate(topic) chainofthought}{p_end}
+
+{pstd}Inspect the result:{p_end}
+{phang2}{cmd:. list response topic_*, separator(0)}{p_end}
+{phang2}{cmd:. tab1 topic_*}{p_end}
 
 {pstd}Using Anthropic Claude:{p_end}
 {phang2}{cmd:. catllm classify feedback, categories("Bug" "Feature" "Question") apikey($ANTHROPIC_API_KEY) model("claude-sonnet-4-20250514") provider("anthropic")}{p_end}

@@ -1,4 +1,4 @@
-*! version 1.3.0  17may2026
+*! version 2.0.0  18may2026
 *! catllm_classify -- Classify text into categories using LLMs
 
 program define catllm_classify, rclass
@@ -36,7 +36,10 @@ program define catllm_classify, rclass
         ]
 
     * ----- defaults -----
-    if "`generate'" == "" local generate "_catllm_class"
+    * generate() is now a PREFIX for one byte variable per category
+    * (e.g. categories("Positive" "Negative") + generate(sent) -->
+    *  sent_Positive, sent_Negative as 0/1 byte variables).
+    if "`generate'" == "" local generate "cat"
     if "`model'"    == "" local model "gpt-4o"
     if "`provider'" == "" local provider "auto"
     if "`consensus'" == "" local consensus "majority"
@@ -45,15 +48,9 @@ program define catllm_classify, rclass
     * ----- validate -----
     confirm string variable `varlist'
 
-    if "`replace'" == "" {
-        confirm new variable `generate'
-    }
-    else {
-        capture confirm variable `generate'
-        if !_rc {
-            drop `generate'
-        }
-    }
+    * Variable creation is deferred to the python: block because we don't
+    * know the per-category sanitized names until we've parsed the
+    * categories() string.  The `replace` flag is passed through.
 
     * ----- mark sample -----
     marksample touse, strok
@@ -64,9 +61,6 @@ program define catllm_classify, rclass
         exit 2000
     }
     di as txt "Classifying `nobs' observations..."
-
-    * ----- create result variable -----
-    quietly gen str244 `generate' = ""
 
     * ----- store parameters for Python -----
     local _catllm_var      "`varlist'"
@@ -98,6 +92,7 @@ program define catllm_classify, rclass
     local _catllm_tuneopt  "`tuneoptimize'"
     local _catllm_domain   "`domain'"
     local _catllm_pyopts   `"`pyoptions'"'
+    local _catllm_replace  "`replace'"
 
     if `creativity' == -1 {
         local _catllm_creat ""
@@ -108,17 +103,23 @@ program define catllm_classify, rclass
 
     * ----- call Python -----
     local _catllm_failed ""
+    local _catllm_ret_vars ""
+    local _catllm_ret_classified ""
     python: _catllm_do_classify()
     if "`_catllm_failed'" != "" {
         exit 198
     }
 
     * ----- return results -----
-    quietly count if `generate' != "" & `touse'
-    local classified = r(N)
+    * _catllm_ret_vars is set by python to a space-separated list of
+    * indicator variables created.  _catllm_ret_classified is the count
+    * of rows with at least one category marked 1.
+    local genvars     "`_catllm_ret_vars'"
+    local classified  "`_catllm_ret_classified'"
     return scalar N = `nobs'
     return scalar N_classified = `classified'
-    return local variable "`generate'"
+    return local prefix "`generate'"
+    return local variables "`genvars'"
     return local model "`model'"
     return local provider "`provider'"
 
@@ -126,7 +127,7 @@ program define catllm_classify, rclass
     di as txt "Classification complete."
     di as txt "  Observations: `nobs'"
     di as txt "  Classified:   `classified'"
-    di as txt "  Variable:     {res}`generate'"
+    di as txt "  Variables:    {res}`genvars'"
 end
 
 python:
@@ -173,13 +174,15 @@ def _catllm_do_classify():
     pyopts_str = Macro.getLocal("_catllm_pyopts")
     creat_str  = Macro.getLocal("_catllm_creat")
 
-    # --- version guard: this .ado requires cat-stack >= 1.2.0 ---
+    replace_flag = Macro.getLocal("_catllm_replace") != ""
+
+    # --- version guard: this .ado requires cat-stack >= 1.4.0 ---
     try:
         import cat_stack
         _v = tuple(int(x) for x in cat_stack.__version__.split(".")[:2])
-        if _v < (1, 2):
+        if _v < (1, 4):
             raise ImportError(
-                "catllm_classify 1.3 requires cat-stack >= 1.2.0 "
+                "catllm_classify 2.0 requires cat-stack >= 1.4.0 "
                 "(installed: " + cat_stack.__version__ + "). "
                 "Run: catllm setup, upgrade"
             )
@@ -221,9 +224,61 @@ def _catllm_do_classify():
         Macro.setLocal("_catllm_failed", "1")
         return
 
+    # --- build per-category Stata variable names ---
+    # generate() is now a PREFIX. For each user category we create one
+    # byte variable: <prefix>_<safe_short_label>.  Sanitize: replace
+    # non-[A-Za-z0-9_] chars with _, collapse repeats, strip edges,
+    # prefix leading digits, truncate to 32 chars, disambiguate collisions.
+    import re as _re
+    def _safe_var_name(prefix, raw):
+        s = _re.sub(r"[^A-Za-z0-9_]+", "_", str(raw)).strip("_")
+        s = _re.sub(r"_+", "_", s) or "cat"
+        if s[0].isdigit():
+            s = "_" + s
+        # leave room for "_N" suffix if we later collide
+        base = (prefix + "_" + s)[:30]
+        return base
+
+    short_cats = [cat_stack.short_label(c) for c in categories]
+    var_names = []
+    used = set()
+    for sc in short_cats:
+        base = _safe_var_name(genname, sc)
+        name = base
+        i = 1
+        while name in used:
+            name = base + "_" + str(i)
+            i += 1
+        used.add(name)
+        var_names.append(name)
+
+    # --- replace existing vars or fail loudly if any already exist ---
+    # sfi.Data.getVarIndex raises ValueError when the var doesn't exist,
+    # so probe with a try/except instead of testing the return value.
+    for vn in var_names:
+        try:
+            Data.getVarIndex(vn)
+            exists = True
+        except ValueError:
+            exists = False
+        if exists:
+            if replace_flag:
+                SFIToolkit.stata("quietly drop " + vn)
+            else:
+                SFIToolkit.errprintln(
+                    "{err}variable " + vn + " already exists; pass `replace` to overwrite"
+                )
+                Macro.setLocal("_catllm_failed", "1")
+                return
+
+    # --- create the byte indicator variables ---
+    for vn in var_names:
+        Data.addVarByte(vn)
+        # Default new values are missing (.); we want 0/1, so the writeback
+        # loop below initializes 0 for in-sample rows.
+
     # --- read text column from Stata (sfi-only — stays) ---
     var_idx   = Data.getVarIndex(varname)
-    gen_idx   = Data.getVarIndex(genname)
     touse_idx = Data.getVarIndex(touse)
     n         = Data.getObsTotal()
 
@@ -278,20 +333,37 @@ def _catllm_do_classify():
         kwargs["creativity"] = creativity
     kwargs.update(extra_kwargs)
 
-    # --- ONE cat-stack call: classify and collapse to one label per row ---
+    # --- ONE cat-stack call: classify and return one 0/1 list per category ---
     try:
-        labels = module.classify_labels(short_labels=True, **kwargs)
+        indicators = module.classify_indicators(short_labels=True, **kwargs)
     except Exception as e:
         SFIToolkit.errprintln(
-            "{err}" + module.__name__ + ".classify_labels() failed: " + str(e)
+            "{err}" + module.__name__ + ".classify_indicators() failed: " + str(e)
         )
         Macro.setLocal("_catllm_failed", "1")
         return
 
-    # --- write labels back to Stata (sfi-only — stays) ---
-    for row_i, label in enumerate(labels):
-        if label:
-            Data.storeAt(gen_idx, obs_map[row_i], label)
+    # --- write per-category indicators back to Stata ---
+    # Indicator dict is keyed by short_label; align with our var_names by
+    # the same short_cats order.
+    var_indices = [Data.getVarIndex(vn) for vn in var_names]
+    classified_count = 0
+    for row_i in range(len(obs_map)):
+        stata_obs = obs_map[row_i]
+        any_set = False
+        for k, vn in enumerate(var_names):
+            key = short_cats[k]
+            vals = indicators.get(key, None)
+            v = 1 if (vals is not None and row_i < len(vals) and vals[row_i] == 1) else 0
+            Data.storeAt(var_indices[k], stata_obs, v)
+            if v == 1:
+                any_set = True
+        if any_set:
+            classified_count += 1
+
+    # --- hand back to Stata ---
+    Macro.setLocal("_catllm_ret_vars", " ".join(var_names))
+    Macro.setLocal("_catllm_ret_classified", str(classified_count))
 
     SFIToolkit.displayln("{txt}Python classification complete.")
 end

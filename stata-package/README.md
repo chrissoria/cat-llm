@@ -30,7 +30,7 @@ through this repo without also upgrading Python, run `catllm setup, upgrade`.
 
 | Command | Returns | Use when |
 |---|---|---|
-| [`catllm classify`](catllm_classify.sthlp) | new variable with one category label per row | you already have a category scheme |
+| [`catllm classify`](catllm_classify.sthlp) | one byte indicator variable per category (`<prefix>_<short>` = 0/1) | you already have a category scheme |
 | [`catllm extract`](catllm_extract.sthlp) | `r()` macros listing top categories | you want the model to discover a scheme |
 | [`catllm explore`](catllm_explore.sthlp) | `r()` macros listing every raw category | you're doing saturation analysis |
 | [`catllm summarize`](catllm_summarize.sthlp) | new `strL` variable with a summary per row | you want digests rather than labels |
@@ -44,6 +44,8 @@ through this repo without also upgrading Python, run `catllm setup, upgrade`.
 global OPENAI_API_KEY : env OPENAI_API_KEY
 
 * 2. Classify a column of free text
+* generate(sentiment) is a PREFIX — one byte variable per category:
+* sentiment_Positive, sentiment_Negative, sentiment_Neutral, sentiment_Other.
 catllm classify response,                                          ///
     categories(                                                    ///
         "Positive: The respondent expresses satisfaction or approval." ///
@@ -54,7 +56,8 @@ catllm classify response,                                          ///
     model("gpt-4o-mini")                                           ///
     generate(sentiment)
 
-list response sentiment, separator(0)
+list response sentiment_*, separator(0)
+tab1 sentiment_*
 ```
 
 For zero-cost local-model workflows, use Ollama (`provider("ollama")`,
