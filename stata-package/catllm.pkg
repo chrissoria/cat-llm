@@ -1,15 +1,14 @@
 v 3
-d catllm: LLM-powered classification and extraction for text data
+d catllm: classify, summarize, and discover themes in text with LLMs
 d
-d catllm provides a Stata interface to the cat-stack ecosystem of Python
-d packages for automating the categorization of text data using large
-d language models (LLMs). Supports text classification, category discovery,
-d saturation analysis, and text summarization. Domain-specific prompts
-d (political, sentiment, academic, survey, cognitive, web) are available
-d via the domain() option. Works with 8+ LLM providers (OpenAI, Anthropic,
-d Google, and more).
+d catllm wraps the cat-stack Python package so Stata users can classify
+d open-ended text, summarize it, and discover category schemes from it
+d using large language models. Works with OpenAI, Anthropic, Google,
+d Mistral, Perplexity, xAI, HuggingFace, and local Ollama models. The
+d domain() option selects prompt templates tuned for political,
+d sentiment, academic, survey, cognitive, or web text.
 d
-d Requires: Stata 16+ with Python integration, Python 3.8+, cat-stack >= 1.2.0
+d Requires: Stata 16+ with Python integration, Python 3.8+, cat-stack >= 1.4.0
 d
 d Author: Christopher Soria
 d Support: chrissoria@berkeley.edu

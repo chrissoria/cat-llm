@@ -17,69 +17,24 @@ you actually send the email; update both if the send date slips.
 
 Dear Kit,
 
-I would like to submit a new package, **`catllm`**, for inclusion in SSC.
+Submitting a new package, catllm, for SSC. It's a Stata wrapper around the
+cat-stack Python package that lets users classify, summarize, and discover
+themes in open-ended text using LLMs (OpenAI, Anthropic, Google, plus
+local models via Ollama). The use case I built it for is coding survey
+free-text without moving the data out of Stata.
 
-**Purpose.** `catllm` is a Stata interface to the `cat-stack` Python package
-for automating the categorization of open-ended text using large language
-models (LLMs). It exposes four verbs — `catllm classify`, `catllm extract`,
-`catllm explore`, `catllm summarize` — plus `catllm setup` to install the
-Python backend and `catllm cerad` for scoring CERAD drawn-shape recall
-tests. Domain-specific prompts (political opinion, sentiment, academic,
-survey, cognitive, web) are selectable via a `domain()` option. Supports
-9 LLM providers including OpenAI, Anthropic, Google, Mistral, xAI, and
-local models via Ollama.
+I checked the SSC archive and don't see anything overlapping in name or
+scope. License is GPL-3.0. It needs Stata 16+, Python 3.8+, and the
+cat-stack Python backend (>= 1.4.0), which the included catllm setup
+command installs from PyPI.
 
-**Why it is useful.** Coding open-ended survey responses by hand is one of
-the most time-consuming tasks in applied social-science research. `catllm`
-brings the same LLM-assisted classification pipeline that is already
-established in Python and R workflows into Stata, so analysts can stay in
-their native environment and reproduce the same coding scheme across all
-three languages. The package handles category-scheme discovery, single-
-and multi-model classification (with consensus voting), and text
-summarization. A two-step natural-language-then-format prompting path with
-a fine-tuned JSON-formatter fallback makes it usable with small local
-models (e.g. `qwen2.5:7b` via Ollama) for cost-free or privacy-sensitive
-workflows.
+Source and worked examples are at https://github.com/chrissoria/cat-llm.
+The attached zip has 7 .ado files, 7 .sthlp files, catllm.pkg, and
+stata.toc. Let me know if anything needs reformatting.
 
-**Output shape.** `catllm classify` produces one byte indicator variable
-per category, named `<prefix>_<short_label>` (0/1), matching the wide
-DataFrame shape Python and R users see from `cat-stack`'s `classify()`.
-Multi-label classification is first-class: a single response can have
-multiple indicators set to 1. Standard Stata verbs (`tab1`, `summarize`,
-`regress`, `egen`) work directly on the resulting variables.
-
-**Originality.** I have searched the SSC archive and other Stata package
-repositories and am not aware of any existing package named `catllm` or
-providing equivalent LLM-classification functionality. The closest
-existing tools (`chatgpt`, `gpt2stata`, etc.) wrap individual API calls;
-`catllm` provides a full classification/extraction pipeline with consensus
-voting, JSON-schema validation, automatic prompt verbosity checking, and
-optional domain-specific prompts.
-
-**Requirements.** Stata 16+ with Python integration (`python query` to
-verify), Python 3.8+, and an API key from a supported provider (or a local
-Ollama install for no-API-key workflows). The Python backend is
-[`cat-stack`](https://pypi.org/project/cat-stack/) **≥ 1.4.0**; the user
-runs `catllm setup` once after installation to install it from PyPI. The
-Stata wrapper is intentionally thin — string parsing, domain resolution,
-output shaping, and schema validation all live server-side in `cat-stack`,
-which means new Python features become usable from Stata without a
-package update.
-
-**Package contents.** 7 `.ado` files and 7 matching `.sthlp` files, plus
-`catllm.pkg` and `stata.toc`. License: GPL-3.0 (LICENSE file in the
-source repository).
-
-**Source repository and documentation.**
-- GitHub: https://github.com/chrissoria/cat-llm
-- Python backend (`cat-stack`): https://pypi.org/project/cat-stack/
-- Worked examples (mirroring Python and R): `stata-package/examples/`
-
-Please let me know if you need any changes to the format or contents.
-
-Best regards,
-Christopher Soria
-University of California, Berkeley
+Thanks,
+Chris Soria
+UC Berkeley
 chrissoria@berkeley.edu
 
 ---
