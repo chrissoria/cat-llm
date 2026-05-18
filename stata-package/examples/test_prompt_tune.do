@@ -12,7 +12,8 @@
 *
 * This script is NOT a regression test. It is a manual verification you
 * run once before tagging a release / submitting to SSC, to confirm that
-*   1. pyoptions(prompt_tune=N) flows into cat_stack.classify() correctly
+*   1. The native prompttune() / tuneiterations() / tuneui() options
+*      flow into cat_stack.classify() correctly
 *   2. The browser UI opens and accepts corrections
 *   3. classify() returns a labeled dataset after tuning completes
 *
@@ -55,11 +56,11 @@ input str200 response
 end
 
 * --- Classify with prompt_tune enabled ---------------------------------------
-* pyoptions() forwards arbitrary kwargs to cat_stack.classify(). We use:
-*   prompt_tune=5         -- run APO with a 5-row sample (small for testing)
-*   tune_iterations=1     -- one optimization pass per category (fast)
-*   tune_ui='browser'     -- browser-based corrections (default; readable)
-*   tune_optimize='balanced' -- maximize avg(accuracy, sensitivity, precision)
+* Native Stata options drive cat-stack's APO loop:
+*   prompttune(5)           -- run APO with a 5-row sample (small for testing)
+*   tuneiterations(1)       -- one instruction attempt per category (fast)
+*   tuneui("browser")       -- browser-based corrections (readable)
+*   tuneoptimize("balanced") -- avg(accuracy, sensitivity, precision)
 *
 * NOTE: The browser window will pop open BEFORE this command returns. Submit
 * your corrections, then control returns to Stata.
@@ -78,7 +79,10 @@ catllm classify response,                                                       
     model("gpt-4o-mini")                                                               ///
     provider("openai")                                                                 ///
     generate(sentiment)                                                                ///
-    pyoptions("prompt_tune=5, tune_iterations=1, tune_ui='browser', tune_optimize='balanced'")
+    prompttune(5)                                                                      ///
+    tuneiterations(1)                                                                  ///
+    tuneui("browser")                                                                  ///
+    tuneoptimize("balanced")
 
 * --- Verify the run produced labels ------------------------------------------
 di _n "{hline 60}"

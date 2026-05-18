@@ -140,29 +140,35 @@ baseline. If it does not improve, the original prompt is kept automatically
 
 ## 3. Applying the tuned prompt to a full dataset
 
-After tuning on a small sample you can apply the resulting prompt to your
-full dataset. The tuned system prompt is embedded in the returned
-`system_prompt` attribute.
+When you want to carry the optimized prompt to a separate `classify()` call
+(e.g. to run on your full dataset after tuning on a subsample), call
+`prompt_tune()` directly — it returns a list with a `system_prompt` field you
+can pass to `classify()`.
 
 ```{r apply-tuned}
-# In practice, load your full dataset here:
-# full_df <- read.csv("responses.csv")
-# full_results <- classify(
-#   input_data      = full_df$response,
-#   categories      = categories,
-#   research_question = SURVEY_QUESTION,
-#   api_key         = api_key,
-#   user_model      = "gpt-4o-mini",
-#   system_prompt   = attr(tuned, "system_prompt")   # carry over the tuned prompt
-# )
-
-# For now, re-use the same 15 responses to confirm the tuned prompt is stable:
-full_results <- classify(
+# Step A: tune on a small sample
+tune_result <- prompt_tune(
   input_data      = responses,
   categories      = categories,
-  research_question = SURVEY_QUESTION,
   api_key         = api_key,
-  user_model      = "gpt-4o-mini"
+  user_model      = "gpt-4o-mini",
+  sample_size     = 5L,
+  max_iterations  = 1L,
+  ui              = "browser"
+)
+
+cat("Optimized system prompt:\n")
+cat(tune_result$system_prompt, "\n")
+
+# Step B: classify your full dataset with the tuned prompt
+# (In practice, substitute full_df$response for `responses` here)
+full_results <- classify(
+  input_data        = responses,
+  categories        = categories,
+  research_question = SURVEY_QUESTION,
+  api_key           = api_key,
+  user_model        = "gpt-4o-mini",
+  system_prompt     = tune_result$system_prompt
 )
 
 cat("Full-dataset classifications with tuned prompt:\n")

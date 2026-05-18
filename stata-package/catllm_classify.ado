@@ -1,4 +1,4 @@
-*! version 1.1.0  17may2026
+*! version 1.2.0  17may2026
 *! catllm_classify -- Classify text into categories using LLMs
 
 program define catllm_classify, rclass
@@ -25,6 +25,11 @@ program define catllm_classify, rclass
             ROWdelay(real 0.0)                                  ///
             FAILstrategy(string)                                ///
             NOJSONschema                                        ///
+            TWOSTEPclassify(string)                             ///
+            PROMPTtune(integer 0)                               ///
+            TUNEiterations(integer 3)                           ///
+            TUNEui(string)                                      ///
+            TUNEoptimize(string)                                ///
             DOMain(string)                                      ///
             PYOptions(string asis)                              ///
             REPLACE                                             ///
@@ -86,6 +91,11 @@ program define catllm_classify, rclass
     local _catllm_rowdelay "`rowdelay'"
     local _catllm_failstr  "`failstrategy'"
     local _catllm_nojson   "`nojsonschema'"
+    local _catllm_twostep  "`twostepclassify'"
+    local _catllm_pt       "`prompttune'"
+    local _catllm_tuneiter "`tuneiterations'"
+    local _catllm_tuneui   "`tuneui'"
+    local _catllm_tuneopt  "`tuneoptimize'"
     local _catllm_domain   "`domain'"
     local _catllm_pyopts   `"`pyoptions'"'
 
@@ -226,9 +236,30 @@ def _catllm_do_classify():
     rowdelay   = float(Macro.getLocal("_catllm_rowdelay") or "0.0")
     failstr    = Macro.getLocal("_catllm_failstr")
     nojson     = Macro.getLocal("_catllm_nojson") != ""
+    twostep_s  = Macro.getLocal("_catllm_twostep")
+    pt_n       = int(Macro.getLocal("_catllm_pt") or "0")
+    tune_iter  = int(Macro.getLocal("_catllm_tuneiter") or "3")
+    tune_ui    = Macro.getLocal("_catllm_tuneui")
+    tune_opt   = Macro.getLocal("_catllm_tuneopt")
     domain     = Macro.getLocal("_catllm_domain")
     pyopts_str = Macro.getLocal("_catllm_pyopts")
     creat_str  = Macro.getLocal("_catllm_creat")
+
+    # twostep: accept "true"/"false"/"" (unset) — map to bool/None
+    two_step_classify = None
+    if twostep_s:
+        s = twostep_s.strip().lower()
+        if s in ("true", "yes", "1", "on"):
+            two_step_classify = True
+        elif s in ("false", "no", "0", "off"):
+            two_step_classify = False
+        else:
+            SFIToolkit.errprintln(
+                "{err}twostepclassify() must be true/false (got: '"
+                + twostep_s + "')"
+            )
+            Macro.setLocal("_catllm_failed", "1")
+            return
 
     creativity = float(creat_str) if creat_str else None
 
@@ -311,6 +342,15 @@ def _catllm_do_classify():
         kwargs["models"] = models
     if workers > 0:
         kwargs["max_workers"] = workers
+    if two_step_classify is not None:
+        kwargs["two_step_classify"] = two_step_classify
+    if pt_n > 0:
+        kwargs["prompt_tune"] = pt_n
+        kwargs["tune_iterations"] = tune_iter
+        if tune_ui:
+            kwargs["tune_ui"] = tune_ui
+        if tune_opt:
+            kwargs["tune_optimize"] = tune_opt
     if creativity is not None:
         kwargs["creativity"] = creativity
 

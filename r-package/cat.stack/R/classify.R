@@ -86,6 +86,9 @@
 #'   ensemble entry uses the `"ollama"` provider. Set `FALSE` to skip
 #'   the check (e.g. on CI runners where you don't want to launch
 #'   Ollama).
+#' @param system_prompt Character. Custom system-level instruction prepended to
+#'   every classification call. Use this to apply a prompt returned by
+#'   [prompt_tune()]: `system_prompt = result$system_prompt`. Default `""`.
 #' @param prompt_tune Integer or `NULL`. If set, enables Automatic Prompt
 #'   Optimization (APO). The value is the number of rows sampled per
 #'   correction round. A browser window opens so you can correct
@@ -172,6 +175,7 @@ classify <- function(
     add_other            = "prompt",
     check_verbosity      = TRUE,
     auto_start_ollama    = TRUE,
+    system_prompt        = "",
     prompt_tune          = NULL,
     tune_iterations      = 1L,
     tune_ui              = "browser",
@@ -232,6 +236,7 @@ classify <- function(
     auto_download         = auto_download,
     add_other             = add_other,
     check_verbosity       = check_verbosity,
+    system_prompt         = system_prompt,
     prompt_tune           = reticulate::r_to_py(prompt_tune),
     tune_iterations       = .as_py_int(tune_iterations),
     tune_ui               = tune_ui,
