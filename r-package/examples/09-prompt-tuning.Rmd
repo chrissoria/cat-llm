@@ -77,8 +77,7 @@ responses <- c(
 categories <- c(
   "Positive: The respondent expresses satisfaction, approval, or favorable sentiment.",
   "Negative: The respondent expresses dissatisfaction, frustration, or criticism.",
-  "Neutral: The respondent is factual, ambivalent, or does not express clear sentiment.",
-  "Other: The response does not fit any of the above categories."
+  "Neutral: The respondent is factual, ambivalent, or does not express clear sentiment."
 )
 
 SURVEY_QUESTION <- "How do you feel about the new employee wellness program?"
