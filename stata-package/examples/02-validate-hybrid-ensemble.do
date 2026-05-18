@@ -78,8 +78,8 @@ catllm classify response,                                                       
     models("`local_models'")                                                                           ///
     pyoptions("filename='`dump_csv'', check_verbosity=False")
 
-list response sentiment, separator(0) abbreviate(50)
-tab sentiment
+list response sentiment_*, separator(0) abbreviate(50)
+tab1 sentiment_*
 
 * --- Structural validation against the dumped CSV ----------------------------
 * The R example uses stopifnot() on R's full data.frame. Stata's wrapper

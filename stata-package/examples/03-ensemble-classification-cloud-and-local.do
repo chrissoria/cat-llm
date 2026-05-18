@@ -63,8 +63,8 @@ else {
         consensus("unanimous")                                                                                ///
         models("`cloud_models'")
 
-    list response reason_cloud, separator(0) abbreviate(30)
-    tab reason_cloud
+    list response reason_cloud_*, separator(0) abbreviate(30)
+    tab1 reason_cloud_*
 }
 
 * --- 2. Hybrid ensemble (cloud + local Ollama, majority voting) --------------
@@ -100,8 +100,8 @@ else {
         di as txt "  (hybrid ensemble skipped -- likely Ollama not installed or qwen2.5:14b not pulled)"
     }
     else {
-        list response reason_hybrid, separator(0) abbreviate(30)
-        tab reason_hybrid
+        list response reason_hybrid_*, separator(0) abbreviate(30)
+        tab1 reason_hybrid_*
     }
 }
 
@@ -122,10 +122,10 @@ else {
 *   category_<i>_consensus      the voted result (0/1) per category
 *   <category>_agreement        how many models agreed
 *
-* The Stata wrapper reads the *_consensus columns to write the single
-* assigned label into generate(). For full per-model output, call the
-* Python cat-stack ensemble path directly via reticulate (R) or python:
-* (Stata), or save the result with the underlying filename / save_directory
-* kwargs via pyoptions().
+* The Stata wrapper exposes the *_consensus columns as one indicator
+* variable per category: <prefix>_<short_label>, with 0/1 per row. For
+* full per-model (not just consensus) output, dump the underlying DataFrame
+* by passing pyoptions("filename='/tmp/dump.csv'") and `import delimited`
+* the file back into Stata.
 
 di _n "Done."

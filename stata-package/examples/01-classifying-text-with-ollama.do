@@ -55,6 +55,10 @@ end
 * qwen2.5:7b is the default; substitute qwen2.5:14b for higher accuracy
 * if you have the RAM. If the requested model is not installed locally,
 * cat-stack will print a clear error with the exact ollama pull command.
+*
+* `generate(sentiment)` is a PREFIX — one byte variable per category
+* (sentiment_Positive, sentiment_Negative, ...) holding 0/1 indicators,
+* matching what Python and R users see directly from cat-stack.
 catllm classify response,                                                              ///
     categories(                                                                        ///
         "Positive: The respondent expresses satisfaction, approval, or favorable sentiment." ///
@@ -66,12 +70,12 @@ catllm classify response,                                                       
     provider("ollama")                                                                 ///
     generate(sentiment)
 
-list response sentiment, separator(0) abbreviate(20)
-tab sentiment
+list response sentiment_*, separator(0) abbreviate(30)
+tab1 sentiment_*
 
 * --- 5. Save the classified dataset -----------------------------------------
-* The new `sentiment` column lives in the in-memory dataset. Persist it to
-* disk before exiting Stata; otherwise the labels are lost.
+* The new `sentiment_*` indicator variables live in the in-memory dataset.
+* Persist them to disk before exiting Stata; otherwise the values are lost.
 *
 * Pick whichever format your downstream workflow uses:
 save "01-classified.dta", replace

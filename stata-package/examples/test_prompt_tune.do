@@ -89,8 +89,8 @@ di _n "{hline 60}"
 di "Results after prompt_tune"
 di "{hline 60}"
 
-list response sentiment, separator(0) abbreviate(40)
-tab sentiment
+list response sentiment_*, separator(0) abbreviate(40)
+tab1 sentiment_*
 
 * --- What this verified -------------------------------------------------------
 *

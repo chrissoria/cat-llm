@@ -128,7 +128,7 @@ catllm classify response,                                                       
     surveyquestion("`SURVEY_Q'")                                                                   ///
     generate(move_reason)
 
-list response move_reason, separator(0) abbreviate(40)
-tab move_reason
+list response move_reason_*, separator(0) abbreviate(40)
+tab1 move_reason_*
 
 di _n "Done."

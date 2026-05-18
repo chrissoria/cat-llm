@@ -61,8 +61,8 @@ catllm classify response,                           ///
     apikey($OPENAI_API_KEY)                         ///
     generate(topic)
 
-list response topic, separator(0) abbreviate(20)
-tab topic
+list response topic_*, separator(0) abbreviate(20)
+tab1 topic_*
 
 * --- Step 4: extract ---
 di _n "{hline 60}"
@@ -101,7 +101,7 @@ catllm classify response,                           ///
     generate(topic_pyopts)                          ///
     pyoptions("max_retries=3, retry_delay=0.5")
 
-tab topic_pyopts
+tab1 topic_pyopts_*
 
 * --- Step 7: domain() error paths ---
 di _n "{hline 60}"

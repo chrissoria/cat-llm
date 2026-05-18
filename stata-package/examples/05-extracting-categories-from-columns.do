@@ -106,8 +106,8 @@ catllm classify open_response,                                         ///
     generate(category)                                                 ///
     surveyquestion("Why did you move to a new city?")
 
-list open_response category, separator(0) abbreviate(20)
-tab category
+list open_response category_*, separator(0) abbreviate(20)
+tab1 category_*
 
 * --- Step 4: Export or save --------------------------------------------------
 di _n "{hline 60}"

@@ -77,8 +77,8 @@ catllm classify response,                                                       
     surveyq("`SURVEY_Q'")                                                              ///
     generate(sentiment_baseline)
 
-list response sentiment_baseline, separator(0) abbreviate(40)
-tab sentiment_baseline
+list response sentiment_baseline_*, separator(0) abbreviate(40)
+tab1 sentiment_baseline_*
 
 * --- 2. classify() with prompt_tune ------------------------------------------
 * pyoptions() forwards arbitrary kwargs to cat_stack.classify(). We pass:
@@ -111,8 +111,8 @@ di _n "{hline 60}"
 di "Results after prompt_tune"
 di "{hline 60}"
 
-list response sentiment_baseline sentiment_tuned, separator(0) abbreviate(40)
-tab sentiment_tuned
+list response sentiment_baseline_* sentiment_tuned_*, separator(0) abbreviate(40)
+tab1 sentiment_tuned_*
 
 * --- What to look for --------------------------------------------------------
 *
