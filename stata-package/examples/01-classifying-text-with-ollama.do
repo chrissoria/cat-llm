@@ -9,11 +9,11 @@
 *
 * Requires: Ollama installed (https://ollama.com/download) and at least
 * one model pulled:
-*     ollama pull qwen2.5:14b   // recommended (~9 GB disk, ~10 GB RAM)
-*     ollama pull qwen2.5:7b    // fallback if RAM is limited (~4.7 GB)
+*     ollama pull qwen2.5:7b    // default used here (~4.7 GB)
+*     ollama pull qwen2.5:14b   // higher accuracy if you have ~10 GB RAM
 *
 * Cost:     $0 (runs entirely on your local machine)
-* Runtime:  ~30-60 seconds for 10 rows on Apple Silicon with qwen2.5:14b
+* Runtime:  ~30 seconds for 10 rows on Apple Silicon with qwen2.5:7b
 ********************************************************************************
 
 clear all
@@ -52,7 +52,9 @@ end
 *
 * Verbose, definition-style labels classify several percentage points more
 * accurately than one-word labels on small local models.
-* Use qwen2.5:14b for best accuracy; substitute qwen2.5:7b if RAM is limited.
+* qwen2.5:7b is the default; substitute qwen2.5:14b for higher accuracy
+* if you have the RAM. If the requested model is not installed locally,
+* cat-stack will print a clear error with the exact ollama pull command.
 catllm classify response,                                                              ///
     categories(                                                                        ///
         "Positive: The respondent expresses satisfaction, approval, or favorable sentiment." ///
@@ -60,14 +62,23 @@ catllm classify response,                                                       
         "Neutral: The respondent is factual, ambivalent, or does not express clear sentiment." ///
         "Other: The response does not fit any of the above categories.")               ///
     apikey("_")                                                                        ///
-    model("qwen2.5:14b")                                                               ///
+    model("qwen2.5:7b")                                                                ///
     provider("ollama")                                                                 ///
     generate(sentiment)
 
 list response sentiment, separator(0) abbreviate(20)
 tab sentiment
 
-* --- 5. Why local? -----------------------------------------------------------
+* --- 5. Save the classified dataset -----------------------------------------
+* The new `sentiment` column lives in the in-memory dataset. Persist it to
+* disk before exiting Stata; otherwise the labels are lost.
+*
+* Pick whichever format your downstream workflow uses:
+save "01-classified.dta", replace
+export delimited "01-classified.csv", replace
+di as txt "Wrote: 01-classified.dta  and  01-classified.csv"
+
+* --- 6. Why local? -----------------------------------------------------------
 * - Zero API cost: only your machine's electricity.
 * - Data never leaves your network -- key for sensitive survey data.
 * - Reproducible: model weights are pinned by `ollama pull <model>:<tag>`.
@@ -76,7 +87,7 @@ tab sentiment
 * behind frontier cloud models. For high-stakes coding, validate against a
 * hand-labeled subsample.
 
-* --- 6. Suggested local models -----------------------------------------------
+* --- 7. Suggested local models -----------------------------------------------
 * qwen2.5:14b   -- Recommended: best accuracy/size tradeoff (~10 GB RAM)
 * qwen2.5:7b    -- Faster, lower RAM, noticeably weaker (~5 GB RAM)
 * llama3.2      -- Good generalist, smaller footprint (~2 GB)
