@@ -1,0 +1,190 @@
+---
+title: "Automatic Prompt Optimization with prompt_tune()"
+output: html_document
+---
+
+```{r setup, include = FALSE}
+knitr::opts_chunk$set(eval = FALSE, comment = "#>", collapse = TRUE)
+```
+
+# Automatic Prompt Optimization with `prompt_tune()`
+
+`prompt_tune()` iteratively refines the classification system prompt by
+analyzing category-level errors in a small labeled sample. Each iteration:
+
+1. Classifies a random sample with the current prompt
+2. Opens a browser window so you can correct misclassifications
+3. Asks an LLM to generate targeted per-category instructions from your corrections
+4. Re-classifies the sample with the updated prompt
+5. Keeps the prompt only if accuracy improves
+
+Categories are **never modified** — only the system prompt changes.
+
+**What this script covers:**
+
+1. Basic `prompt_tune()` with a cloud model
+2. Understanding the output (tuned prompt, accuracy before/after)
+3. Applying the tuned prompt to a full dataset via `classify()`
+4. Tips for getting the most out of prompt tuning
+
+**What you need:**
+
+- `library(cat.llm)` with Python backend installed
+- An API key (OpenAI used here; any supported provider works)
+- A browser (the correction UI opens automatically)
+
+**Cost:** ~$0.10–0.30 per tuning run (a handful of small model calls)
+
+**Runtime:** ~2–5 minutes including your time labeling corrections
+
+---
+
+## Prerequisites
+
+```{r prereqs}
+# install.packages("cat.llm",
+#                  repos = c("https://chrissoria.r-universe.dev",
+#                            "https://cloud.r-project.org"))
+library(cat.llm)
+
+# One-time Python backend install:
+# install_cat_stack()
+
+api_key <- Sys.getenv("OPENAI_API_KEY")   # or paste your key directly
+```
+
+## Sample data
+
+```{r data}
+responses <- c(
+  "The new wellness program is great, I've been using it daily.",
+  "It's confusing and the app crashes constantly.",
+  "I haven't tried it yet but it sounds promising.",
+  "The interface is intuitive and I like the dashboard.",
+  "Customer support never responded to my emails.",
+  "Pretty average -- nothing special either way.",
+  "Best benefit my employer has ever offered.",
+  "I tried it once and forgot about it.",
+  "The login keeps failing on my phone.",
+  "Really useful for tracking my steps and sleep.",
+  "Would love more customization options.",
+  "Absolutely love it — recommend to everyone.",
+  "Too many steps to get anything done.",
+  "Fine for what it is, nothing more.",
+  "It helped me sleep better within a week."
+)
+
+categories <- c(
+  "Positive: The respondent expresses satisfaction, approval, or favorable sentiment.",
+  "Negative: The respondent expresses dissatisfaction, frustration, or criticism.",
+  "Neutral: The respondent is factual, ambivalent, or does not express clear sentiment.",
+  "Other: The response does not fit any of the above categories."
+)
+
+SURVEY_QUESTION <- "How do you feel about the new employee wellness program?"
+```
+
+## 1. Basic `classify()` without prompt tuning
+
+Run a baseline classification first so you can compare accuracy before
+and after tuning.
+
+```{r baseline}
+baseline <- classify(
+  input_data      = responses,
+  categories      = categories,
+  research_question = SURVEY_QUESTION,
+  api_key         = api_key,
+  user_model      = "gpt-4o-mini"
+)
+
+cat("Baseline classifications:\n")
+print(baseline[, c("input_data", grep("_label$", names(baseline), value = TRUE))])
+```
+
+## 2. `classify()` with `prompt_tune`
+
+Pass `prompt_tune` (sample size) to enable automatic prompt optimization.
+A browser window will open before `classify()` returns — correct any
+misclassified rows and click **Submit**.
+
+```{r prompt-tune}
+# prompt_tune = 5   -- show 5 rows for correction per iteration
+# tune_iterations = 1 -- one optimization pass (increase for more polish)
+# tune_ui = 'browser' -- browser-based correction UI
+# tune_optimize = 'balanced' -- maximize avg(accuracy, sensitivity, precision)
+
+tuned <- classify(
+  input_data        = responses,
+  categories        = categories,
+  research_question = SURVEY_QUESTION,
+  api_key           = api_key,
+  user_model        = "gpt-4o-mini",
+  prompt_tune       = 5L,
+  tune_iterations   = 1L,
+  tune_ui           = "browser",
+  tune_optimize     = "balanced"
+)
+
+cat("Tuned classifications:\n")
+print(tuned[, c("input_data", grep("_label$", names(tuned), value = TRUE))])
+```
+
+When the browser window opens you will see a table with one row per
+sampled response and one checkbox column per category. Check the boxes
+that should be `1` for each response, then click **Submit**.
+
+`prompt_tune` keeps the tuned prompt only if accuracy improves over the
+baseline. If it does not improve, the original prompt is kept automatically
+— no risk of making things worse.
+
+## 3. Applying the tuned prompt to a full dataset
+
+After tuning on a small sample you can apply the resulting prompt to your
+full dataset. The tuned system prompt is embedded in the returned
+`system_prompt` attribute.
+
+```{r apply-tuned}
+# In practice, load your full dataset here:
+# full_df <- read.csv("responses.csv")
+# full_results <- classify(
+#   input_data      = full_df$response,
+#   categories      = categories,
+#   research_question = SURVEY_QUESTION,
+#   api_key         = api_key,
+#   user_model      = "gpt-4o-mini",
+#   system_prompt   = attr(tuned, "system_prompt")   # carry over the tuned prompt
+# )
+
+# For now, re-use the same 15 responses to confirm the tuned prompt is stable:
+full_results <- classify(
+  input_data      = responses,
+  categories      = categories,
+  research_question = SURVEY_QUESTION,
+  api_key         = api_key,
+  user_model      = "gpt-4o-mini"
+)
+
+cat("Full-dataset classifications with tuned prompt:\n")
+print(full_results[, c("input_data", grep("_label$", names(full_results), value = TRUE))])
+```
+
+## Tips
+
+- **Start with `prompt_tune = 10`** and `tune_iterations = 2` for real
+  datasets. A 5-row sample is fast but may miss edge cases.
+- **Correct confidently.** Only fix rows you are certain about — uncertain
+  corrections add noise that degrades the tuned prompt.
+- **Use verbose category descriptions.** `prompt_tune` tunes the system
+  prompt, not the category labels. Verbose labels (with "such as" clauses)
+  give the meta-LLM more signal to work with.
+- **Use a stronger tuning model.** The meta-LLM that writes the improved
+  prompt benefits from higher capability — `gpt-4o` or `claude-opus` for
+  tuning, even if you classify with `gpt-4o-mini`.
+- **`tune_optimize = "sensitivity"`** is useful when false negatives are
+  costly (e.g. safety-relevant categories). `"precision"` is useful when
+  false positives are costly. `"balanced"` (default) optimizes the average
+  of both.
+- **Ollama works too.** Replace `user_model = "gpt-4o-mini"` with any
+  local model and add `model_source = "ollama"`. Larger local models
+  (qwen2.5:7b, mistral:7b) produce more useful corrections.
