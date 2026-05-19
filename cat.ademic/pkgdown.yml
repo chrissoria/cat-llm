@@ -1,0 +1,9 @@
+pandoc: 3.8.3
+pkgdown: 2.2.0
+pkgdown_sha: ~
+articles:
+  classifying-academic-papers: classifying-academic-papers.html
+last_built: 2026-05-18T23:59Z
+urls:
+  reference: https://christophersoria.com/cat-llm/cat.ademic/reference
+  article: https://christophersoria.com/cat-llm/cat.ademic/articles
