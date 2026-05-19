@@ -1,0 +1,10 @@
+# Local secrets — never push to the Space
+.env
+
+# Python bytecode
+__pycache__/
+*.pyc
+
+# Local test artifacts
+*.log
+.DS_Store

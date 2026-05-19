@@ -41,7 +41,7 @@ for m in models:
     print(f"  - {m}")
 
 # Set the model you want to use. Change to any model you have installed.
-MODEL = "llama3.2"
+MODEL = "qwen2.5:7b"
 
 if not cat.check_ollama_model(MODEL):
     print(f"\n'{MODEL}' is not installed. Downloading now...")
