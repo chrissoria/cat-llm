@@ -43,6 +43,10 @@
 #' @param row_delay Numeric. Default `0.0`.
 #' @param pdf_dpi Integer. Default `150L`.
 #' @param auto_download Logical. Default `FALSE`.
+#' @param prompt_tune Integer or `NULL`. Rows sampled per APO correction round. Default `NULL`.
+#' @param tune_iterations Integer. APO optimization passes. Default `1L`.
+#' @param tune_ui Character. Correction UI: `"browser"` or `"terminal"`. Default `"browser"`.
+#' @param tune_optimize Character. Metric to optimize: `"balanced"`, `"sensitivity"`, or `"precision"`. Default `"balanced"`.
 #'
 #' @return A `data.frame` with classification results.
 #' @examples

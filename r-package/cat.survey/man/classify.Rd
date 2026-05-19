@@ -126,6 +126,14 @@ few-shot examples.}
 \item{pdf_dpi}{Integer. Default \code{150L}.}
 
 \item{auto_download}{Logical. Default \code{FALSE}.}
+
+\item{prompt_tune}{Integer or \code{NULL}. Rows sampled per APO correction round. Default \code{NULL}.}
+
+\item{tune_iterations}{Integer. APO optimization passes. Default \code{1L}.}
+
+\item{tune_ui}{Character. Correction UI: \code{"browser"} or \code{"terminal"}. Default \code{"browser"}.}
+
+\item{tune_optimize}{Character. Metric to optimize: \code{"balanced"}, \code{"sensitivity"}, or \code{"precision"}. Default \code{"balanced"}.}
 }
 \value{
 A \code{data.frame} with classification results.

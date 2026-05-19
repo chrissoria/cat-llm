@@ -1,6 +1,6 @@
 Package: cat.survey
 Title: Survey Response Classification with LLMs
-Version: 0.1.1
+Version: 0.1.2
 Authors@R: person("Chris", "Soria", role = c("aut", "cre"),
                   email = "chrissoria@berkeley.edu")
 Description: R interface to the Python cat-survey package. Classifies, extracts,
