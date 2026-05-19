@@ -47,7 +47,11 @@ classify(
   pdf_dpi = 150L,
   auto_download = FALSE,
   add_other = "prompt",
-  check_verbosity = TRUE
+  check_verbosity = TRUE,
+  prompt_tune = NULL,
+  tune_iterations = 1L,
+  tune_ui = "browser",
+  tune_optimize = "balanced"
 )
 }
 \arguments{

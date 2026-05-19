@@ -9,6 +9,9 @@
 \alias{prompt_tune}
 \alias{install_cat_stack}
 \alias{ensure_ollama_running}
+\alias{list_ollama_models}
+\alias{check_ollama_model}
+\alias{pull_ollama_model}
 \title{Re-exported functions from cat.stack}
 \description{
 The \code{cat.llm} meta-package re-exports the core functions from \code{cat.stack}
@@ -25,6 +28,9 @@ the canonical documentation in \code{cat.stack}.
 \item{\code{\link[cat.stack]{prompt_tune}}}{Interactive, human-in-the-loop tuning of the classification system prompt.}
 \item{\code{\link[cat.stack]{install_cat_stack}}}{One-time installer for the Python \code{catstack} backend.}
 \item{\code{\link[cat.stack]{ensure_ollama_running}}}{Check (and optionally start) a local Ollama server before running local-model classification.}
+\item{\code{\link[cat.stack]{list_ollama_models}}}{List locally installed Ollama models.}
+\item{\code{\link[cat.stack]{check_ollama_model}}}{Check whether a specific Ollama model is installed locally.}
+\item{\code{\link[cat.stack]{pull_ollama_model}}}{Download an Ollama model to the local installation.}
 }
 }
 \keyword{internal}

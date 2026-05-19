@@ -1,6 +1,6 @@
 Package: cat.llm
 Title: LLM-Powered Text Classification for Social Science
-Version: 3.1.0
+Version: 3.1.1
 Authors@R: person("Chris", "Soria", email = "chrissoria@berkeley.edu",
                   role = c("aut", "cre"))
 Description: Meta-package that installs and loads the full CatLLM ecosystem

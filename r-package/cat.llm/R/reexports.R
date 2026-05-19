@@ -13,9 +13,12 @@
 #'   \item{\code{\link[cat.stack]{prompt_tune}}}{Interactive, human-in-the-loop tuning of the classification system prompt.}
 #'   \item{\code{\link[cat.stack]{install_cat_stack}}}{One-time installer for the Python `catstack` backend.}
 #'   \item{\code{\link[cat.stack]{ensure_ollama_running}}}{Check (and optionally start) a local Ollama server before running local-model classification.}
+#'   \item{\code{\link[cat.stack]{list_ollama_models}}}{List locally installed Ollama models.}
+#'   \item{\code{\link[cat.stack]{check_ollama_model}}}{Check whether a specific Ollama model is installed locally.}
+#'   \item{\code{\link[cat.stack]{pull_ollama_model}}}{Download an Ollama model to the local installation.}
 #' }
 #'
 #' @name reexports
-#' @aliases classify extract explore summarize prompt_tune install_cat_stack ensure_ollama_running
+#' @aliases classify extract explore summarize prompt_tune install_cat_stack ensure_ollama_running list_ollama_models check_ollama_model pull_ollama_model
 #' @keywords internal
 NULL

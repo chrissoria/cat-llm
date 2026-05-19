@@ -45,7 +45,12 @@ classify(
   auto_download = FALSE,
   add_other = "prompt",
   check_verbosity = TRUE,
-  auto_start_ollama = TRUE
+  auto_start_ollama = TRUE,
+  system_prompt = "",
+  prompt_tune = NULL,
+  tune_iterations = 1L,
+  tune_ui = "browser",
+  tune_optimize = "balanced"
 )
 }
 \arguments{
@@ -167,6 +172,29 @@ call \code{\link[=ensure_ollama_running]{ensure_ollama_running()}} when \code{mo
 ensemble entry uses the \code{"ollama"} provider. Set \code{FALSE} to skip
 the check (e.g. on CI runners where you don't want to launch
 Ollama).}
+
+\item{system_prompt}{Character. Custom system-level instruction prepended to
+every classification call. Use this to apply a prompt returned by
+\code{\link[=prompt_tune]{prompt_tune()}}: \code{system_prompt = result$system_prompt}. Default \code{""}.}
+
+\item{prompt_tune}{Integer or \code{NULL}. If set, enables Automatic Prompt
+Optimization (APO). The value is the number of rows sampled per
+correction round. A browser window opens so you can correct
+misclassifications; the meta-LLM then rewrites the system prompt and
+re-classifies until accuracy converges or \code{tune_iterations} is reached.
+Categories are never modified — only the system prompt changes.
+Default \code{NULL} (disabled).}
+
+\item{tune_iterations}{Integer. Number of APO optimization passes.
+Default \code{1L}.}
+
+\item{tune_ui}{Character. Correction UI: \code{"browser"} (default) opens an
+interactive browser window; \code{"terminal"} uses the console.}
+
+\item{tune_optimize}{Character. Metric to optimize: \code{"balanced"} (default,
+maximizes average of accuracy, sensitivity, and precision),
+\code{"sensitivity"} (minimize false negatives), or \code{"precision"} (minimize
+false positives).}
 }
 \value{
 A \code{data.frame} with one row per input item and classification

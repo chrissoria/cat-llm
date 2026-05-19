@@ -44,7 +44,11 @@ classify(
   retry_delay = 1,
   row_delay = 0,
   pdf_dpi = 150L,
-  auto_download = FALSE
+  auto_download = FALSE,
+  prompt_tune = NULL,
+  tune_iterations = 1L,
+  tune_ui = "browser",
+  tune_optimize = "balanced"
 )
 }
 \arguments{
