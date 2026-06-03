@@ -31,7 +31,7 @@ summarize(
   auto_download = FALSE,
   safety = FALSE,
   max_retries = 5L,
-  batch_retries = 2L,
+  batch_retries = 1L,
   retry_delay = 1,
   row_delay = 0,
   fail_strategy = "partial",
@@ -120,7 +120,7 @@ Default \code{NULL}.}
 \item{max_retries}{Integer. Max retries per API call. Default \code{5L}.}
 
 \item{batch_retries}{Integer. Max retries for batch-level failures.
-Default \code{2L}.}
+Default \code{1L}.}
 
 \item{retry_delay}{Numeric. Seconds between retries. Default \code{1.0}.}
 

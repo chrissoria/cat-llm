@@ -38,13 +38,21 @@ classify(
   max_workers = NULL,
   fail_strategy = "partial",
   max_retries = 5L,
-  batch_retries = 2L,
+  batch_retries = 1L,
+  json_retries = 2L,
   retry_delay = 1,
   row_delay = 0,
   pdf_dpi = 150L,
   auto_download = FALSE,
   add_other = "prompt",
   check_verbosity = TRUE,
+  batch_mode = FALSE,
+  batch_poll_interval = 30,
+  batch_timeout = 86400,
+  json_formatter = NULL,
+  two_step_classify = NULL,
+  embedding_tiebreaker = FALSE,
+  min_centroid_size = 3L,
   auto_start_ollama = TRUE,
   system_prompt = "",
   prompt_tune = NULL,
@@ -130,8 +138,29 @@ Each element is either a 3-element character vector
 When \code{models} is supplied, \code{api_key} and \code{user_model} are ignored.}
 
 \item{consensus_threshold}{Character or numeric. Agreement threshold for
-ensemble mode. Options: \code{"unanimous"} (default, 100\%), \code{"majority"}
-(50\%), \code{"two-thirds"} (67\%), or a numeric value between 0 and 1.}
+ensemble mode. Options:
+\itemize{
+\item \code{"unanimous"} (default, 100\% — empirically the most accurate)
+\item \code{"majority"} — STRICT majority. More than half of the models
+must vote positive. Ties (50/50 splits on even-model ensembles
+like 2-2 of 4) resolve to \code{"0"}. This matches sklearn's
+\code{VotingClassifier} default and standard ensemble literature.
+For 2-model ensembles, \code{"majority"} effectively requires both
+models to agree on positive (there's no "more than half" of 2
+without being all); use 3+ models for a non-degenerate
+majority vote, or pass \code{0.5} numerically to keep the old
+"tie favors positive" semantics.
+\item \code{"two-thirds"} — ~67\% agreement, \code{>=} semantics.
+\item numeric between 0 and 1 — evaluated with \code{>=} semantics
+(the user picked a number; they get the literal interpretation).
+}
+The output \code{data.frame} for multi-model runs includes
+\code{category_N_agreement} columns (fraction of models that match the
+consensus, 0.0-1.0). For even-model ensembles with \code{"majority"},
+pair with \code{embedding_tiebreaker = TRUE} to resolve true 50/50 ties
+via embedding-centroid similarity instead of the default
+"tie → 0"; that adds a \code{category_N_resolved_by} audit column
+(values: \code{"vote"} or \code{"centroid"}).}
 
 \item{survey_question}{Character. The survey question text (used when
 \code{categories = "auto"}). Default \code{""}.}
@@ -148,7 +177,15 @@ Default \code{NULL}.}
 \item{max_retries}{Integer. Max retries per API call. Default \code{5L}.}
 
 \item{batch_retries}{Integer. Max retries for batch-level failures.
-Default \code{2L}.}
+Default \code{1L}. Note: composes multiplicatively with \code{json_retries} —
+a row can hit the LLM up to \code{(1 + json_retries) * (1 + batch_retries)}
+times.}
+
+\item{json_retries}{Integer. Per-row retries when the LLM returns JSON
+that fails schema validation. On each retry the prompt appends
+"Respond with ONLY valid JSON". On the final attempt the formatter
+fallback (if enabled via \code{json_formatter}) fires before the row is
+marked failed. Default \code{2L}.}
 
 \item{retry_delay}{Numeric. Seconds between retries. Default \code{1.0}.}
 
@@ -166,6 +203,62 @@ silently adds "Other". \code{FALSE} never adds it.}
 
 \item{check_verbosity}{Logical. Check whether each category has a
 description and examples (1 API call). Default \code{TRUE}.}
+
+\item{batch_mode}{Logical. If \code{TRUE}, use async batch APIs for ~50\%
+cost savings and higher rate limits. Supported providers: OpenAI,
+Anthropic, Google, Mistral, xAI. HuggingFace / Perplexity / Ollama
+fall back to synchronous calls. Incompatible with PDF / image input
+and with \code{embedding_tiebreaker}. Default \code{FALSE}.}
+
+\item{batch_poll_interval}{Numeric. Seconds between batch-job status
+polls when \code{batch_mode = TRUE}. Default \code{30.0}.}
+
+\item{batch_timeout}{Numeric. Maximum seconds to wait for a batch
+job to complete. Default \code{86400.0} (24 hours).}
+
+\item{json_formatter}{\code{TRUE}, \code{FALSE}, or \code{NULL}. Three-state control
+for the local JSON-repair fallback model that fixes malformed LLM
+output before marking rows as failed. Runs only when
+\code{extract_json()} produces invalid output. The model (~1 GB) is
+downloaded from HuggingFace Hub on first use; requires
+\code{cat-stack[formatter]}.
+\itemize{
+\item \code{TRUE} — eagerly load and use the formatter (implicit
+consent for the ~1.5 GB dependency install if needed).
+\item \code{FALSE} — disabled; malformed rows stay as failures.
+\item \code{NULL} (default) — auto-prompt on the first malformed
+row. If dependencies are installed, asks
+"Use the formatter for this run? (Y/n)"; if not, asks
+"Download deps (~1.5 GB) and use the formatter? (Y/n)".
+Non-TTY contexts (CI, batch scripts) decline silently and
+print a one-time suggestion.
+}
+Auto-enabled when \code{two_step_classify = TRUE} or any model uses
+the Ollama provider.}
+
+\item{two_step_classify}{\code{TRUE}, \code{FALSE}, or \code{NULL}. Split
+classification into two LLM calls — (1) natural-language reasoning,
+(2) JSON formatting. More reliable for weaker models (local
+Ollama, lower-tier API models like \verb{gpt-4o-mini},
+\code{claude-haiku-4-5}, \code{gemini-2.5-flash}) that struggle to produce
+strict per-category JSON in a single shot. Default \code{NULL}
+(auto-enables for Ollama models, disabled otherwise). When
+enabled, \code{json_formatter} is auto-enabled too.}
+
+\item{embedding_tiebreaker}{Logical. Resolve true ensemble ties
+(50/50 splits at the threshold) using embedding centroids built
+from unanimously-agreed rows; the closer centroid wins. Companion
+for \code{consensus_threshold = "majority"} on even-model ensembles —
+replaces the default \code{"tie → 0"} with an evidence-based decision.
+Adds a \code{category_N_resolved_by} audit column to the output
+(values: \code{"vote"} or \code{"centroid"}). Multi-model ensemble + text
+input only; not supported in \code{batch_mode}. Requires
+\code{cat-stack[embeddings]}. Default \code{FALSE}.}
+
+\item{min_centroid_size}{Integer. Minimum number of
+unanimously-agreed rows needed to build a centroid for a category
+when \code{embedding_tiebreaker = TRUE}. Categories with fewer
+confident rows fall back to vote-based consensus. Default \code{3L}.}
 
 \item{auto_start_ollama}{Logical. If \code{TRUE} (default), automatically
 call \code{\link[=ensure_ollama_running]{ensure_ollama_running()}} when \code{model_source = "ollama"} or any
@@ -225,6 +318,30 @@ results <- classify(
     c("claude-sonnet-4-5-20250929", "anthropic", Sys.getenv("ANTHROPIC_API_KEY"))
   ),
   consensus_threshold = "unanimous"
+)
+
+# Even-model ensemble with strict-majority + embedding tiebreaker
+# (resolves true 50/50 ties via centroid similarity instead of
+# the default "tie -> 0"; requires cat-stack[embeddings])
+results <- classify(
+  input_data           = df$responses,
+  categories           = c("Positive", "Negative", "Neutral"),
+  models               = list(
+    c("gpt-4o-mini",      "openai",    Sys.getenv("OPENAI_API_KEY")),
+    c("claude-haiku-4-5", "anthropic", Sys.getenv("ANTHROPIC_API_KEY"))
+  ),
+  consensus_threshold  = "majority",
+  embedding_tiebreaker = TRUE
+)
+
+# Async batch mode (50\% cheaper, slower) — OpenAI / Anthropic /
+# Google / Mistral / xAI only; not yet supported with PDFs/images
+# or embedding_tiebreaker.
+results <- classify(
+  input_data = df$responses,
+  categories = c("Positive", "Negative", "Neutral"),
+  api_key    = Sys.getenv("OPENAI_API_KEY"),
+  batch_mode = TRUE
 )
 }
 

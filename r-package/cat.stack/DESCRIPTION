@@ -1,6 +1,6 @@
 Package: cat.stack
 Title: General-Purpose LLM Text Classification Engine
-Version: 0.1.2
+Version: 0.2.0
 Authors@R: person("Chris", "Soria", role = c("aut", "cre"),
                   email = "chrissoria@berkeley.edu")
 Description: R interface to the Python cat-stack package. General-purpose text,
@@ -12,7 +12,7 @@ BugReports: https://github.com/chrissoria/cat-llm/issues
 Encoding: UTF-8
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.3.2
-SystemRequirements: Python (>= 3.9), pip
+SystemRequirements: Python (>= 3.9), pip, cat-stack (>= 1.6.0)
 Imports:
     reticulate (>= 1.28)
 Suggests:

@@ -57,8 +57,29 @@
 #'   `list("model", "provider", "api_key", list(creativity = 0.5))`.
 #'   When `models` is supplied, `api_key` and `user_model` are ignored.
 #' @param consensus_threshold Character or numeric. Agreement threshold for
-#'   ensemble mode. Options: `"unanimous"` (default, 100%), `"majority"`
-#'   (50%), `"two-thirds"` (67%), or a numeric value between 0 and 1.
+#'   ensemble mode. Options:
+#'   \itemize{
+#'     \item `"unanimous"` (default, 100% — empirically the most accurate)
+#'     \item `"majority"` — STRICT majority. More than half of the models
+#'       must vote positive. Ties (50/50 splits on even-model ensembles
+#'       like 2-2 of 4) resolve to `"0"`. This matches sklearn's
+#'       `VotingClassifier` default and standard ensemble literature.
+#'       For 2-model ensembles, `"majority"` effectively requires both
+#'       models to agree on positive (there's no "more than half" of 2
+#'       without being all); use 3+ models for a non-degenerate
+#'       majority vote, or pass `0.5` numerically to keep the old
+#'       "tie favors positive" semantics.
+#'     \item `"two-thirds"` — ~67% agreement, `>=` semantics.
+#'     \item numeric between 0 and 1 — evaluated with `>=` semantics
+#'       (the user picked a number; they get the literal interpretation).
+#'   }
+#'   The output `data.frame` for multi-model runs includes
+#'   `category_N_agreement` columns (fraction of models that match the
+#'   consensus, 0.0-1.0). For even-model ensembles with `"majority"`,
+#'   pair with `embedding_tiebreaker = TRUE` to resolve true 50/50 ties
+#'   via embedding-centroid similarity instead of the default
+#'   "tie → 0"; that adds a `category_N_resolved_by` audit column
+#'   (values: `"vote"` or `"centroid"`).
 #' @param survey_question Character. The survey question text (used when
 #'   `categories = "auto"`). Default `""`.
 #' @param use_json_schema Logical. Use JSON schema for structured output.
@@ -69,7 +90,14 @@
 #'   (default) or `"strict"`.
 #' @param max_retries Integer. Max retries per API call. Default `5L`.
 #' @param batch_retries Integer. Max retries for batch-level failures.
-#'   Default `2L`.
+#'   Default `1L`. Note: composes multiplicatively with `json_retries` —
+#'   a row can hit the LLM up to `(1 + json_retries) * (1 + batch_retries)`
+#'   times.
+#' @param json_retries Integer. Per-row retries when the LLM returns JSON
+#'   that fails schema validation. On each retry the prompt appends
+#'   "Respond with ONLY valid JSON". On the final attempt the formatter
+#'   fallback (if enabled via `json_formatter`) fires before the row is
+#'   marked failed. Default `2L`.
 #' @param retry_delay Numeric. Seconds between retries. Default `1.0`.
 #' @param row_delay Numeric. Seconds between processing each row (useful for
 #'   rate limiting). Default `0.0`.
@@ -81,6 +109,55 @@
 #'   silently adds "Other". `FALSE` never adds it.
 #' @param check_verbosity Logical. Check whether each category has a
 #'   description and examples (1 API call). Default `TRUE`.
+#' @param batch_mode Logical. If `TRUE`, use async batch APIs for ~50%
+#'   cost savings and higher rate limits. Supported providers: OpenAI,
+#'   Anthropic, Google, Mistral, xAI. HuggingFace / Perplexity / Ollama
+#'   fall back to synchronous calls. Incompatible with PDF / image input
+#'   and with `embedding_tiebreaker`. Default `FALSE`.
+#' @param batch_poll_interval Numeric. Seconds between batch-job status
+#'   polls when `batch_mode = TRUE`. Default `30.0`.
+#' @param batch_timeout Numeric. Maximum seconds to wait for a batch
+#'   job to complete. Default `86400.0` (24 hours).
+#' @param json_formatter `TRUE`, `FALSE`, or `NULL`. Three-state control
+#'   for the local JSON-repair fallback model that fixes malformed LLM
+#'   output before marking rows as failed. Runs only when
+#'   `extract_json()` produces invalid output. The model (~1 GB) is
+#'   downloaded from HuggingFace Hub on first use; requires
+#'   `cat-stack[formatter]`.
+#'   \itemize{
+#'     \item `TRUE` — eagerly load and use the formatter (implicit
+#'       consent for the ~1.5 GB dependency install if needed).
+#'     \item `FALSE` — disabled; malformed rows stay as failures.
+#'     \item `NULL` (default) — auto-prompt on the first malformed
+#'       row. If dependencies are installed, asks
+#'       "Use the formatter for this run? (Y/n)"; if not, asks
+#'       "Download deps (~1.5 GB) and use the formatter? (Y/n)".
+#'       Non-TTY contexts (CI, batch scripts) decline silently and
+#'       print a one-time suggestion.
+#'   }
+#'   Auto-enabled when `two_step_classify = TRUE` or any model uses
+#'   the Ollama provider.
+#' @param two_step_classify `TRUE`, `FALSE`, or `NULL`. Split
+#'   classification into two LLM calls — (1) natural-language reasoning,
+#'   (2) JSON formatting. More reliable for weaker models (local
+#'   Ollama, lower-tier API models like `gpt-4o-mini`,
+#'   `claude-haiku-4-5`, `gemini-2.5-flash`) that struggle to produce
+#'   strict per-category JSON in a single shot. Default `NULL`
+#'   (auto-enables for Ollama models, disabled otherwise). When
+#'   enabled, `json_formatter` is auto-enabled too.
+#' @param embedding_tiebreaker Logical. Resolve true ensemble ties
+#'   (50/50 splits at the threshold) using embedding centroids built
+#'   from unanimously-agreed rows; the closer centroid wins. Companion
+#'   for `consensus_threshold = "majority"` on even-model ensembles —
+#'   replaces the default `"tie → 0"` with an evidence-based decision.
+#'   Adds a `category_N_resolved_by` audit column to the output
+#'   (values: `"vote"` or `"centroid"`). Multi-model ensemble + text
+#'   input only; not supported in `batch_mode`. Requires
+#'   `cat-stack[embeddings]`. Default `FALSE`.
+#' @param min_centroid_size Integer. Minimum number of
+#'   unanimously-agreed rows needed to build a centroid for a category
+#'   when `embedding_tiebreaker = TRUE`. Categories with fewer
+#'   confident rows fall back to vote-based consensus. Default `3L`.
 #' @param auto_start_ollama Logical. If `TRUE` (default), automatically
 #'   call [ensure_ollama_running()] when `model_source = "ollama"` or any
 #'   ensemble entry uses the `"ollama"` provider. Set `FALSE` to skip
@@ -130,6 +207,30 @@
 #'   ),
 #'   consensus_threshold = "unanimous"
 #' )
+#'
+#' # Even-model ensemble with strict-majority + embedding tiebreaker
+#' # (resolves true 50/50 ties via centroid similarity instead of
+#' # the default "tie -> 0"; requires cat-stack[embeddings])
+#' results <- classify(
+#'   input_data           = df$responses,
+#'   categories           = c("Positive", "Negative", "Neutral"),
+#'   models               = list(
+#'     c("gpt-4o-mini",      "openai",    Sys.getenv("OPENAI_API_KEY")),
+#'     c("claude-haiku-4-5", "anthropic", Sys.getenv("ANTHROPIC_API_KEY"))
+#'   ),
+#'   consensus_threshold  = "majority",
+#'   embedding_tiebreaker = TRUE
+#' )
+#'
+#' # Async batch mode (50% cheaper, slower) — OpenAI / Anthropic /
+#' # Google / Mistral / xAI only; not yet supported with PDFs/images
+#' # or embedding_tiebreaker.
+#' results <- classify(
+#'   input_data = df$responses,
+#'   categories = c("Positive", "Negative", "Neutral"),
+#'   api_key    = Sys.getenv("OPENAI_API_KEY"),
+#'   batch_mode = TRUE
+#' )
 #' }
 #'
 #' @export
@@ -167,13 +268,21 @@ classify <- function(
     max_workers          = NULL,
     fail_strategy        = "partial",
     max_retries          = 5L,
-    batch_retries        = 2L,
+    batch_retries        = 1L,
+    json_retries         = 2L,
     retry_delay          = 1.0,
     row_delay            = 0.0,
     pdf_dpi              = 150L,
     auto_download        = FALSE,
     add_other            = "prompt",
     check_verbosity      = TRUE,
+    batch_mode           = FALSE,
+    batch_poll_interval  = 30.0,
+    batch_timeout        = 86400.0,
+    json_formatter       = NULL,
+    two_step_classify    = NULL,
+    embedding_tiebreaker = FALSE,
+    min_centroid_size    = 3L,
     auto_start_ollama    = TRUE,
     system_prompt        = "",
     prompt_tune          = NULL,
@@ -230,12 +339,20 @@ classify <- function(
     fail_strategy         = fail_strategy,
     max_retries           = .as_py_int(max_retries),
     batch_retries         = .as_py_int(batch_retries),
+    json_retries          = .as_py_int(json_retries),
     retry_delay           = as.double(retry_delay),
     row_delay             = as.double(row_delay),
     pdf_dpi               = .as_py_int(pdf_dpi),
     auto_download         = auto_download,
     add_other             = add_other,
     check_verbosity       = check_verbosity,
+    batch_mode            = batch_mode,
+    batch_poll_interval   = as.double(batch_poll_interval),
+    batch_timeout         = as.double(batch_timeout),
+    json_formatter        = reticulate::r_to_py(json_formatter),
+    two_step_classify     = reticulate::r_to_py(two_step_classify),
+    embedding_tiebreaker  = embedding_tiebreaker,
+    min_centroid_size     = .as_py_int(min_centroid_size),
     system_prompt         = system_prompt,
     prompt_tune           = reticulate::r_to_py(prompt_tune),
     tune_iterations       = .as_py_int(tune_iterations),

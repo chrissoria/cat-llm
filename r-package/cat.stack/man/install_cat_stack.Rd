@@ -33,6 +33,13 @@ Invisibly \code{NULL}.
 Installs the \code{cat-stack} Python package into the Python environment used by
 reticulate. Optionally installs PDF extras.
 }
+\details{
+The version floor is pinned to \verb{cat-stack >= 1.6.0} — that release adds
+strict-majority consensus, embedding tiebreaker, async batch mode, and the
+JSON-formatter auto-consent flow that the R wrappers now expose. Older
+Python installs work, but R users will hit "unexpected keyword argument"
+errors from \code{reticulate} when the new parameters get forwarded.
+}
 \examples{
 \dontrun{
 # Standard install

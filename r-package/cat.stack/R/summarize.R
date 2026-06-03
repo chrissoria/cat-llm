@@ -56,7 +56,7 @@
 #'   `FALSE`.
 #' @param max_retries Integer. Max retries per API call. Default `5L`.
 #' @param batch_retries Integer. Max retries for batch-level failures.
-#'   Default `2L`.
+#'   Default `1L`.
 #' @param retry_delay Numeric. Seconds between retries. Default `1.0`.
 #' @param row_delay Numeric. Seconds between processing each row. Default
 #'   `0.0`.
@@ -121,7 +121,7 @@ summarize <- function(
     auto_download        = FALSE,
     safety               = FALSE,
     max_retries          = 5L,
-    batch_retries        = 2L,
+    batch_retries        = 1L,
     retry_delay          = 1.0,
     row_delay            = 0.0,
     fail_strategy        = "partial",
