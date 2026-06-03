@@ -8,12 +8,12 @@ d Mistral, Perplexity, xAI, HuggingFace, and local Ollama models. The
 d domain() option selects prompt templates tuned for political,
 d sentiment, academic, survey, cognitive, or web text.
 d
-d Requires: Stata 16+ with Python integration, Python 3.8+, cat-stack >= 1.4.0
+d Requires: Stata 16+ with Python integration, Python 3.8+, cat-stack >= 1.6.0
 d
 d Author: Christopher Soria
 d Support: chrissoria@berkeley.edu
 d
-d Distribution-Date: 20260518
+d Distribution-Date: 20260603
 
 F catllm.ado
 F catllm_classify.ado

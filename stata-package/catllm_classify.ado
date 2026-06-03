@@ -1,4 +1,4 @@
-*! version 2.0.0  18may2026
+*! version 2.1.0  03jun2026
 *! catllm_classify -- Classify text into categories using LLMs
 
 program define catllm_classify, rclass
@@ -176,13 +176,13 @@ def _catllm_do_classify():
 
     replace_flag = Macro.getLocal("_catllm_replace") != ""
 
-    # --- version guard: this .ado requires cat-stack >= 1.4.0 ---
+    # --- version guard: this .ado requires cat-stack >= 1.6.0 ---
     try:
         import cat_stack
         _v = tuple(int(x) for x in cat_stack.__version__.split(".")[:2])
-        if _v < (1, 4):
+        if _v < (1, 6):
             raise ImportError(
-                "catllm_classify 2.0 requires cat-stack >= 1.4.0 "
+                "catllm_classify 2.1 requires cat-stack >= 1.6.0 "
                 "(installed: " + cat_stack.__version__ + "). "
                 "Run: catllm setup, upgrade"
             )

@@ -1,4 +1,4 @@
-*! version 2.0.0  17may2026
+*! version 2.1.0  03jun2026
 *! catllm -- LLM-powered classification and extraction for text data
 *! Author: Christopher Soria (chrissoria@berkeley.edu)
 

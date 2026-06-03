@@ -1,4 +1,4 @@
-*! version 2.0.0  17may2026
+*! version 2.1.0  03jun2026
 *! catllm_setup -- Install the cat-stack Python backend (and optional domain packages)
 
 program define catllm_setup
@@ -22,12 +22,16 @@ program define catllm_setup
 
     local upflag = cond("`upgrade'" != "", "--upgrade", "")
 
+    * Floor pin matches the cat-stack version guard in catllm_classify.ado.
+    * Bumping this floor alongside the guard guarantees `catllm setup` pulls
+    * a Python that's actually compatible with the .ado, rather than
+    * letting the version-guard error fire at runtime.
     if "`domain'" == "" {
-        local pkgs = cond("`pdf'" != "", "cat-stack[pdf]", "cat-stack")
+        local pkgs = cond("`pdf'" != "", "cat-stack[pdf]>=1.6.0", "cat-stack>=1.6.0")
         di as txt "Installing `pkgs'..."
     }
     else if "`domain'" == "all" {
-        local pkgs = cond("`pdf'" != "", "cat-stack[pdf]", "cat-stack")
+        local pkgs = cond("`pdf'" != "", "cat-stack[pdf]>=1.6.0", "cat-stack>=1.6.0")
         local pkgs "`pkgs' cat-pol cat-vader cat-ademic cat-survey cat-cog cat-web"
         di as txt "Installing cat-stack and all domain packages..."
     }

@@ -114,8 +114,32 @@ Example: {cmd:models("gpt-4o openai $OPENAI_API_KEY; claude-sonnet-4-20250514 an
 
 {phang}
 {opt consensus(string)} sets the consensus threshold for ensemble mode.
-Options: {bf:majority} (default), {bf:two-thirds}, {bf:unanimous}, or a
-number between 0 and 1.
+Options:
+
+{phang2}{bf:majority} (default) — STRICT majority. More than half of the
+models must vote positive. Ties (50/50 splits on even-model ensembles like
+2-2 of 4) resolve to {bf:0}. Matches sklearn's VotingClassifier default and
+standard ensemble literature. For 2-model ensembles, {bf:majority}
+effectively requires both models to agree on positive (there's no "more
+than half" of 2 without being all); use 3+ models for a non-degenerate
+majority vote, or pass a numeric threshold via {opt pyoptions()}
+({cmd:pyoptions("consensus_threshold=0.5")}) to keep the older
+"tie favors positive" semantics.{p_end}
+
+{phang2}{bf:two-thirds} — ~67% agreement, uses {bf:>=} comparison.{p_end}
+
+{phang2}{bf:unanimous} — 100% agreement.{p_end}
+
+{phang2}numeric between 0 and 1 — evaluated with {bf:>=} semantics
+(the user picked a number; the literal interpretation applies). Pass via
+{opt pyoptions()}.{p_end}
+
+{phang}
+For even-model ensembles with {bf:majority}, pair with
+{cmd:pyoptions("embedding_tiebreaker=True")} to resolve true 50/50 ties
+via embedding-centroid similarity instead of the default tie -> 0. That
+adds a {cmd:category_N_resolved_by} audit column to the returned data
+(values {bf:vote} or {bf:centroid}). Requires {cmd:cat-stack[embeddings]}.
 
 {dlgtab:Prompt tuning}
 
@@ -168,6 +192,30 @@ underlying Python function. Format: comma-separated {cmd:key=value} pairs.
 Values are parsed as Python literals (numbers, booleans, strings, lists).
 Use this to access any cat-stack parameter not otherwise wrapped as a Stata
 option.
+
+{pmore}
+Common v1.6.0 features reachable via {opt pyoptions()}:
+
+{phang2}{cmd:pyoptions("embedding_tiebreaker=True, min_centroid_size=3")}
+— use embedding centroids to break true 50/50 ties on even-model
+ensembles. Companion to {cmd:consensus("majority")}. Adds a
+{cmd:category_N_resolved_by} audit column to the returned data. Requires
+{cmd:cat-stack[embeddings]}.{p_end}
+
+{phang2}{cmd:pyoptions("json_formatter=True")} — enable the local
+JSON-repair model that fixes malformed LLM output before marking rows as
+failed. Auto-downloads ~1.5 GB of dependencies on first use. Pass
+{bf:False} to disable entirely; omit (or pass nothing) for the new
+auto-consent behavior that prompts on the first malformed row.{p_end}
+
+{phang2}{cmd:pyoptions("batch_mode=True, batch_timeout=86400")} — use
+async batch APIs (~50% cheaper, slower turnaround). Supported providers:
+OpenAI, Anthropic, Google, Mistral, xAI. HuggingFace / Perplexity / Ollama
+fall back to synchronous calls. Incompatible with PDF / image input and
+with {cmd:embedding_tiebreaker}.{p_end}
+
+{phang2}{cmd:pyoptions("max_retries=3, row_delay=0.2")} — classic
+rate-limit / retry tuning.{p_end}
 
 
 {marker results}{...}

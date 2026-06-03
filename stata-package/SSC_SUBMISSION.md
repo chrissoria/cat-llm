@@ -25,7 +25,7 @@ free-text without moving the data out of Stata.
 
 I checked the SSC archive and don't see anything overlapping in name or
 scope. License is GPL-3.0. It needs Stata 16+, Python 3.8+, and the
-cat-stack Python backend (>= 1.4.0), which the included catllm setup
+cat-stack Python backend (>= 1.6.0), which the included catllm setup
 command installs from PyPI.
 
 Source and worked examples are at https://github.com/chrissoria/cat-llm.

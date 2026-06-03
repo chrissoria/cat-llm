@@ -4,8 +4,8 @@ d Christopher Soria, University of California, Berkeley
 d chrissoria@berkeley.edu
 d https://github.com/chrissoria/cat-llm
 d
-d Requires: Stata 16+, Python 3.8+, cat-stack >= 1.4.0
+d Requires: Stata 16+, Python 3.8+, cat-stack >= 1.6.0
 d
-d Distribution-Date: 20260518
+d Distribution-Date: 20260603
 
 p catllm classify, summarize, and discover themes in open-ended text using LLMs
