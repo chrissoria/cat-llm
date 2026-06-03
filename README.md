@@ -1006,6 +1006,37 @@ This notebook walks through text classification using a local model, verifying t
 
 For cloud provider testing, additional example notebooks are available in the [`examples/`](examples/) directory covering ensemble classification, category extraction, and summarization.
 
+## Future work
+
+Items tracked for a future release. PRs welcome.
+
+- **Decouple the desktop app's update-check from the cat-llm PyPI
+  version.** Today the in-app "CatLLM X.Y.Z is available" banner
+  (`app/components/update_check.py`) queries PyPI for the latest
+  `cat-llm` release and compares it to the bundled `catllm.__version__`.
+  That means existing users of an older
+  [`chrissoria/catllm-desktop`](https://huggingface.co/chrissoria/catllm-desktop)
+  DMG only see an update prompt when we cut a new cat-llm PyPI
+  release — even if we've rebuilt the DMG with a newer underlying
+  `cat-stack` engine. The cleaner check would query the HuggingFace
+  model repo directly (last-commit timestamp, or a manifest file the
+  build writes alongside the DMG) so that engine-only rebuilds also
+  trigger the banner without forcing a meta-package release. Scope:
+  swap `PYPI_URL` for an HF API call, add a tiny `manifest.json`
+  emitted by `app/desktop/build.sh`, and adjust the version-comparison
+  logic.
+
+- **Tier 2 UI: surface the cat-stack 1.6.0 advanced params in the
+  Streamlit classify page.** The new `embedding_tiebreaker`,
+  `json_formatter`, `batch_mode`, and `two_step_classify` parameters
+  all work today through direct Python use and the underlying engine,
+  but the desktop UI doesn't expose them as toggles. An "Advanced
+  classification settings" expander in
+  `app/functions/classify_page.py` plus the corresponding kwargs in
+  `app/components/code_generation.py` would close the gap. See the
+  `[Unreleased]` section in `CHANGELOG.md` for the full v1.6.0
+  feature list.
+
 ## Contributing & Support
 
 Contributions are welcome! Please see [CONTRIBUTING.md](CONTRIBUTING.md) for detailed guidelines.
