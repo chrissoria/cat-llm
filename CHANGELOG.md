@@ -5,6 +5,91 @@ All notable changes to CatLLM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+No cat-llm release planned for these — the cat-stack 1.6.0 behaviors
+below already flow through to fresh `pip install cat-llm` runs via the
+existing `cat-stack>=1.0.19` floor pin (1.6.0 satisfies the floor). The
+notes here exist so users of the meta-package can see what's available
+in the engine layer; they will be folded into the next cat-llm release
+proper whenever one is cut.
+
+### Available from cat-stack 1.6.0 (no umbrella code change needed)
+- **`consensus_threshold="majority"` is now strict majority.** 50/50
+  ties on even-model ensembles resolve to `"0"` instead of `"1"`
+  (matches sklearn's `VotingClassifier` default and standard ensemble
+  literature). Numeric `consensus_threshold=0.5` keeps the old `>=`
+  semantics for callers that want the prior tie-favors-positive
+  behavior. The Streamlit desktop app's consensus radio
+  (majority / two-thirds / unanimous) inherits this without UI work.
+- **`embedding_tiebreaker=True`** — companion to
+  `consensus_threshold="majority"` for even-model ensembles. Resolves
+  true 50/50 ties via embedding-centroid similarity instead of
+  defaulting to `"0"`. Adds a `category_N_resolved_by` audit column
+  (`"vote"` or `"centroid"`). Multi-model + text input only; not yet
+  supported in batch mode. Requires `cat-stack[embeddings]`. Not yet
+  surfaced in the Streamlit UI — reachable by direct Python use; a
+  future cat-llm release can add a UI toggle if user demand
+  surfaces.
+- **`json_formatter`** — three-state (`True` / `False` / `None`)
+  control of the local JSON-repair model that fixes malformed LLM
+  output. Default `None` triggers an interactive consent prompt on
+  the first malformed row; non-TTY contexts (the Streamlit desktop
+  app and CI) decline silently and print a one-time suggestion.
+  Requires `cat-stack[formatter]`.
+- **`batch_mode=True`** — async batch APIs for OpenAI / Anthropic /
+  Google / Mistral / xAI with ~50% cost savings. HuggingFace /
+  Perplexity / Ollama fall back to synchronous. Incompatible with
+  PDF / image input and with `embedding_tiebreaker`. Per-model
+  failure isolation: one model's batch failure no longer aborts the
+  ensemble.
+- **Anthropic batch terminal-state inspection** — all-errored batches
+  now raise `BatchJobFailedError` instead of silently returning
+  empty results.
+- **Google `responseSchema` preflight sanitizer** strips
+  `additionalProperties`, `oneOf`/`anyOf`/`allOf`, `$schema`/`$ref`,
+  etc. before send, so the preflight probe no longer 400s on Gemini.
+- **PDF inputs validated against the `%PDF-` magic-byte header**
+  before reaching PyMuPDF. A webpage saved with a `.pdf` extension
+  now raises `ValueError` instead of being rendered as a blank page
+  and classified `processing_status: "success"`.
+- **HuggingFace small-model `response_format` strip-on-5xx** —
+  Llama-3.2-1B and similar gateways that 502 on
+  `response_format: json_object` are now recoverable: cat-stack
+  strips the field once per call and caches the decision.
+- **Image directory loading is case-insensitive** (`IMG.JPG` no
+  longer dropped); large images (>20MB) print a warning before the
+  upload.
+- **`system_prompt` is no longer silently dropped in `batch_mode`**
+  (the canonical use case is piping a `prompt_tune` result into
+  batch classification).
+- **PDF summary synthesis grounds on the actual page text** instead
+  of the page label, so multi-model PDF summarization actually has
+  source-of-truth to anchor its consensus on.
+- **`prompt_tune` returns `system_prompt=""` when no improvement
+  was found** (instead of returning a non-improving prompt). The
+  meta-LLM also now sees the full attempt history rather than just
+  the last three.
+- **`parse_kwargs_string` warns on probable typos** like
+  `max_retries=three` (plain prose like
+  `research_question=Why did you move?` still falls through
+  silently).
+- **`strip_html_tags`** swapped from regex to stdlib `html.parser`
+  (attribute values containing `>` no longer leak into output text).
+
+Full cat-stack 1.6.0 release notes:
+https://github.com/chrissoria/cat-stack/blob/main/CHANGELOG.md
+
+### Coherent across consumers (no umbrella code change needed)
+The R package `cat.stack` (0.2.0) and the Stata package `catllm`
+(2.1.0) both shipped this batch with their own
+`cat-stack>=1.6.0` floor pins (`install_cat_stack()` and
+`catllm setup` respectively). The cat-llm umbrella's existing
+`cat-stack>=1.0.19` floor still resolves to 1.6.0 for any fresh
+install, so no version bump or pin tightening is needed here.
+
+---
+
 ## [3.1.1] - 2026-05-11
 
 ### Added
