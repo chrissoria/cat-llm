@@ -1006,6 +1006,36 @@ This notebook walks through text classification using a local model, verifying t
 
 For cloud provider testing, additional example notebooks are available in the [`examples/`](examples/) directory covering ensemble classification, category extraction, and summarization.
 
+### HTTP timeouts on local Ollama runs (cat-stack ≥ 1.6.5)
+
+When using `model_source="ollama"`, cat-stack uses a **wider HTTP
+timeout window** than for cloud providers: **600 s per request and
+1200 s cumulative retry budget** (cloud providers stay at 120 s / 300 s).
+The wider window accommodates the long per-row tails that emerge when
+running 14B+ open-weight models on memory-constrained hardware
+(e.g. 16 GB Macs), where individual rows can take 2-4+ minutes under
+thermal/memory pressure as a long session progresses. Under the older
+120 s cloud-default timeout, these rows would spuriously fail even
+though Ollama was on the verge of producing valid output.
+
+You can override these defaults two ways:
+
+```python
+# Per-client override (constructed directly)
+from catstack._providers import UnifiedLLMClient
+client = UnifiedLLMClient("ollama", "", "qwen3:14b",
+                          request_timeout=900,
+                          max_total_wait=1800)
+
+# Process-wide override (all subsequently-constructed clients)
+from catstack._providers import set_session_timeouts
+set_session_timeouts(request_timeout=900, max_total_wait=1800)
+```
+
+Per-call `classify()` kwarg exposure is planned for a follow-up
+release; for now power users construct `UnifiedLLMClient` directly
+or call `set_session_timeouts()` before the classify call.
+
 ## Future work
 
 Items tracked for a future release. PRs welcome.
