@@ -109,6 +109,9 @@
 #'   silently adds "Other". `FALSE` never adds it.
 #' @param check_verbosity Logical. Check whether each category has a
 #'   description and examples (1 API call). Default `TRUE`.
+#' @param multi_label Logical. If `TRUE` (default), the prompt allows
+#'   multiple categories per response. If `FALSE`, the prompt instructs the
+#'   model to assign exactly one best-matching category (single-label).
 #' @param batch_mode Logical. If `TRUE`, use async batch APIs for ~50%
 #'   cost savings and higher rate limits. Supported providers: OpenAI,
 #'   Anthropic, Google, Mistral, xAI. HuggingFace / Perplexity / Ollama
@@ -197,6 +200,17 @@
 #'   api_key     = Sys.getenv("OPENAI_API_KEY")
 #' )
 #'
+#' # Single-label: force exactly one best-matching category per response
+#' # (the prompt asks for the single most appropriate category instead of
+#' # all that apply). Use for mutually exclusive coding frames.
+#' results <- classify(
+#'   input_data  = c("I love this!", "Terrible service.", "It was okay."),
+#'   categories  = c("Positive", "Negative", "Neutral"),
+#'   description = "Customer feedback",
+#'   multi_label = FALSE,
+#'   api_key     = Sys.getenv("OPENAI_API_KEY")
+#' )
+#'
 #' # Multi-model ensemble
 #' results <- classify(
 #'   input_data  = df$responses,
@@ -276,6 +290,7 @@ classify <- function(
     auto_download        = FALSE,
     add_other            = "prompt",
     check_verbosity      = TRUE,
+    multi_label          = TRUE,
     batch_mode           = FALSE,
     batch_poll_interval  = 30.0,
     batch_timeout        = 86400.0,
@@ -346,6 +361,7 @@ classify <- function(
     auto_download         = auto_download,
     add_other             = add_other,
     check_verbosity       = check_verbosity,
+    multi_label           = multi_label,
     batch_mode            = batch_mode,
     batch_poll_interval   = as.double(batch_poll_interval),
     batch_timeout         = as.double(batch_timeout),

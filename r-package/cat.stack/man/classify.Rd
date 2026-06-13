@@ -46,6 +46,7 @@ classify(
   auto_download = FALSE,
   add_other = "prompt",
   check_verbosity = TRUE,
+  multi_label = TRUE,
   batch_mode = FALSE,
   batch_poll_interval = 30,
   batch_timeout = 86400,
@@ -204,6 +205,10 @@ silently adds "Other". \code{FALSE} never adds it.}
 \item{check_verbosity}{Logical. Check whether each category has a
 description and examples (1 API call). Default \code{TRUE}.}
 
+\item{multi_label}{Logical. If \code{TRUE} (default), the prompt allows
+multiple categories per response. If \code{FALSE}, the prompt instructs the
+model to assign exactly one best-matching category (single-label).}
+
 \item{batch_mode}{Logical. If \code{TRUE}, use async batch APIs for ~50\%
 cost savings and higher rate limits. Supported providers: OpenAI,
 Anthropic, Google, Mistral, xAI. HuggingFace / Perplexity / Ollama
@@ -306,6 +311,17 @@ results <- classify(
   input_data  = c("I love this!", "Terrible service.", "It was okay."),
   categories  = c("Positive", "Negative", "Neutral"),
   description = "Customer feedback",
+  api_key     = Sys.getenv("OPENAI_API_KEY")
+)
+
+# Single-label: force exactly one best-matching category per response
+# (the prompt asks for the single most appropriate category instead of
+# all that apply). Use for mutually exclusive coding frames.
+results <- classify(
+  input_data  = c("I love this!", "Terrible service.", "It was okay."),
+  categories  = c("Positive", "Negative", "Neutral"),
+  description = "Customer feedback",
+  multi_label = FALSE,
   api_key     = Sys.getenv("OPENAI_API_KEY")
 )
 

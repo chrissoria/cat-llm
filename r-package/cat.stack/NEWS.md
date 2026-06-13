@@ -1,3 +1,14 @@
+# cat.stack 0.2.1
+
+## New parameter in `classify()`
+
+* `multi_label` — logical, default `TRUE` (unchanged behavior). The Python
+  engine has always supported single-label classification, but the R
+  wrapper did not forward the flag, so `classify()` could only ever request
+  multi-label output. Setting `multi_label = FALSE` now reaches the engine
+  and switches the prompt to "assign the single most appropriate category"
+  (one `1`, the rest `0`), for mutually exclusive coding frames.
+
 # cat.stack 0.2.0
 
 Tracks the Python `cat-stack` 1.6.0 release. The version floor in
