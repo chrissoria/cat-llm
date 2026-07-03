@@ -1,4 +1,4 @@
-*! version 1.2.0  17may2026
+*! version 1.3.0  03jul2026
 *! catllm_extract -- Discover categories from unstructured text using LLMs
 
 program define catllm_extract, rclass
@@ -125,13 +125,13 @@ def _catllm_do_extract():
     creat_str = Macro.getLocal("_catllm_creat")
     seed_str  = Macro.getLocal("_catllm_seed")
 
-    # --- version guard: this .ado requires cat-stack >= 1.2.0 ---
+    # --- version guard: this .ado requires cat-stack >= 2.0 ---
     try:
         import cat_stack
         _v = tuple(int(x) for x in cat_stack.__version__.split(".")[:2])
-        if _v < (1, 2):
+        if _v < (2, 0):
             raise ImportError(
-                "catllm_extract 1.2 requires cat-stack >= 1.2.0 "
+                "catllm_extract 1.3 requires cat-stack >= 2.0 "
                 "(installed: " + cat_stack.__version__ + "). "
                 "Run: catllm setup, upgrade"
             )

@@ -4,7 +4,7 @@ d Christopher Soria, University of California, Berkeley
 d chrissoria@berkeley.edu
 d https://github.com/chrissoria/cat-llm
 d
-d Requires: Stata 16+, Python 3.8+, cat-stack >= 1.6.0
+d Requires: Stata 16+, Python 3.8+, cat-stack >= 2.0.1
 d
 d Distribution-Date: 20260603
 

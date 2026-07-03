@@ -1,4 +1,4 @@
-*! version 1.2.0  17may2026
+*! version 1.3.0  03jul2026
 *! catllm_summarize -- Summarize text or PDFs using LLMs
 
 program define catllm_summarize, rclass
@@ -130,13 +130,13 @@ def _catllm_do_summarize():
     pyopts_str = Macro.getLocal("_catllm_pyopts")
     creat_str  = Macro.getLocal("_catllm_creat")
 
-    # --- version guard: this .ado requires cat-stack >= 1.2.0 ---
+    # --- version guard: this .ado requires cat-stack >= 2.0 ---
     try:
         import cat_stack
         _v = tuple(int(x) for x in cat_stack.__version__.split(".")[:2])
-        if _v < (1, 2):
+        if _v < (2, 0):
             raise ImportError(
-                "catllm_summarize 1.2 requires cat-stack >= 1.2.0 "
+                "catllm_summarize 1.3 requires cat-stack >= 2.0 "
                 "(installed: " + cat_stack.__version__ + "). "
                 "Run: catllm setup, upgrade"
             )

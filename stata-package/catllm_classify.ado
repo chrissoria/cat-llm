@@ -1,4 +1,4 @@
-*! version 2.1.0  03jun2026
+*! version 2.2.0  03jul2026
 *! catllm_classify -- Classify text into categories using LLMs
 
 program define catllm_classify, rclass
@@ -152,6 +152,13 @@ def _catllm_do_classify():
     provider   = Macro.getLocal("_catllm_provider")
     desc       = Macro.getLocal("_catllm_desc")
     survey_q   = Macro.getLocal("_catllm_survey")
+    # cat-stack >= 2.0 deprecates survey_question= in favor of the canonical
+    # description= (mirrored either way when only one is given). Forward via
+    # description so Stata callers never trigger the Python
+    # DeprecationWarning; when both options are given they stay distinct
+    # channels, matching the Python semantics.
+    if survey_q and not desc:
+        desc, survey_q = survey_q, ""
     touse      = Macro.getLocal("_catllm_touse")
     cot        = Macro.getLocal("_catllm_cot") != ""
     think      = int(Macro.getLocal("_catllm_think") or "0")
@@ -176,13 +183,13 @@ def _catllm_do_classify():
 
     replace_flag = Macro.getLocal("_catllm_replace") != ""
 
-    # --- version guard: this .ado requires cat-stack >= 1.6.0 ---
+    # --- version guard: this .ado requires cat-stack >= 2.0 ---
     try:
         import cat_stack
         _v = tuple(int(x) for x in cat_stack.__version__.split(".")[:2])
-        if _v < (1, 6):
+        if _v < (2, 0):
             raise ImportError(
-                "catllm_classify 2.1 requires cat-stack >= 1.6.0 "
+                "catllm_classify 2.2 requires cat-stack >= 2.0 "
                 "(installed: " + cat_stack.__version__ + "). "
                 "Run: catllm setup, upgrade"
             )

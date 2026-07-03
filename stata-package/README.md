@@ -23,7 +23,7 @@ workflows). After SSC submission, `ssc install catllm` will also work.
 
 The Stata `.ado` verbs are intentionally thin: every option just shuttles data
 to the [`cat-stack`](https://pypi.org/project/cat-stack/) Python package, which
-does all the LLM work. Requires **cat-stack ≥ 1.2.0**; if you upgrade Stata
+does all the LLM work. Requires **cat-stack ≥ 2.0.1**; if you upgrade Stata
 through this repo without also upgrading Python, run `catllm setup, upgrade`.
 
 ## Commands
