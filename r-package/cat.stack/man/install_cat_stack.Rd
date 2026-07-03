@@ -34,11 +34,12 @@ Installs the \code{cat-stack} Python package into the Python environment used by
 reticulate. Optionally installs PDF extras.
 }
 \details{
-The version floor is pinned to \verb{cat-stack >= 1.6.0} — that release adds
-strict-majority consensus, embedding tiebreaker, async batch mode, and the
-JSON-formatter auto-consent flow that the R wrappers now expose. Older
-Python installs work, but R users will hit "unexpected keyword argument"
-errors from \code{reticulate} when the new parameters get forwarded.
+The version floor is pinned to \verb{cat-stack >= 2.0.1} — the stable 2.0 line
+centralizes provider parameter handling (current Anthropic models no
+longer 400 on \code{creativity} / \code{thinking_budget}), grades \code{thinking_budget}
+consistently across providers, and fixes \verb{description=} context routing
+in \code{classify()} / \code{prompt_tune()}. Older Python installs work for old
+models, but silently degrade on the newest Anthropic generation.
 }
 \examples{
 \dontrun{

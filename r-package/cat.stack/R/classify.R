@@ -80,8 +80,9 @@
 #'   via embedding-centroid similarity instead of the default
 #'   "tie → 0"; that adds a `category_N_resolved_by` audit column
 #'   (values: `"vote"` or `"centroid"`).
-#' @param survey_question Character. The survey question text (used when
-#'   `categories = "auto"`). Default `""`.
+#' @param survey_question Character. Soft-deprecated alias for `description`
+#'   (kept for backward compatibility; forwarded to the engine as
+#'   `description`). Prefer `description`. Default `""`.
 #' @param use_json_schema Logical. Use JSON schema for structured output.
 #'   Default `TRUE`.
 #' @param max_workers Integer or `NULL`. Max parallel workers. `NULL` = auto.
@@ -311,6 +312,16 @@ classify <- function(
 
   api_key   <- .strip_quotes(api_key)
   add_other <- .validate_add_other(add_other)
+
+  # `survey_question` is deprecated at the Python level in favor of the
+  # canonical `description` (cat-stack >= 2.0 mirrors one into the other, so
+  # they are interchangeable when only one is given). Forward it as
+  # `description` so R callers never trigger the Python DeprecationWarning;
+  # when both are given they stay distinct channels, matching Python.
+  if (nzchar(survey_question) && !nzchar(description)) {
+    description     <- survey_question
+    survey_question <- ""
+  }
 
   # Convert creativity to float when non-NULL
   if (!is.null(creativity)) creativity <- as.double(creativity)

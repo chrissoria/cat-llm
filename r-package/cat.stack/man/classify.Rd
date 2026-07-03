@@ -163,8 +163,9 @@ via embedding-centroid similarity instead of the default
 "tie → 0"; that adds a \code{category_N_resolved_by} audit column
 (values: \code{"vote"} or \code{"centroid"}).}
 
-\item{survey_question}{Character. The survey question text (used when
-\code{categories = "auto"}). Default \code{""}.}
+\item{survey_question}{Character. Soft-deprecated alias for \code{description}
+(kept for backward compatibility; forwarded to the engine as
+\code{description}). Prefer \code{description}. Default \code{""}.}
 
 \item{use_json_schema}{Logical. Use JSON schema for structured output.
 Default \code{TRUE}.}

@@ -29,8 +29,9 @@
 #'   `c(model, provider, api_key)`). Overrides `user_model`/`api_key`/
 #'   `model_source` if given. Default `NULL`.
 #' @param description Character. Context description. Default `""`.
-#' @param survey_question Character. Survey question for context.
-#'   Default `""`.
+#' @param survey_question Character. Soft-deprecated alias for `description`
+#'   (kept for backward compatibility; forwarded to the engine as
+#'   `description`). Prefer `description`. Default `""`.
 #' @param sample_size Integer. Items to test per iteration. Default `10L`.
 #' @param max_iterations Integer. Max instruction attempts per
 #'   category. Default `3L`.
@@ -116,6 +117,15 @@ prompt_tune <- function(
   api_key   <- .strip_quotes(api_key)
   add_other <- .validate_add_other(add_other)
   if (!is.null(creativity)) creativity <- as.double(creativity)
+
+  # `survey_question` is deprecated at the Python level in favor of the
+  # canonical `description` (cat-stack >= 2.0 mirrors one into the other).
+  # Forward it as `description` so R callers never trigger the Python
+  # DeprecationWarning.
+  if (nzchar(survey_question) && !nzchar(description)) {
+    description     <- survey_question
+    survey_question <- ""
+  }
 
   py_models <- if (!is.null(models)) .convert_models(models) else reticulate::py_none()
 

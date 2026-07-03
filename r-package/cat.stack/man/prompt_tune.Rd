@@ -48,8 +48,9 @@ instructions change.}
 
 \item{description}{Character. Context description. Default \code{""}.}
 
-\item{survey_question}{Character. Survey question for context.
-Default \code{""}.}
+\item{survey_question}{Character. Soft-deprecated alias for \code{description}
+(kept for backward compatibility; forwarded to the engine as
+\code{description}). Prefer \code{description}. Default \code{""}.}
 
 \item{sample_size}{Integer. Items to test per iteration. Default \code{10L}.}
 

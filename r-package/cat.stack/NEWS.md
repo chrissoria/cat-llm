@@ -1,3 +1,23 @@
+# cat.stack 0.2.2
+
+## Python engine floor raised to cat-stack 2.0.1
+
+* `install_cat_stack()` (and `SystemRequirements`) now require
+  `cat-stack >= 2.0.1` — the stable 2.0 engine. This is where the fixes
+  land that R users on the newest Anthropic generation need: `creativity`
+  and `thinking_budget` no longer 400 on Opus 4.7+/Sonnet 5/Fable 5
+  (adaptive thinking + parameter gating are handled per model),
+  `thinking_budget` grades consistently across providers, and
+  `description` context routing is fixed in `classify()`/`prompt_tune()`.
+  Existing installs: run `install_cat_stack(upgrade = TRUE)` once.
+
+## Deprecation-proof `survey_question` forwarding
+
+* `classify()` and `prompt_tune()` now forward `survey_question` to the
+  engine as the canonical `description` parameter, so R callers never
+  trigger the Python-level `DeprecationWarning`. The R signatures are
+  unchanged; `survey_question` remains a documented soft-deprecated alias.
+
 # cat.stack 0.2.1
 
 ## New parameter in `classify()`
