@@ -5,14 +5,21 @@ All notable changes to CatLLM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [3.1.3] - 2026-07-03
 
-No cat-llm release planned for these — the cat-stack 1.6.0 behaviors
-below already flow through to fresh `pip install cat-llm` runs via the
-existing `cat-stack>=1.0.19` floor pin (1.6.0 satisfies the floor). The
-notes here exist so users of the meta-package can see what's available
-in the engine layer; they will be folded into the next cat-llm release
-proper whenever one is cut.
+### Changed
+- **Dependency floors raised to the fixed stack.** `cat-stack>=2.0.0`
+  (first stable 2.0: centralized provider param shaping, support for the
+  current Anthropic generation — Opus 4.7+/Sonnet 5/Fable 5 no longer 400
+  on `creativity`/`thinking_budget` — graded cross-provider
+  `thinking_budget`, and the `description=` context fix),
+  `cat-survey>=0.2.3`, `cat-vader>=1.13.5`, `cat-pol>=1.3.3`,
+  `cat-web>=0.2.3` (each forwards `description=` to `catstack.extract()`,
+  silencing the deprecation warning). A fresh `pip install cat-llm` now
+  guarantees the fixed engine and wrappers.
+
+The engine-layer notes below, previously tracked under Unreleased, ship
+with this release via the cat-stack floor:
 
 ### Available from cat-stack 1.6.0 (no umbrella code change needed)
 - **`consensus_threshold="majority"` is now strict majority.** 50/50
