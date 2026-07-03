@@ -1,0 +1,96 @@
+# cat.web
+
+Web content classification with LLMs. A domain wrapper around
+[cat.stack](https://christophersoria.com/cat-llm/cat.stack/) that adds
+automatic URL fetching and web-context prompt injection (source domain,
+content type, metadata).
+
+`cat.web` wraps the Python [catweb](https://pypi.org/project/cat-web/)
+package via [reticulate](https://rstudio.github.io/reticulate/).
+
+## Installation
+
+``` r
+
+# From R-universe (recommended once published):
+install.packages("cat.web", repos = "https://chrissoria.r-universe.dev")
+
+# Or from a local clone:
+devtools::install("path/to/cat.stack")
+devtools::install("path/to/cat.web")
+
+# Install the Python backend
+# pip install cat-web
+```
+
+## Quick Start
+
+### Classify a list of URLs
+
+``` r
+
+library(cat.web)
+
+urls <- c(
+  "https://example.com/article-1",
+  "https://example.com/article-2",
+  "https://example.com/article-3"
+)
+
+results <- classify(
+  input_data    = urls,
+  categories    = c("News", "Opinion", "Tutorial"),
+  source_domain = "example.com",
+  content_type  = "blog post",
+  api_key       = Sys.getenv("OPENAI_API_KEY")
+)
+```
+
+### Classify raw text (no fetching)
+
+``` r
+
+results <- classify(
+  input_data = df$article_text,
+  categories = c("News", "Opinion", "Tutorial"),
+  api_key    = Sys.getenv("OPENAI_API_KEY")
+)
+```
+
+### Discover categories from scraped pages
+
+``` r
+
+result <- extract(
+  input_data    = urls,
+  source_domain = "example.com",
+  api_key       = Sys.getenv("OPENAI_API_KEY")
+)
+print(result$top_categories)
+```
+
+### Summarize web articles
+
+``` r
+
+results <- summarize(
+  input_data    = urls,
+  source_domain = "nytimes.com",
+  content_type  = "news article",
+  format        = "bullets",
+  api_key       = Sys.getenv("OPENAI_API_KEY")
+)
+```
+
+## Functions
+
+| Function | Description |
+|----|----|
+| [`classify()`](https://christophersoria.com/cat-llm/cat.web/reference/classify.md) | Classify URLs or text into categories |
+| [`extract()`](https://christophersoria.com/cat-llm/cat.web/reference/extract.md) | Discover and extract categories from web content |
+| [`explore()`](https://christophersoria.com/cat-llm/cat.web/reference/explore.md) | Get raw category extractions for saturation analysis |
+| [`summarize()`](https://christophersoria.com/cat-llm/cat.web/reference/summarize.md) | Summarize web articles (URL auto-fetched) |
+
+## License
+
+MIT

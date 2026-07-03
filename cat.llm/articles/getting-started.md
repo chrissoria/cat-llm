@@ -1,0 +1,477 @@
+# Getting Started with CatLLM for R
+
+## Introduction
+
+**CatLLM** is an ecosystem of R packages that use large language models
+(LLMs) to categorize open-ended text — survey responses, social media
+posts, academic papers, policy documents, web content — at scale. It’s
+designed for researchers who want quantitative analysis of free-text
+data without manual coding or hiring research assistants.
+
+CatLLM achieves **98% accuracy compared to human consensus** on
+classification tasks using leading models such as GPT-5, Gemini 2.5 Pro,
+and Qwen 3. Validated against expert human coders across 21 LLMs and 4
+surveys; see the [SocArXiv
+preprint](https://osf.io/preprints/socarxiv/gjvcf_v1) for methodology.
+
+The R packages are thin
+[reticulate](https://rstudio.github.io/reticulate/) wrappers around the
+underlying Python implementation. **Every parameter, default, and
+behavior is identical to the Python version** — only the calling syntax
+differs. For deep conceptual content, advanced configuration, or the
+full 50-parameter
+[`classify()`](https://christophersoria.com/cat-llm/cat.stack/reference/classify.html)
+reference, the Python [cat-llm
+README](https://github.com/chrissoria/cat-llm#readme) is the canonical
+source.
+
+------------------------------------------------------------------------
+
+## Installation
+
+Install the meta-package (brings in all 7 sub-packages) from R-universe:
+
+``` r
+
+install.packages(
+  "cat.llm",
+  repos = c("https://chrissoria.r-universe.dev",
+            "https://cloud.r-project.org")
+)
+```
+
+Or install a single domain package for a lighter footprint:
+
+``` r
+
+install.packages(
+  c("cat.stack", "cat.survey"),
+  repos = c("https://chrissoria.r-universe.dev",
+            "https://cloud.r-project.org")
+)
+```
+
+One-time setup: install the Python backend (requires Python 3.9+ on your
+system):
+
+``` r
+
+library(cat.llm)
+install_cat_stack()
+
+# With PDF processing support:
+# install_cat_stack(pdf = TRUE)
+```
+
+------------------------------------------------------------------------
+
+## Quick Start
+
+CatLLM is designed for **building datasets at scale**, not one-off
+queries. While you can classify individual responses, its primary
+purpose is batch processing entire text columns, image collections, or
+PDF corpora into structured research datasets. All outputs are R
+`data.frame`s ready for analysis or CSV export.
+
+### Option A — via the meta-package
+
+[`library(cat.llm)`](https://christophersoria.com/cat-llm/cat.llm/)
+attaches every domain package and exposes domain-suffixed aliases
+([`classify_survey()`](https://christophersoria.com/cat-llm/cat.llm/reference/catllm-aliases.md),
+[`classify_political()`](https://christophersoria.com/cat-llm/cat.llm/reference/catllm-aliases.md),
+[`classify_social()`](https://christophersoria.com/cat-llm/cat.llm/reference/catllm-aliases.md),
+etc.):
+
+``` r
+
+library(cat.llm)
+
+api_key <- Sys.getenv("OPENAI_API_KEY")
+
+# Domain-neutral classification (from cat.stack)
+results <- classify(
+  input_data  = c("I love this product!", "Terrible experience.", "It was fine."),
+  categories  = c("Positive", "Negative", "Neutral"),
+  description = "Customer feedback sentiment",
+  api_key     = api_key
+)
+
+# Survey classification — adds survey-tuned prompts
+results <- classify_survey(
+  input_data      = df$responses,
+  categories      = c("Job change", "Family reasons", "Cost of living"),
+  survey_question = "Why did you move to a new city?",
+  api_key         = api_key
+)
+
+# Academic paper classification — fetches by journal
+results <- classify_academic(
+  input_data    = NULL,
+  categories    = c("Empirical", "Theoretical", "Review"),
+  journal_issn  = "0894-4393",
+  paper_limit   = 50L,
+  polite_email  = "you@university.edu",
+  api_key       = api_key
+)
+
+# Social media classification
+results <- classify_social(
+  input_data = df$posts,
+  categories = c("Misinformation", "Opinion", "News"),
+  api_key    = api_key
+)
+
+# Political text classification (built-in registered sources)
+results <- classify_political(
+  source     = "city_san_diego",
+  doc_type   = "ordinance",
+  since      = "2025-01-01",
+  n          = 50L,
+  categories = c("Housing", "Public Safety", "Finance"),
+  api_key    = api_key
+)
+
+# Cognitive assessment scoring (CERAD drawings)
+scores <- cerad_drawn_score(
+  shape       = "diamond",
+  image_input = df$drawing_paths,
+  api_key     = api_key
+)
+```
+
+### Option B — install only the domain you need
+
+For a lighter dependency footprint, install only the package you
+actually use:
+
+``` r
+
+# install.packages("cat.survey", repos = ...)
+library(cat.survey)
+
+results <- cat.survey::classify(
+  input_data      = df$responses,
+  categories      = c("Job change", "Family reasons", "Cost of living"),
+  survey_question = "Why did you move to a new city?",
+  api_key         = Sys.getenv("OPENAI_API_KEY")
+)
+```
+
+The two options produce identical results —
+[`classify_survey()`](https://christophersoria.com/cat-llm/cat.llm/reference/catllm-aliases.md)
+from `cat.llm` is just a thin re-export of
+[`cat.survey::classify()`](https://christophersoria.com/cat-llm/cat.survey/reference/classify.html).
+
+------------------------------------------------------------------------
+
+## The Ecosystem
+
+| Package | Domain | Wraps |
+|----|----|----|
+| **cat.stack** | General-purpose classification base | `classify`, `extract`, `explore`, `summarize` |
+| **cat.survey** | Open-ended survey responses | Adds `survey_question=` framing |
+| **cat.vader** | Social media posts | Platform connectors (Threads, Reddit, Bluesky, etc.) |
+| **cat.ademic** | Academic papers | OpenAlex-based journal/topic fetching, PDF support |
+| **cat.cog** | Cognitive assessment scoring | [`cerad_drawn_score()`](https://christophersoria.com/cat-llm/cat.llm/reference/catllm-aliases.md) for CERAD constructional praxis |
+| **cat.pol** | Policy documents | 17 registered sources (ordinances, federal laws, EOs, political speech) |
+| **cat.web** | Web content | Automatic URL fetching, web-context prompt injection |
+| **cat.llm** | Meta-package (installs all 7) | Re-exports + domain-suffixed aliases |
+
+Every domain package shares the same core API —
+[`classify()`](https://christophersoria.com/cat-llm/cat.stack/reference/classify.html),
+[`extract()`](https://christophersoria.com/cat-llm/cat.stack/reference/extract.html),
+[`explore()`](https://christophersoria.com/cat-llm/cat.stack/reference/explore.html),
+[`summarize()`](https://christophersoria.com/cat-llm/cat.stack/reference/summarize.html)
+(where applicable) — and depends on `cat.stack`, which holds the
+underlying classification engine.
+
+------------------------------------------------------------------------
+
+## Best Practices for Classification
+
+These recommendations are based on empirical testing across 4 surveys, 4
+models (7B to frontier-class), and 250-row subsamples compared against
+human-coded ground truth. They apply identically to R and Python.
+
+### What works
+
+**Detailed category descriptions** — the single biggest lever for
+accuracy. Instead of short labels like `"Job change"`, use verbose
+descriptions like
+`"The person had a job or school or career change, including transferred and retired."`
+Consistently improves accuracy by several percentage points across all
+models.
+
+``` r
+
+verbose_categories <- c(
+  "Job/school: A change in employment, education, or career, including transfers and retirement.",
+  "Family: Relationship changes, having children, supporting relatives, or relocating to be near family.",
+  "Cost of living: Housing affordability, cost of goods, or general economic pressure.",
+  "Other: The response does not fit any of the above categories."
+)
+
+results <- classify(
+  input_data = df$responses,
+  categories = verbose_categories,
+  api_key    = Sys.getenv("OPENAI_API_KEY")
+)
+```
+
+**Include an “Other” category** — a catch-all like
+`"Other: The response does not fit any of the above categories."`
+prevents the model from forcing ambiguous responses into ill-fitting
+categories. By default, R wrappers will prompt to add one if your
+category list lacks one (`add_other = "prompt"`).
+
+**Few-shot examples** (`example1`–`example6`) — providing 2-4 labeled
+examples can help, especially for weaker models. Effects are modest
+(+0–1 pp on average) and model-dependent.
+
+``` r
+
+results <- classify(
+  input_data = df$responses,
+  categories = verbose_categories,
+  example1   = list(text = "Took a new job in Chicago", label = "Job/school"),
+  example2   = list(text = "Wanted to be closer to grandkids", label = "Family"),
+  api_key    = Sys.getenv("OPENAI_API_KEY")
+)
+```
+
+**Low temperature** (`creativity = 0`) — for classification,
+deterministic output is preferable. Higher temperatures add noise
+without improving accuracy.
+
+### What doesn’t help (or hurts)
+
+- **Chain of Thought** (`chain_of_thought = TRUE`): no measurable
+  improvement in our testing; slightly degraded performance for some
+  models. Off by default.
+- **Chain of Verification** (`chain_of_verification = TRUE`): uses ~4x
+  the API calls for self-verification. Consistently *reduced* accuracy
+  by 1–2 pp by retracting correct classifications. Not recommended for
+  classification.
+- **Step-back prompting** (`step_back_prompt = TRUE`): inconsistent —
+  slight gains for weaker models (~+1.8 pp), slight losses for stronger
+  ones (~−0.5 pp). Not recommended as a default.
+- **Context prompting** (`context_prompt = TRUE`): no consistent benefit
+  observed.
+
+### Summary
+
+The most effective approach is straightforward: **write detailed
+category descriptions, include an “Other” category, use a capable model
+at low temperature.** Advanced prompting adds complexity and cost
+without reliable gains for classification.
+
+------------------------------------------------------------------------
+
+## Configuration
+
+### Get an API key
+
+Get an API key from your preferred provider:
+
+| Provider | Where |
+|----|----|
+| OpenAI | [platform.openai.com](https://platform.openai.com) |
+| Anthropic | [console.anthropic.com](https://console.anthropic.com) |
+| Google | [aistudio.google.com](https://aistudio.google.com) |
+| HuggingFace | [huggingface.co/settings/tokens](https://huggingface.co/settings/tokens) |
+| xAI | [console.x.ai](https://console.x.ai) |
+| Mistral | [console.mistral.ai](https://console.mistral.ai) |
+| Perplexity | [perplexity.ai/settings/api](https://www.perplexity.ai/settings/api) |
+
+Most providers require adding a payment method. Store your key securely
+and never share it publicly.
+
+### Store your key in `.Renviron` (recommended)
+
+Rather than pasting your key into scripts, store it in `~/.Renviron` so
+it’s automatically available to every R session:
+
+    OPENAI_API_KEY=sk-...
+    ANTHROPIC_API_KEY=sk-ant-...
+    GOOGLE_API_KEY=AIza...
+
+Then restart R and use:
+
+``` r
+
+api_key <- Sys.getenv("OPENAI_API_KEY")
+```
+
+To find or edit your `.Renviron`:
+
+``` r
+
+usethis::edit_r_environ()   # opens it for editing; creates if missing
+```
+
+After saving, restart R for the changes to take effect.
+
+### Run entirely locally with no API key
+
+For sensitive data, free use, or air-gapped environments, run against a
+local model via [Ollama](https://ollama.com):
+
+``` r
+
+# In a separate terminal: install Ollama, then pull a model.
+# Recommended (larger, more accurate, ~9 GB):
+#   ollama pull qwen2.5:14b
+# Smaller fallback if disk/RAM constrained (~4.7 GB):
+#   ollama pull qwen2.5:7b
+
+results <- classify(
+  input_data    = df$responses,
+  categories    = c("Positive", "Negative", "Neutral"),
+  user_model    = "qwen2.5:14b",   # or "qwen2.5:7b" if you pulled the smaller one
+  model_source  = "ollama"
+)
+```
+
+> ⚠️ **Disk-space heads-up:** `qwen2.5:14b` is ~9 GB on disk and Ollama
+> needs roughly that much *free* during the download. Check `df -h /`
+> first — if under ~12 GB free, use `qwen2.5:7b`.
+
+No API key needed; your data never leaves the machine.
+
+------------------------------------------------------------------------
+
+## Supported Models
+
+Specify any of these via `user_model = "..."`:
+
+- **OpenAI**: `gpt-4o`, `gpt-4o-mini`, `gpt-4`, `gpt-5`, …
+- **Anthropic**: `claude-sonnet-4-20250514`,
+  `claude-3-5-sonnet-20241022`, `claude-3-5-haiku-20241022`, …
+- **Google**: `gemini-2.5-flash`, `gemini-2.5-pro`, …
+- **HuggingFace**: `Qwen/Qwen3-235B`, `meta-llama/Llama-4-Scout`,
+  `deepseek-ai/DeepSeek-V3`, and thousands of community models
+- **xAI**: `grok-2`, …
+- **Mistral**: `mistral-large-latest`, `pixtral-large-latest`, …
+- **Perplexity**: `sonar-large`, `sonar-small`, …
+- **Ollama (local)**: `qwen2.5:14b` (recommended, ~9 GB), `qwen2.5:7b`
+  (smaller fallback, ~4.7 GB), `llama3.1:8b`, … (set
+  `model_source = "ollama"`)
+
+**Fully tested:** OpenAI, Anthropic, Perplexity, Google Gemini (free
+tier has 5 RPM limit), HuggingFace, xAI, Mistral.
+
+For best results when starting out, **OpenAI** (`gpt-4o-mini`) or
+**Anthropic** (`claude-3-5-haiku-20241022`) are cheap, fast, and
+reliable.
+
+------------------------------------------------------------------------
+
+## Ensemble & multi-model classification
+
+Run the same input through multiple models and combine results via
+majority voting. Often improves accuracy by reducing individual model
+biases.
+
+``` r
+
+results <- classify(
+  input_data = df$responses,
+  categories = verbose_categories,
+  models = list(
+    c("gpt-4o-mini",            "openai",    Sys.getenv("OPENAI_API_KEY")),
+    c("claude-3-5-haiku-20241022", "anthropic", Sys.getenv("ANTHROPIC_API_KEY")),
+    c("gemini-2.5-flash",       "google",    Sys.getenv("GOOGLE_API_KEY"))
+  ),
+  consensus_threshold = "unanimous"   # or 0.5 for majority, etc.
+)
+```
+
+The output `data.frame` includes per-model predictions (e.g.,
+`category_1_gpt_4o_mini`, `category_1_claude`) plus a consensus column.
+
+------------------------------------------------------------------------
+
+## API Reference (brief)
+
+Every parameter from the Python
+[`classify()`](https://christophersoria.com/cat-llm/cat.stack/reference/classify.html),
+[`extract()`](https://christophersoria.com/cat-llm/cat.stack/reference/extract.html),
+[`explore()`](https://christophersoria.com/cat-llm/cat.stack/reference/explore.html),
+and
+[`summarize()`](https://christophersoria.com/cat-llm/cat.stack/reference/summarize.html)
+functions is exposed in R with identical semantics. The full
+per-parameter documentation lives in the in-R help system and on the
+R-universe per-package reference manuals.
+
+| Function | In-R help | Online |
+|----|----|----|
+| Domain-neutral [`classify()`](https://christophersoria.com/cat-llm/cat.stack/reference/classify.html) | [`?cat.stack::classify`](https://christophersoria.com/cat-llm/cat.stack/reference/classify.html) | [cat.stack manual](https://chrissoria.r-universe.dev/cat.stack/doc/manual.html) |
+| Survey [`classify()`](https://christophersoria.com/cat-llm/cat.stack/reference/classify.html) | [`?cat.survey::classify`](https://christophersoria.com/cat-llm/cat.survey/reference/classify.html) | [cat.survey manual](https://chrissoria.r-universe.dev/cat.survey/doc/manual.html) |
+| Academic [`classify()`](https://christophersoria.com/cat-llm/cat.stack/reference/classify.html) | [`?cat.ademic::classify`](https://christophersoria.com/cat-llm/cat.ademic/reference/classify.html) | [cat.ademic manual](https://chrissoria.r-universe.dev/cat.ademic/doc/manual.html) |
+| Political [`classify()`](https://christophersoria.com/cat-llm/cat.stack/reference/classify.html) | [`?cat.pol::classify`](https://christophersoria.com/cat-llm/cat.pol/reference/classify.html) | [cat.pol manual](https://chrissoria.r-universe.dev/cat.pol/doc/manual.html) |
+| Web [`classify()`](https://christophersoria.com/cat-llm/cat.stack/reference/classify.html) | [`?cat.web::classify`](https://christophersoria.com/cat-llm/cat.web/reference/classify.html) | [cat.web manual](https://chrissoria.r-universe.dev/cat.web/doc/manual.html) |
+| Social [`classify()`](https://christophersoria.com/cat-llm/cat.stack/reference/classify.html) | [`?cat.vader::classify`](https://christophersoria.com/cat-llm/cat.vader/reference/classify.html) | [cat.vader manual](https://chrissoria.r-universe.dev/cat.vader/doc/manual.html) |
+| CERAD scoring | [`?cat.cog::cerad_drawn_score`](https://christophersoria.com/cat-llm/cat.cog/reference/cerad_drawn_score.html) | [cat.cog manual](https://chrissoria.r-universe.dev/cat.cog/doc/manual.html) |
+| List registered policy sources | [`?cat.pol::list_sources`](https://christophersoria.com/cat-llm/cat.pol/reference/list_sources.html) | [cat.pol manual](https://chrissoria.r-universe.dev/cat.pol/doc/manual.html) |
+
+For full conceptual coverage of every parameter — batch mode, prompt
+tuning, embeddings, JSON formatting, advanced ensemble configurations —
+see the **[Python README API
+Reference](https://github.com/chrissoria/cat-llm#api-reference)**. The R
+wrappers expose every Python kwarg.
+
+------------------------------------------------------------------------
+
+## R ↔︎ Python type translation
+
+When adapting Python examples from the project README, the table below
+covers the syntax differences. All conversions are handled automatically
+by
+[`reticulate::r_to_py()`](https://rstudio.github.io/reticulate/reference/r-py-conversion.html)
+inside the R wrappers — you write R, the wrapper passes Python.
+
+| Python | R |
+|----|----|
+| `["a", "b", "c"]` | `c("a", "b", "c")` |
+| `{"key": "value"}` | `list(key = "value")` |
+| `True` / `False` / `None` | `TRUE` / `FALSE` / `NULL` |
+| `[(model, provider, key), (...)]` (ensemble) | `list(c(model, provider, key), c(...))` |
+| `df['col']` | `df$col` |
+| `import catllm` | [`library(cat.llm)`](https://christophersoria.com/cat-llm/cat.llm/) |
+| `catllm.classify_survey(...)` | `classify_survey(...)` (after [`library(cat.llm)`](https://christophersoria.com/cat-llm/cat.llm/)) |
+
+------------------------------------------------------------------------
+
+## Where to go from here
+
+- **Full conceptual reference**: the Python [cat-llm
+  README](https://github.com/chrissoria/cat-llm#readme) — covers every
+  parameter, advanced configuration, prompt tuning, embeddings, etc.
+  Since R is a thin reticulate layer, every Python concept applies
+  directly.
+
+- **Per-package R reference manuals**:
+  <https://chrissoria.r-universe.dev> — pick a package, then click the
+  “Reference Manual” link for full `@param` docs.
+
+- **End-to-end smoke test**: see `r-package/test-all-packages.R` in the
+  [GitHub
+  repo](https://github.com/chrissoria/cat-llm/tree/main/r-package) — a
+  single R script that installs all 8 packages and runs a minimal
+  classification per package.
+
+- **Issues, questions, contributions**:
+  [github.com/chrissoria/cat-llm/issues](https://github.com/chrissoria/cat-llm/issues)
+
+- **Citation** — if you use CatLLM in published research, please cite:
+
+  > Soria, C. (2026). *Scaling Open-Ended Survey Coding: An LLM Pipeline
+  > Where Definitions Do the Heavy Lifting.* SocArXiv.
+  > <https://osf.io/preprints/socarxiv/gjvcf_v1>
+
+  and the software DOI:
+
+  > Soria, C. (2026). *CatLLM: A Reproducible Python Ecosystem for
+  > Generating, Assigning, and Scoring Open-Ended Text, Images, and
+  > Documents Across Research Domains* (v3.0.0) \[Software\]. Zenodo.
+  > <https://doi.org/10.5281/zenodo.19960067>

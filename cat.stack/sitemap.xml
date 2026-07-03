@@ -1,0 +1,27 @@
+<urlset xmlns = 'http://www.sitemaps.org/schemas/sitemap/0.9'>
+<url><loc>https://christophersoria.com/cat-llm/cat.stack/404.html</loc></url>
+<url><loc>https://christophersoria.com/cat-llm/cat.stack/authors.html</loc></url>
+<url><loc>https://christophersoria.com/cat-llm/cat.stack/index.html</loc></url>
+<url><loc>https://christophersoria.com/cat-llm/cat.stack/news/index.html</loc></url>
+<url><loc>https://christophersoria.com/cat-llm/cat.stack/reference/check_ollama_model.html</loc></url>
+<url><loc>https://christophersoria.com/cat-llm/cat.stack/reference/classify.html</loc></url>
+<url><loc>https://christophersoria.com/cat-llm/cat.stack/reference/dot-as_py_int.html</loc></url>
+<url><loc>https://christophersoria.com/cat-llm/cat.stack/reference/dot-check_classify_schema.html</loc></url>
+<url><loc>https://christophersoria.com/cat-llm/cat.stack/reference/dot-check_explore_schema.html</loc></url>
+<url><loc>https://christophersoria.com/cat-llm/cat.stack/reference/dot-check_extract_schema.html</loc></url>
+<url><loc>https://christophersoria.com/cat-llm/cat.stack/reference/dot-check_summarize_schema.html</loc></url>
+<url><loc>https://christophersoria.com/cat-llm/cat.stack/reference/dot-convert_models.html</loc></url>
+<url><loc>https://christophersoria.com/cat-llm/cat.stack/reference/dot-maybe_ensure_ollama.html</loc></url>
+<url><loc>https://christophersoria.com/cat-llm/cat.stack/reference/dot-strip_quotes.html</loc></url>
+<url><loc>https://christophersoria.com/cat-llm/cat.stack/reference/dot-validate_add_other.html</loc></url>
+<url><loc>https://christophersoria.com/cat-llm/cat.stack/reference/ensure_ollama_running.html</loc></url>
+<url><loc>https://christophersoria.com/cat-llm/cat.stack/reference/explore.html</loc></url>
+<url><loc>https://christophersoria.com/cat-llm/cat.stack/reference/extract.html</loc></url>
+<url><loc>https://christophersoria.com/cat-llm/cat.stack/reference/index.html</loc></url>
+<url><loc>https://christophersoria.com/cat-llm/cat.stack/reference/install_cat_stack.html</loc></url>
+<url><loc>https://christophersoria.com/cat-llm/cat.stack/reference/list_ollama_models.html</loc></url>
+<url><loc>https://christophersoria.com/cat-llm/cat.stack/reference/prompt_tune.html</loc></url>
+<url><loc>https://christophersoria.com/cat-llm/cat.stack/reference/pull_ollama_model.html</loc></url>
+<url><loc>https://christophersoria.com/cat-llm/cat.stack/reference/summarize.html</loc></url>
+</urlset>
+
