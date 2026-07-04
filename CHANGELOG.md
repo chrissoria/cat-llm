@@ -5,6 +5,14 @@ All notable changes to CatLLM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2026-07-03
+
+### Added
+- **`cat-claws` bundled** — `pip install cat-llm` now includes the cat-claws
+  agent backend, so classification through a Claude *subscription* (no API
+  key) works out of the box via `model_source="claude-agent"` on the engine.
+  Floor `cat-stack>=2.1.0` (which adds the dispatch) + new `cat-claws>=0.1.0`.
+
 ## [3.1.3] - 2026-07-03
 
 ### Changed
