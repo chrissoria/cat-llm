@@ -5,6 +5,28 @@ All notable changes to CatLLM will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+## [3.3.0] - 2026-07-11
+
+### Added
+- **`[codex]` extra** — `pip install "cat-llm[codex]"` enables classification
+  through a ChatGPT subscription (`model_source="codex-agent"` on the engine,
+  requires `codex login`). Optional rather than bundled: the openai-codex SDK
+  ships platform wheels with a bundled codex binary, too heavy to force on
+  every install.
+
+### Changed
+- **cat-stack floor raised to `>=2.4.0`** (adds the codex-agent dispatch,
+  the 2026-07 bug-audit fixes, and the previously-undeclared `jellyfish`
+  dependency that broke `import catstack` on fresh installs).
+- **cat-claws pin: `cat-claws[claude]>=0.3.0`** (was `cat-claws>=0.1.0`).
+  cat-claws 0.3.0 split its agent SDKs into extras; without the `[claude]`
+  extra, upgrades would silently drop claude-agent-sdk and break
+  `model_source="claude-agent"` for every cat-llm user. No code changes —
+  the meta-package re-exports catstack entry points and `model_source`
+  passes through.
+
 ## [3.2.0] - 2026-07-03
 
 ### Added
