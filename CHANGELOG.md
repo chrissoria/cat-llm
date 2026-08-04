@@ -15,6 +15,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (`explore()` -> `collapse_themes()`) without a second import. Every
   text-domain package (cat-survey, cat-vader, cat-ademic, cat-pol, cat-web)
   re-exports it too.
+- README documents the subscription backends (`model_source="claude-agent"`
+  ships with cat-llm via the `cat-claws[claude]` dependency; `"codex-agent"`
+  via the `[codex]` extra; `"claude-code"` via the CLI) — previously
+  undocumented. Every domain package now works with them end-to-end and
+  offers matching `[agent]`/`[codex-agent]` extras for standalone installs.
 
 ### Changed
 - Dependency floors raised to the versions that ship the re-export and the
