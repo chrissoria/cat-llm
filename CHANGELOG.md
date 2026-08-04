@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [3.4.0] - 2026-08-04
+
+### Added
+- **`collapse_themes` is now exported at the top level** (re-exported from
+  the cat-stack engine), completing the two-stage discovery workflow
+  (`explore()` -> `collapse_themes()`) without a second import. Every
+  text-domain package (cat-survey, cat-vader, cat-ademic, cat-pol, cat-web)
+  re-exports it too.
+
+### Changed
+- Dependency floors raised to the versions that ship the re-export and the
+  new consolidation engine: `cat-stack>=2.5.0` (where `extract()`
+  consolidates via explore -> `collapse_themes`, with `top_n`/`prune`),
+  `cat-survey>=0.3.0`, `cat-vader>=1.14.0`, `cat-ademic>=0.3.0`,
+  `cat-pol>=1.4.0`, `cat-web>=0.3.0`.
+
 ## [3.3.0] - 2026-07-11
 
 ### Added

@@ -55,7 +55,7 @@ cat-pol     cat-cog    cat-web
              cat-llm                ← meta-package (depends on all of the above)
 ```
 
-Every domain package exposes the same five core functions — `classify()`, `extract()`, `explore()`, `summarize()`, `prompt_tune()` — with domain-specific parameters added on top. Learn once, apply anywhere.
+Every domain package exposes the same five core functions — `classify()`, `extract()`, `explore()`, `summarize()`, `prompt_tune()` — with domain-specific parameters added on top, plus `collapse_themes()` re-exported from the engine to consolidate `explore()` output. Learn once, apply anywhere.
 
 -----
 
@@ -73,6 +73,7 @@ Every domain package exposes the same five core functions — `classify()`, `ext
   - [prompt_tune()](#prompt_tune) - Automatic prompt optimization via user feedback
   - [extract()](#extract) - Unified function for category extraction
   - [explore()](#explore) - Raw category extraction for saturation analysis
+  - [collapse_themes()](#collapse_themes) - Consolidate an explore() inventory into a deduplicated taxonomy
   - [summarize()](#summarize) - Unified function for text and PDF summarization
   - [image_score_drawing()](#image_score_drawing)
   - [image_features()](#image_features)
@@ -725,6 +726,25 @@ counts = Counter(raw_categories)
 for category, freq in counts.most_common(15):
     print(f"{freq:3d}x  {category}")
 ```
+
+---
+
+### `collapse_themes()`
+
+Consolidate the raw label inventory from `explore()` into a smaller, deduplicated taxonomy (re-exported from the cat-stack engine). Deterministic pre-cleaning — Jaro-Winkler dedup, embedding merge — runs before any LLM judgment; quality-controlled LLM merge passes follow, with an optional count-guided reduction to the `top_n` most common categories. This is the same consolidation `extract()` runs internally since cat-stack 2.5.0 (`engine="collapse"`).
+
+```python
+import catllm as cat
+
+themes = cat.collapse_themes(
+    input_data=raw_categories,   # the explore() output, duplicates intact
+    api_key=api_key,
+    description="Why did you move?",
+    top_n=12,
+)
+```
+
+The final output is a strong first pass for exploratory analysis; for research-grade codebooks, keep a human in the loop — inspect the full pre-merge inventory, or leave `top_n` off and curate the collapsed list by hand. See the [cat-stack README](https://github.com/chrissoria/cat-stack#collapse_themes) for the full parameter table (`passes`, `aggressive`, `prune`, per-step model assignment, ...).
 
 ---
 

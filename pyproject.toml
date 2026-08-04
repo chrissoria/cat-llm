@@ -23,13 +23,13 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: CPython",
 ]
 dependencies = [
-  "cat-stack>=2.4.0",
-  "cat-survey>=0.2.3",
-  "cat-vader>=1.13.5",
-  "cat-ademic>=0.2.2",
+  "cat-stack>=2.5.0",
+  "cat-survey>=0.3.0",
+  "cat-vader>=1.14.0",
+  "cat-ademic>=0.3.0",
   "cat-cog>=0.2.1",
-  "cat-pol>=1.3.3",
-  "cat-web>=0.2.3",
+  "cat-pol>=1.4.0",
+  "cat-web>=0.3.0",
   # [claude] is required: cat-claws 0.3.0 split its SDKs into extras, and a
   # bare pin would silently drop claude-agent-sdk from every cat-llm install.
   "cat-claws[claude]>=0.3.0",

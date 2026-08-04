@@ -9,7 +9,7 @@ Installing cat-llm pulls in all domain packages. Use ``import catllm`` and
 tab-complete to find every available function.
 
 Domain-neutral (from cat-stack):
-    classify, extract, explore, summarize
+    classify, extract, explore, collapse_themes, summarize
 
 Survey (from cat-survey):
     classify_survey, extract_survey, explore_survey, summarize_survey
@@ -43,6 +43,11 @@ from .__about__ import (
 # Domain-neutral base (cat-stack)
 # =============================================================================
 from catstack import classify, extract, explore, summarize
+
+# Semantic consolidation for explore() output — completes the discovery
+# workflow (explore -> collapse_themes) at the top level. Since cat-stack
+# 2.5.0 this is also what extract() runs internally (engine="collapse").
+from catstack import collapse_themes
 
 # Provider utilities (re-exported for backward compatibility)
 from catstack import (
@@ -133,6 +138,7 @@ __all__ = [
     "classify",
     "extract",
     "explore",
+    "collapse_themes",
     "summarize",
     # Survey (cat-survey)
     "classify_survey",
