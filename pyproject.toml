@@ -23,7 +23,7 @@ classifiers = [
   "Programming Language :: Python :: Implementation :: CPython",
 ]
 dependencies = [
-  "cat-stack>=2.5.0",
+  "cat-stack>=2.5.1",
   "cat-survey>=0.3.0",
   "cat-vader>=1.14.0",
   "cat-ademic>=0.3.0",
@@ -32,7 +32,7 @@ dependencies = [
   "cat-web>=0.3.0",
   # [claude] is required: cat-claws 0.3.0 split its SDKs into extras, and a
   # bare pin would silently drop claude-agent-sdk from every cat-llm install.
-  "cat-claws[claude]>=0.3.0",
+  "cat-claws[claude]>=0.3.1",
 ]
 
 [project.optional-dependencies]
@@ -42,7 +42,7 @@ formatter = ["cat-stack[formatter]"]
 # ChatGPT-subscription backend (model_source="codex-agent"). Optional: the
 # openai-codex SDK ships platform wheels with a bundled codex binary — too
 # heavy to force on every cat-llm user.
-codex = ["cat-claws[codex]>=0.3.0"]
+codex = ["cat-claws[codex]>=0.3.1"]
 
 [project.urls]
 Documentation = "https://github.com/chrissoria/cat-llm#readme"

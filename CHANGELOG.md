@@ -23,10 +23,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 - Dependency floors raised to the versions that ship the re-export and the
-  new consolidation engine: `cat-stack>=2.5.0` (where `extract()`
-  consolidates via explore -> `collapse_themes`, with `top_n`/`prune`),
-  `cat-survey>=0.3.0`, `cat-vader>=1.14.0`, `cat-ademic>=0.3.0`,
-  `cat-pol>=1.4.0`, `cat-web>=0.3.0`.
+  new consolidation engine: `cat-stack>=2.5.1` (where `extract()`
+  consolidates via explore -> `collapse_themes`, with `top_n`/`prune`, and
+  the subscription backends run keyless end-to-end), `cat-survey>=0.3.0`,
+  `cat-vader>=1.14.0`, `cat-ademic>=0.3.0`, `cat-pol>=1.4.0`,
+  `cat-web>=0.3.0`, `cat-claws[claude]>=0.3.1` (subscription auth is the
+  actual default — 0.3.0 silently key-billed when `ANTHROPIC_API_KEY` was
+  set).
 
 ## [3.3.0] - 2026-07-11
 
