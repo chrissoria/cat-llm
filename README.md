@@ -466,6 +466,8 @@ Most providers require adding a payment method and purchasing credits. Store you
 
 Every function accepts `model_source="claude-agent"`, which authenticates through your Claude subscription via the Agent SDK — the backend ships with cat-llm, so no extra install is needed. A ChatGPT subscription works the same way via `model_source="codex-agent"` (`pip install "cat-llm[codex]"`), and `model_source="claude-code"` uses the Claude Code CLI if installed. In all three cases, leave `api_key` unset.
 
+**Reproducibility note:** the same nominal model can behave differently across access routes. In a seed-matched benchmark (Claude Sonnet 5, temperature 0), extraction through the Agent SDK produced more varied label phrasings than the direct API (89% vs. 74% unique raw labels), while final consolidated taxonomies were equivalent. If raw label counts matter to your analysis, record the access route alongside the model version.
+
 ## Supported Models
 
 - **OpenAI**: GPT-4o, GPT-4, GPT-5, etc.
