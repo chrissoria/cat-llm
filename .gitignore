@@ -58,3 +58,6 @@ app/desktop/icon_preview_*.png
 # Claude Code transient artifacts
 .claude/scheduled_tasks.lock
 .claude/worktrees/
+
+# Stata conference poster (large build artifacts, not needed on main)
+academic_examples/stata_conference_poster/

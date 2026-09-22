@@ -210,3 +210,33 @@ The findings imply that social science researchers who want to use LLMs should d
 	annote = {Comment: ICLR 2024},
 	file = {Preprint PDF:/Users/chrissoria/Zotero/storage/TVLEVBHV/Zheng et al. - 2024 - Take a Step Back Evoking Reasoning via Abstraction in Large Language Models.pdf:application/pdf;Snapshot:/Users/chrissoria/Zotero/storage/EBTVHR9R/2310.html:text/html},
 }
+
+@misc{soria_agreement_2026,
+	title = {High {Agreement}, {Different} {Stories}: {How} {LLM} {Classifiers} {Reshape} {Demographic} {Patterns} in {Survey} {Data}},
+	shorttitle = {High {Agreement}, {Different} {Stories}},
+	url = {https://osf.io/preprints/socarxiv/85kyd_v2},
+	doi = {10.31235/osf.io/85kyd_v2},
+	abstract = {What we learn from open-ended survey data depends on who—or what—does the coding. Large Language Models (LLMs) promise to democratize qualitative analysis, but do high agreement rates translate into equivalent thematic findings? This study compares eight LLMs to human annotators on a multi-label coding task using 3,200 responses from the UC Berkeley Social Networks Study, comprising over 19,000 coding decisions. Although LLM-human reliability does not match human-human reliability overall, LLMs approach human performance on simpler tasks and can serve as useful additional coders for generating consensus labels. Compared to a gold-standard human consensus, models achieve 82–97\% per-category agreement, but macro F1 is lower and response-level similarity is lower still: even the best model reproduces the full human label set for fewer than 60\% of responses. Yet high agreement masks thematic divergence. Models systematically over-identify themes, assigning 66\% more categories per response, especially for categories requiring greater interpretive judgment. Models also show lower agreement for some demographic groups. These gaps are partly explained by response characteristics such as length, clarity, and atypicality, but the main driver is over-classification itself: models add false positives at a nearly constant rate, so groups whose answers carry fewer themes lose the most precision. At the sample level, models largely preserve the overall thematic narrative: human and model category rankings correlate strongly (pooled Spearman's rho=0.75), and top-performing models achieve approximately 80\% directional agreement on demographic patterns. Yet systematic over-classification can still shift narratives about how specific groups behave, leading researchers to report patterns that the human gold standard does not support.},
+	language = {en-us},
+	urldate = {2026-09-22},
+	publisher = {OSF},
+	author = {Soria, Chris},
+	month = sep,
+	year = {2026},
+	keywords = {Large Language Models, Survey Methodology, Open-Ended Responses, Text Classification, Inter-Rater Reliability, Computational Social Science},
+}
+
+@misc{soria_diversity_2026,
+	title = {Model {Diversity} {Over} {Model} {Size}: {Unanimous} {LLM} {Ensembles} {Correct} {Over}-{Classification} in {Survey} {Coding}},
+	shorttitle = {Model {Diversity} {Over} {Model} {Size}},
+	url = {https://osf.io/preprints/socarxiv/er6mz_v2},
+	doi = {10.31235/osf.io/er6mz_v2},
+	abstract = {Large language models are increasingly used to classify open-ended survey responses, but they systematically over-classify, assigning categories too liberally on ambiguous cases and producing high sensitivity but low precision. Drawing on the established principle that aggregating multiple noisy annotators outperforms any single annotator, we test whether ensembles of LLMs can correct this problem. Using four open-ended survey questions with human-coded ground truth (3,208 responses, 6 categories per question), we evaluate ensemble configurations across 16 models spanning three cost tiers and six providers. Unanimous voting (requiring all models to agree before assigning a category) directly corrects over-classification by dramatically improving specificity: on the most ambiguous categories, the false positive rate drops from 50\% to 3\%, and precision triples. This advantage concentrates precisely where over-classification is worst, on subjectively ambiguous categories with fuzzy boundaries, while categories with clear criteria show no benefit. This pattern replicates across three independent datasets. Decorrelated errors are what drive the correction, and of the sources we test, cross-provider model access is the most reliable: models from different providers err differently on ambiguous cases, and consensus filters the idiosyncratic false positives. Neither temperature variation nor within-family size scaling reliably decorrelates errors. As few as three diverse lower-tier models suffice to reliably exceed GPT-5. For the ambiguous classification problems common in open-ended survey research, the well-established annotation principle of multi-coder agreement transfers directly to LLMs: investing in diverse perspectives is more effective than investing in a single expensive model.},
+	language = {en-us},
+	urldate = {2026-09-22},
+	publisher = {OSF},
+	author = {Soria, Chris},
+	month = aug,
+	year = {2026},
+	keywords = {Large Language Models, Ensembles, Automated Coding, Unanimous Voting, Open-Ended Survey Data, Text Classification},
+}
