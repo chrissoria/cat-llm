@@ -2,19 +2,29 @@
 
 Every number plotted here traces to a source in this repository:
 
-  * Accuracy bands (fig2)    -- academic_examples/README.md (UCNETS validation:
-                                GPT-4o, Claude Sonnet 3.7, Llama 3.1 Sonar Large,
-                                Mistral Large vs. human annotators) and README.md
-                                (98% vs. human consensus with GPT-5 / Gemini /
-                                Qwen 3).
-  * Cost + runtime (fig3)    -- academic_examples/paper.md (8 models x 3,208
-                                responses = 25,664 classifications).
+  * Accuracy bands (fig2)    -- ../../closed_vs_open_llm/plots_tables/
+                                leaderboard.csv, question == "all" rows
+                                (macro_f1 there is already the mean of the
+                                3 per-question macro-F1s -- verified equal
+                                to hand-averaging a19i/a19f/e1b for all 18
+                                models, since each question has the same
+                                category count). Tier ranges = min/max
+                                macro_f1 across the models in that tier.
+                                Claude Fable 5's point from
+                                fable5_reference.csv, question == "all".
+                                Local/laptop models excluded from fig2 --
+                                shown separately in fig3 instead.
+  * Local models (fig3)      -- ../../closed_vs_open_llm/plots_tables/
+                                leaderboard.csv, tier == "local", question
+                                == "all". Same macro-F1 metric and gold
+                                standard as fig2.
 
 fig1 and fig4 are schematics and encode no data.
 
 Usage:  python make_figures.py
 """
 
+import math
 from pathlib import Path
 
 import matplotlib
@@ -111,46 +121,53 @@ def fig_pipeline():
 
 # ---------------------------------------------------------------- fig 2
 def fig_accuracy():
-    """Accuracy bands vs. human coders. Ranges, not point estimates, because
-    the underlying validation reports per-family ranges across four models."""
-    fig, ax = plt.subplots(figsize=(9.6, 4.4))
+    """Macro F1 against human consensus, survey-question-level (mean of the
+    three per-question F1s, so no question dominates by category count or
+    base rate). Three cloud tiers as ranges, plus Claude Fable 5 as a single
+    highlighted model -- four things to track, not six. Local/laptop-scale
+    models excluded (separate regime, covered by "Choosing a Route")."""
+    fig, ax = plt.subplots(figsize=(9.6, 3.0))
 
-    rows = [
-        ("Straightforward items", 97, 97, BERK_BLUE),
-        ("Complex interpretive items", 88, 91, BERK_BLUE),
-        ("Straightforward items", 95, 96, GOLD_DK),
-        ("Complex interpretive items", 87, 87, GOLD_DK),
+    # Precise values (2026-09-22 pull from leaderboard.csv / fable5_reference.csv,
+    # question == "all"), F1 on its native 0-1 scale. Plotted at full precision --
+    # only the printed labels round (floor/ceil to hundredths for ranges, nearest
+    # hundredth for the single point) -- so relative positions on the axis stay
+    # honest even where rounded labels coincide (Frontier open's true ceiling,
+    # 0.806, is visibly short of Fable's 0.813 despite both rounding to "0.81").
+    ROWS = [
+        ("Frontier closed", 0.7722, 0.8279, BERK_BLUE, False),
+        ("Economy closed", 0.7795, 0.8179, BERK_BLUE_2, False),
+        ("Frontier open", 0.7583, 0.8060, MUTED, False),
+        ("Claude Fable 5", 0.8132, 0.8132, GOLD_DK, True),
     ]
     ypos = [3, 2, 1, 0]
 
-    for y, (task, lo, hi, color) in zip(ypos, rows):
-        if hi > lo:
+    def floor2(v):
+        return math.floor(v * 100) / 100
+
+    def ceil2(v):
+        return math.ceil(v * 100) / 100
+
+    for y, (label, lo, hi, color, is_point) in zip(ypos, ROWS):
+        if is_point:
+            ax.scatter([lo], [y], s=200, color=color, zorder=3,
+                       marker="D", edgecolor="white", linewidth=1.2)
+            ax.text(lo + 0.01, y, f"{round(lo, 2):.2f}", va="center", fontsize=13.5,
+                    fontweight="bold", color=color)
+        else:
             ax.plot([lo, hi], [y, y], color=color, linewidth=11,
                     solid_capstyle="round", zorder=2)
-            label = f"{lo}–{hi}%"
-        else:
-            label = f"{lo}%"
-        ax.scatter([lo, hi], [y, y], s=130, color=color, zorder=3)
-        ax.text(hi + 0.7, y, label, va="center", fontsize=13.5,
-                fontweight="bold", color=color)
-
-    ax.axvline(98, color="#b3261e", linestyle="--", linewidth=2, zorder=1)
-    ax.text(98.3, 4.05, "98%  ensemble vs.\nhuman consensus\n(GPT-5 · Gemini · Qwen 3)",
-            fontsize=11, color="#b3261e", va="top", fontweight="bold",
-            linespacing=1.3)
+            ax.scatter([lo, hi], [y, y], s=130, color=color, zorder=3)
+            ax.text(hi + 0.01, y, f"{floor2(lo):.2f}–{ceil2(hi):.2f}",
+                    va="center", fontsize=13.5, fontweight="bold", color=color)
 
     ax.set_yticks(ypos)
-    ax.set_yticklabels([r[0] for r in rows], fontsize=12)
-    ax.set_ylim(-0.7, 4.3)
-    ax.set_xlim(85, 103.5)
-    ax.set_xticks([86, 88, 90, 92, 94, 96, 98, 100])
-    ax.set_xlabel("Agreement with human coders (%)", fontsize=13)
-
-    ax.axhspan(-0.7, 1.55, color=PANEL, zorder=0)
-    ax.text(85.35, 3.95, "PROPRIETARY  (GPT-4o, Claude Sonnet 3.7)", fontsize=12,
-            fontweight="bold", color=BERK_BLUE, va="center")
-    ax.text(85.35, 1.30, "OPEN-WEIGHT  (Llama 3.1, Mistral Large)", fontsize=12,
-            fontweight="bold", color=GOLD_DK, va="center")
+    ax.set_yticklabels([r[0] for r in ROWS], fontsize=12.5)
+    ax.set_ylim(-0.8, 3.8)
+    ax.set_xlim(0.72, 0.89)
+    ax.set_xticks([0.72, 0.74, 0.76, 0.78, 0.80, 0.82, 0.84, 0.86, 0.88])
+    ax.xaxis.set_major_formatter(lambda v, pos: f"{v:.2f}")
+    ax.set_xlabel("Macro F1 vs. human consensus", fontsize=13)
 
     for s_ in ("top", "right", "left"):
         ax.spines[s_].set_visible(False)
@@ -162,60 +179,41 @@ def fig_accuracy():
 
 
 # ---------------------------------------------------------------- fig 3
-def fig_providers():
-    """Cost and wall-clock spread across the 8 models benchmarked on the same
-    3,208 responses. Only the endpoints are published, so only the endpoints
-    are drawn."""
-    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(9.6, 3.6))
+def fig_local_models():
+    """Macro F1 against human consensus for the four laptop-scale local
+    models (Ollama), same metric and gold standard as fig2's cloud tiers.
+    Individual bars, not ranges -- there are only four models, each worth
+    naming, and the spread between them is the point."""
+    fig, ax = plt.subplots(figsize=(9.6, 3.0))
 
-    # -- cost
-    ax1.plot([0.38, 27.85], [0, 0], color=BERK_BLUE, linewidth=12,
-             solid_capstyle="round", zorder=2)
-    ax1.scatter([0.38, 27.85], [0, 0], s=170, color=GOLD, zorder=3,
-                edgecolor=BERK_BLUE, linewidth=2)
-    ax1.text(0.38, 0.30, "$0.38\nMistral Medium", ha="left", va="bottom",
-             fontsize=12, fontweight="bold", color=BERK_BLUE)
-    ax1.text(27.85, -0.32, "$27.85\nGPT-5", ha="right", va="top",
-             fontsize=12, fontweight="bold", color=BERK_BLUE)
-    ax1.set_xscale("log")
-    ax1.set_xlim(0.2, 60)
-    ax1.set_ylim(-1.1, 1.1)
-    ax1.set_yticks([])
-    ax1.set_xticks([0.5, 1, 5, 10, 30])
-    ax1.set_xticklabels(["$0.50", "$1", "$5", "$10", "$30"], fontsize=12)
-    ax1.xaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
-    ax1.set_xlabel("Cost to classify 3,208 responses (log scale)", fontsize=12)
-    ax1.set_title("73× spread in price", fontsize=13.5, fontweight="bold",
-                  color=BERK_BLUE, pad=10)
+    # Precise values (2026-09-22 pull from leaderboard.csv, tier == "local",
+    # question == "all"), sorted ascending so the bars read as a ladder.
+    MODELS = [
+        ("Mistral 7B", 0.6164),
+        ("Llama 3.1 8B", 0.6365),
+        ("Gemma 3 12B", 0.7432),
+        ("Qwen3 14B", 0.7680),
+    ]
+    ypos = list(range(len(MODELS)))[::-1]
 
-    # -- runtime
-    ax2.plot([23, 420], [0, 0], color=GOLD_DK, linewidth=12,
-             solid_capstyle="round", zorder=2)
-    ax2.scatter([23, 420], [0, 0], s=170, color=GOLD, zorder=3,
-                edgecolor=GOLD_DK, linewidth=2)
-    ax2.text(23, 0.30, "23 min", ha="left", va="bottom", fontsize=12,
-             fontweight="bold", color=GOLD_DK)
-    ax2.text(420, -0.32, "7+ hr", ha="right", va="top", fontsize=12,
-             fontweight="bold", color=GOLD_DK)
-    ax2.set_xscale("log")
-    ax2.set_xlim(12, 900)
-    ax2.set_ylim(-1.1, 1.1)
-    ax2.set_yticks([])
-    ax2.set_xticks([15, 30, 60, 120, 240, 480])
-    ax2.set_xticklabels(["15m", "30m", "1h", "2h", "4h", "8h"], fontsize=12)
-    ax2.xaxis.set_minor_formatter(matplotlib.ticker.NullFormatter())
-    ax2.set_xlabel("Wall-clock time, same job (log scale)", fontsize=12)
-    ax2.set_title("Rate limits, not model size, drive runtime", fontsize=13.5,
-                  fontweight="bold", color=BERK_BLUE, pad=10)
+    for y, (name, val) in zip(ypos, MODELS):
+        ax.barh(y, val, color=MUTED, height=0.55, zorder=2)
+        ax.text(val + 0.012, y, f"{val:.2f}", va="center", fontsize=13.5,
+                fontweight="bold", color=MUTED)
 
-    for ax in (ax1, ax2):
-        for s in ("top", "right", "left"):
-            ax.spines[s].set_visible(False)
-        ax.grid(axis="x", color="#dfe7ea", linewidth=1)
-        ax.set_axisbelow(True)
+    ax.set_yticks(ypos)
+    ax.set_yticklabels([m[0] for m in MODELS], fontsize=12.5)
+    ax.set_xlim(0, 0.88)
+    ax.set_xticks([0, 0.2, 0.4, 0.6, 0.8])
+    ax.xaxis.set_major_formatter(lambda v, pos: f"{v:.1f}")
+    ax.set_xlabel("Macro F1 vs. human consensus", fontsize=13)
 
-    fig.tight_layout()
-    fig.savefig(OUT / "fig3_providers.png")
+    for s_ in ("top", "right", "left"):
+        ax.spines[s_].set_visible(False)
+    ax.tick_params(axis="y", length=0)
+    ax.grid(axis="x", color="#dfe7ea", linewidth=1)
+    ax.set_axisbelow(True)
+    fig.savefig(OUT / "fig3_local.png")
     plt.close(fig)
 
 
@@ -260,6 +258,6 @@ def fig_ensemble():
 if __name__ == "__main__":
     fig_pipeline()
     fig_accuracy()
-    fig_providers()
+    fig_local_models()
     fig_ensemble()
     print(f"Wrote 4 figures to {OUT}")

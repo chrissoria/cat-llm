@@ -118,26 +118,26 @@ Soria (2026). *CatLLM: A Python package for generating, assigning, and scoring o
 ![](figures/fig2_accuracy.png)
 
 ::: {.fig-note}
-UC Berkeley Social Networks Study validation: four models against human annotators, across items of differing interpretive difficulty. Open-weight models trail proprietary ones by 1–2 points on straightforward items and converge with them on complex ones. Ranges span the models within each family.
+UC Berkeley Social Networks Study validation: macro F1 against human consensus, averaged across three survey questions so no single question dominates. Frontier-closed, economy-closed, and frontier-open tiers overlap closely; Claude Fable 5, shown individually, lands in line with the top cloud tiers. Ranges span the models within each tier.
 :::
 :::
 
 ::: {.section-block}
 ## What Moves Accuracy
 
-- **Task difficulty dominates model choice.** The gap between straightforward and interpretive items (≈9 points) is far larger than the gap between the best and worst model on a given item (1–2 points).
+- **Cloud tier spread is narrow.** Frontier-closed, economy-closed, and frontier-open models span just 0.07 of macro F1 (0.75–0.83); Claude Fable 5 lands at 0.81, in line with the top tiers.
 - **Response brevity helps.** Responses under 50 characters are classified 7–11 points more accurately than long ones.
 - **Demographic variation is minimal.** Accuracy is stable across population segments — an essential precondition for using coded output in stratified analysis.
 - **Structured output is not the bottleneck.** Across 8 models × 3,208 responses (25,664 classifications), 100% of successful calls returned valid structured output; the 0–18 failures per model were transient server errors, not parsing failures.
 :::
 
 ::: {.section-block .results-block}
-## Provider Comparison
+## Local Model Spread
 
-![](figures/fig3_providers.png)
+![](figures/fig3_local.png)
 
 ::: {.fig-note}
-The same 3,208-response job, priced and timed across 8 models. Cost varies by a factor of 73 and wall-clock time by a factor of 18 — the latter driven by vendor rate limits rather than model size. Cost and accuracy are only loosely coupled, so the expensive model is frequently the wrong default.
+Same macro F1 against human consensus as the cloud tiers, for the four laptop-scale Ollama models. The spread here (0.62–0.77) is more than double the cloud tiers' (0.75–0.83) — picking well matters far more once you're local.
 :::
 :::
 
@@ -186,9 +186,9 @@ For restricted-use data under an IRB or data-use agreement, the local route is o
 ::: {.key-findings}
 ## Key Findings
 
-- [97% / 88–91%]{.stat-number} [Agreement with human coders on straightforward vs. complex interpretive items. The ceiling is set by how interpretive the question is, not by which vendor you pay]{.stat-label}
+- [0.75–0.83]{.stat-number} [Macro F1 against human consensus across cloud tiers; vendor and tier matter far less than the local-vs-cloud choice covered in Choosing a Route]{.stat-label}
 - [98%]{.stat-number} [A three-model ensemble agrees with human consensus more often than any single model in it — disagreement between models is informative, not noise]{.stat-label}
-- [73×]{.stat-number} [Cost spread across vendors for an identical job. Cost tracks accuracy only loosely, so the default choice should be justified rather than assumed]{.stat-label}
+- [0.62–0.77]{.stat-number} [Macro F1 across the four local Ollama models — more than double the cloud tiers' spread, so which local model you pick matters a lot]{.stat-label}
 :::
 
 ::: {.section-block .code-block}
