@@ -151,13 +151,16 @@ di "{hline 78}"
 * Store the scheme in a local so the identical definitions are reused in
 * every part below -- that reuse is what makes the provider comparison in
 * Part 3 a fair one.
+*
+* The local is built one category at a time inside compound quotes. A
+* plain `local cats "A" "B"` strips the outer pair of quotes, which turns
+* the list into one run of words when it reaches categories().
 
-local cats                                                                      ///
-    "Housing cost: The respondent moved because of rent, mortgage, affordability, or general cost of living." ///
-    "Employment: The respondent moved for a job, a transfer, a promotion, education, or because of job loss." ///
-    "Family: The respondent moved because of family -- caregiving, partners, children, or being near relatives." ///
-    "Neighborhood: The respondent moved because of the local area itself -- safety, schools, climate, or amenities." ///
-    "Other: The response does not fit any of the above categories."
+local cats `""Housing cost: The respondent moved because of rent, mortgage, affordability, or general cost of living.""'
+local cats `"`cats' "Employment: The respondent moved for a job, a transfer, a promotion, education, or because of job loss.""'
+local cats `"`cats' "Family: The respondent moved because of family -- caregiving, partners, children, or being near relatives.""'
+local cats `"`cats' "Neighborhood: The respondent moved because of the local area itself -- safety, schools, climate, or amenities.""'
+local cats `"`cats' "Other: The response does not fit any of the above categories.""'
 
 if "$OPENAI_API_KEY" != "" {
 

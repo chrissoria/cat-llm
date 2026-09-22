@@ -514,22 +514,20 @@ font-size: 18pt;
 </section>
 <section id="one-command" class="section-block code-block">
 <h2>One Command</h2>
-<div class="sourceCode" id="cb1"><pre class="sourceCode stata"><code class="sourceCode stata"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="kw">local</span> cats                                          <span class="co">///</span></span>
-<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot;Housing cost: Moved over rent, a mortgage, or affordability.&quot;</span> <span class="co">///</span></span>
-<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot;Employment: Moved for a job, a transfer, or school.&quot;</span> <span class="co">///</span></span>
-<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot;Family: Moved for caregiving or to be near relatives.&quot;</span> <span class="co">///</span></span>
-<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot;Other: Does not fit any of the above categories.&quot;</span></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>catllm classify response,                           <span class="co">///</span></span>
-<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    categories(<span class="ot">`cats&#39;</span>)                              <span class="co">///</span></span>
-<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    apikey(<span class="ot">$ANTHROPIC_API_KEY</span>)                      <span class="co">///</span></span>
-<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>    <span class="kw">model</span>(<span class="st">&quot;claude-fable-5-1&quot;</span>)                       <span class="co">///</span></span>
-<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>    <span class="kw">generate</span>(reason)</span>
-<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a><span class="kw">tab1</span> reason_*</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="kw">regress</span> reason_Housing_cost age female</span></code></pre></div>
+<div class="sourceCode" id="cb1"><pre class="sourceCode stata"><code class="sourceCode stata"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a>catllm classify response,                           <span class="co">///</span></span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a>    categories(                                     <span class="co">///</span></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;Housing cost: Moved over rent, a mortgage, or affordability.&quot;</span> <span class="co">///</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;Employment: Moved for a job, a transfer, or school.&quot;</span>          <span class="co">///</span></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;Family: Moved for caregiving or to be near relatives.&quot;</span>        <span class="co">///</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>      <span class="st">&quot;Other: Does not fit any of the above categories.&quot;</span>)            <span class="co">///</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>    apikey(<span class="ot">$ANTHROPIC_API_KEY</span>)                      <span class="co">///</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a>    <span class="kw">model</span>(<span class="st">&quot;claude-fable-5-1&quot;</span>)                       <span class="co">///</span></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a>    <span class="kw">generate</span>(reason)</span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a><span class="kw">tab1</span> reason_*</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a><span class="kw">regress</span> reason_Housing_cost age female</span></code></pre></div>
 <div class="fig-note">
-<p>Each category is a full sentence and <code>Other</code> is explicit. <code>catllm</code> warns on terse labels and offers to add a missing <code>Other</code> before coding: without a catch-all, the model must guess on responses that fit nothing.</p>
+<p>Each category is a full sentence and <code>Other</code> is explicit. <code>catllm</code> warns on terse labels and offers to add a missing <code>Other</code> before coding: without a catch-all, the model must guess on responses that fit nothing. <code>$ANTHROPIC_API_KEY</code> is a Stata global, set once with <code>global ANTHROPIC_API_KEY : env ANTHROPIC_API_KEY</code>.</p>
 </div>
 </section>
 <section id="references" class="section-block">

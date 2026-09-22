@@ -84,14 +84,12 @@ Open-ended survey items capture what closed-ended items cannot, and are routinel
 ## One Command
 
 ```stata
-local cats                                          ///
-  "Housing cost: Moved over rent, a mortgage, or affordability." ///
-  "Employment: Moved for a job, a transfer, or school." ///
-  "Family: Moved for caregiving or to be near relatives." ///
-  "Other: Does not fit any of the above categories."
-
 catllm classify response,                           ///
-    categories(`cats')                              ///
+    categories(                                     ///
+      "Housing cost: Moved over rent, a mortgage, or affordability." ///
+      "Employment: Moved for a job, a transfer, or school."          ///
+      "Family: Moved for caregiving or to be near relatives."        ///
+      "Other: Does not fit any of the above categories.")            ///
     apikey($ANTHROPIC_API_KEY)                      ///
     model("claude-fable-5-1")                       ///
     generate(reason)
@@ -101,7 +99,7 @@ regress reason_Housing_cost age female
 ```
 
 ::: {.fig-note}
-Each category is a full sentence and `Other` is explicit. `catllm` warns on terse labels and offers to add a missing `Other` before coding: without a catch-all, the model must guess on responses that fit nothing.
+Each category is a full sentence and `Other` is explicit. `catllm` warns on terse labels and offers to add a missing `Other` before coding: without a catch-all, the model must guess on responses that fit nothing. `$ANTHROPIC_API_KEY` is a Stata global, set once with `global ANTHROPIC_API_KEY : env ANTHROPIC_API_KEY`.
 :::
 :::
 
