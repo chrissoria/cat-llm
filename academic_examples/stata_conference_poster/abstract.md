@@ -45,9 +45,10 @@ and 88–91% of complex interpretive ones, with open-weight models 1–2 points
 behind; a three-model ensemble reaches 98% agreement with human consensus.
 Across eight models and 25,664 classifications, cost for an identical job varied
 by a factor of 73 and wall-clock time by a factor of 18, with accuracy only
-loosely coupled to price. Because models disagree most on the responses humans
-find hardest, `catllm` reports vote-level agreement rather than hiding it behind
-a single label.
+loosely coupled to price. `catllm`'s ensemble mode is built on two empirical
+findings: LLMs systematically over-classify ambiguous survey responses, and
+unanimous, cross-provider ensembles correct that over-classification by
+filtering out each model's idiosyncratic errors.
 
 A self-contained do-file reproducing every result is distributed with the poster.
 
@@ -58,7 +59,7 @@ A self-contained do-file reproducing every result is distributed with the poster
 Open-ended survey items are routinely dropped from analysis because hand-coding
 them does not scale. `catllm` codes free text with large language models from
 inside Stata, returning ordinary indicator variables ready for `tabulate` and
-`regress`. It wraps a Python backend behind six verbs and supports OpenAI,
+`regress`. It wraps a Python backend behind five verbs and supports OpenAI,
 Anthropic, and Google models as well as local open-weight models through Ollama,
 so restricted-use data need not leave the analyst's machine. Validated against
 human coders, proprietary models agree on 97% of straightforward items and 88–91%

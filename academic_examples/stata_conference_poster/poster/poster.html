@@ -487,7 +487,7 @@ font-size: 18pt;
 <div class="poster-column">
 <section id="abstract" class="section-block">
 <h2>Abstract</h2>
-<p>Open-ended survey items capture what closed-ended items cannot, and are routinely dropped from analysis because hand-coding them does not scale. <code>catllm</code> is a Stata command that codes free-text responses with large language models and returns ordinary Stata indicator variables. It wraps a Python backend (<code>cat-stack</code>) behind five verbs — <code>classify</code>, <code>extract</code>, <code>explore</code>, <code>summarize</code>, <code>setup</code> — and supports OpenAI, Anthropic, Google, and local open-weight models through Ollama. Against human coders, proprietary models agree on <strong>97%</strong> of straightforward items and <strong>88–91%</strong> of complex interpretive ones; a multi-model ensemble reaches <strong>98%</strong> agreement with human consensus. Because the same job costs between <strong>$0.38 and $27.85</strong> depending on vendor, and because models disagree most on exactly the responses humans find hardest, the package reports vote-level disagreement rather than hiding it behind a single label.</p>
+<p>Open-ended survey items capture what closed-ended items cannot, and are routinely dropped from analysis because hand-coding them does not scale. <code>catllm</code> is a Stata command that codes free-text responses with large language models and returns ordinary Stata indicator variables. It wraps a Python backend (<code>cat-stack</code>) behind five verbs — <code>classify</code>, <code>extract</code>, <code>explore</code>, <code>summarize</code>, <code>setup</code> — and supports OpenAI, Anthropic, Google, and local open-weight models through Ollama. Against human coders, proprietary models agree on <strong>97%</strong> of straightforward items and <strong>88–91%</strong> of complex interpretive ones; a multi-model ensemble reaches <strong>98%</strong> agreement with human consensus. <code>catllm</code>’s ensemble mode is built on two empirical findings: LLMs systematically over-classify ambiguous survey responses, and unanimous, cross-provider ensembles correct that over-classification by filtering out each model’s idiosyncratic errors.</p>
 </section>
 <section id="the-problem" class="section-block">
 <h2>The Problem</h2>
@@ -527,7 +527,7 @@ font-size: 18pt;
 </section>
 <section id="references" class="section-block">
 <h2>References</h2>
-<p>Soria (2026). <em>CatLLM: A Python package for generating, assigning, and scoring open-ended survey data and images.</em> | Bojic et al. (2025). <em>Comparing LLM and human annotators.</em> | Wei et al. (2023). <em>Chain-of-thought prompting.</em> | Dhuliawala et al. (2023). <em>Chain-of-verification.</em> | Zheng et al. (2024). <em>Step-back prompting.</em></p>
+<p>Soria (2026). <em>CatLLM: A Python package for generating, assigning, and scoring open-ended survey data and images.</em> | Soria (2026). <em>High agreement, different stories: how LLM classifiers reshape demographic patterns in survey data.</em> | Soria (2026). <em>Model diversity over model size: unanimous LLM ensembles correct over-classification in survey coding.</em> | Bojic et al. (2025). <em>Comparing LLM and human annotators.</em> | Wei et al. (2023). <em>Chain-of-thought prompting.</em> | Dhuliawala et al. (2023). <em>Chain-of-verification.</em> | Zheng et al. (2024). <em>Step-back prompting.</em></p>
 </section>
 </div>
 <div class="poster-column">
