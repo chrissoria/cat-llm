@@ -31,8 +31,8 @@ statistical environment to do it — exporting to CSV, scripting in Python, and
 merging results back, losing the audit trail that makes coding reproducible.
 
 `catllm` puts the whole loop inside Stata. It is a thin `.ado` layer over a
-Python backend (`cat-stack`), exposing six verbs — `classify`, `extract`,
-`explore`, `summarize`, `cerad`, and `setup` — and supporting OpenAI, Anthropic,
+Python backend (`cat-stack`), exposing five verbs — `classify`, `extract`,
+`explore`, `summarize`, and `setup` — and supporting OpenAI, Anthropic,
 and Google models as well as local open-weight models through Ollama, so that
 restricted-use data need never leave the analyst's machine. `catllm classify`
 takes a string variable and a set of category definitions and returns ordinary

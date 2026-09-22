@@ -2,7 +2,7 @@
 <html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
 
 <meta charset="utf-8">
-<meta name="generator" content="quarto-1.6.40">
+<meta name="generator" content="quarto-1.5.57">
 
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
@@ -487,7 +487,7 @@ font-size: 18pt;
 <div class="poster-column">
 <section id="abstract" class="section-block">
 <h2>Abstract</h2>
-<p>Open-ended survey items capture what closed-ended items cannot, and are routinely dropped from analysis because hand-coding them does not scale. <code>catllm</code> is a Stata command that codes free-text responses with large language models and returns ordinary Stata indicator variables. It wraps a Python backend (<code>cat-stack</code>) behind six verbs — <code>classify</code>, <code>extract</code>, <code>explore</code>, <code>summarize</code>, <code>cerad</code>, <code>setup</code> — and supports OpenAI, Anthropic, Google, and local open-weight models through Ollama. Against human coders, proprietary models agree on <strong>97%</strong> of straightforward items and <strong>88–91%</strong> of complex interpretive ones; a multi-model ensemble reaches <strong>98%</strong> agreement with human consensus. Because the same job costs between <strong>$0.38 and $27.85</strong> depending on vendor, and because models disagree most on exactly the responses humans find hardest, the package reports vote-level disagreement rather than hiding it behind a single label.</p>
+<p>Open-ended survey items capture what closed-ended items cannot, and are routinely dropped from analysis because hand-coding them does not scale. <code>catllm</code> is a Stata command that codes free-text responses with large language models and returns ordinary Stata indicator variables. It wraps a Python backend (<code>cat-stack</code>) behind five verbs — <code>classify</code>, <code>extract</code>, <code>explore</code>, <code>summarize</code>, <code>setup</code> — and supports OpenAI, Anthropic, Google, and local open-weight models through Ollama. Against human coders, proprietary models agree on <strong>97%</strong> of straightforward items and <strong>88–91%</strong> of complex interpretive ones; a multi-model ensemble reaches <strong>98%</strong> agreement with human consensus. Because the same job costs between <strong>$0.38 and $27.85</strong> depending on vendor, and because models disagree most on exactly the responses humans find hardest, the package reports vote-level disagreement rather than hiding it behind a single label.</p>
 </section>
 <section id="the-problem" class="section-block">
 <h2>The Problem</h2>
@@ -578,7 +578,7 @@ font-size: 18pt;
 <td>Fast</td>
 <td>Yes</td>
 </tr>
-<tr class="highlight odd">
+<tr class="odd highlight">
 <td>Multi-vendor ensemble</td>
 <td>Sum of parts</td>
 <td>Slowest member</td>
