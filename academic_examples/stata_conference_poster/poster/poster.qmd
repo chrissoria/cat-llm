@@ -2,7 +2,11 @@
 title: "Coding Open-Ended Survey Text Without Leaving Stata"
 format:
   html:
+    theme: none
+    minimal: true
     toc: false
+    anchor-sections: false
+    code-copy: false
     self-contained: true
     embed-resources: true
     css: poster.css
@@ -97,6 +101,12 @@ regress reason_Housing_cost age female
 ::: {.fig-note}
 Category definitions, not one-word labels: writing each category as a sentence classifies several percentage points better on every model tested. An explicit `Other` category is required, not optional — without it the model must guess on responses that genuinely fit nothing.
 :::
+:::
+
+::: {.section-block}
+## References
+
+Soria (2026). *CatLLM: A Python package for generating, assigning, and scoring open-ended survey data and images.* | Bojic et al. (2025). *Comparing LLM and human annotators.* | Wei et al. (2023). *Chain-of-thought prompting.* | Dhuliawala et al. (2023). *Chain-of-verification.* | Zheng et al. (2024). *Step-back prompting.*
 :::
 :::
 
@@ -206,11 +216,6 @@ The file walks the full pipeline: classify, analyze the resulting indicators, co
 - **Smaller local models are less tested.** The published benchmarks use high-end models; the low end warrants its own validation before use in production coding.
 :::
 
-::: {.section-block}
-## References
-
-Soria (2026). *CatLLM: A Python package for generating, assigning, and scoring open-ended survey data and images.* | Bojic et al. (2025). *Comparing LLM and human annotators.* | Wei et al. (2023). *Chain-of-thought prompting.* | Dhuliawala et al. (2023). *Chain-of-verification.* | Zheng et al. (2024). *Step-back prompting.*
-:::
 :::
 ::::
 

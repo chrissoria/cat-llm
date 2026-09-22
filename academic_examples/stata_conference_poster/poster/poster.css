@@ -157,20 +157,20 @@ main.content,
   grid-template-columns: 1fr 1.1fr 1fr;
   gap: 0.4in;
   align-items: start;
-  padding: 0.35in 0.5in 0.25in 0.5in;
+  padding: 0.28in 0.5in 0.1in 0.5in;
 }
 
 .poster-column {
   display: flex;
   flex-direction: column;
-  gap: 0.25in;
+  gap: 0.2in;
 }
 
 /* ── Section blocks ── */
 .section-block {
   background: var(--panel-bg);
   border-radius: var(--panel-radius);
-  padding: 0.25in 0.3in;
+  padding: 0.22in 0.28in;
 }
 
 .section-block h2 {
