@@ -1,0 +1,413 @@
+/* Poster stylesheet — 48in x 36in landscape.
+   Adapted from the CADAS dissertation poster template; recolored to
+   Berkeley blue / California gold and extended with a .code-block rule
+   for the Stata listings. */
+
+@page {
+  size: 48in 36in;
+  margin: 0;
+}
+
+@media print {
+  html, body {
+    width: 48in;
+    height: 36in;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+  .poster-shell {
+    height: 36in;
+    overflow: hidden;
+  }
+}
+
+:root {
+  --brand-primary: #003262;   /* Berkeley blue — header/footer bands, section headers */
+  --brand-primary-2: #0a4d7a; /* lighter blue for gradients/accents */
+  --brand-accent: #fdb515;    /* California gold — underlines, key-findings rule */
+  --text: #111111;
+  --muted: #45606a;
+  --panel-bg: #f1f5f6;
+  --panel-radius: 0.15in;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+  background: #ffffff;
+  color: var(--text);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+body {
+  min-width: 48in;
+}
+
+.quarto-title-block,
+#title-block-header,
+header#title-block-header {
+  display: none !important;
+}
+
+main.content,
+.page-columns,
+.page-rows-contents,
+#quarto-content {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding: 0;
+}
+
+/* ── Shell ── */
+.poster-shell {
+  width: 48in;
+  height: 36in;
+  padding: 0;
+  background: #ffffff;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+
+/* ── Header band ── */
+.poster-top {
+  display: grid;
+  grid-template-columns: 6in 1fr 5in;
+  align-items: center;
+  gap: 0.3in;
+  background: linear-gradient(100deg, var(--brand-primary) 0%, var(--brand-primary-2) 100%);
+  padding: 0.32in 0.5in;
+  border-bottom: 0.08in solid var(--brand-accent);
+}
+
+.top-left {
+  font-size: 16pt;
+  line-height: 1.2;
+  color: #ffffff;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 0.05in;
+}
+
+.top-left strong {
+  color: var(--brand-accent);
+}
+
+.top-left p {
+  margin: 0;
+}
+
+.top-qr {
+  width: 2.3in;
+  height: auto;
+  display: block;
+  background: #ffffff;
+  padding: 0.08in;
+  border-radius: 0.08in;
+}
+
+.top-center {
+  text-align: center;
+}
+
+.top-center h1 {
+  margin: 0;
+  font-size: 42pt;
+  line-height: 1.12;
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.top-center .authors {
+  margin: 0.12in 0 0 0;
+  font-size: 21pt;
+  line-height: 1.15;
+  color: var(--brand-accent);
+  font-weight: 600;
+}
+
+.top-center .affils {
+  margin: 0.06in 0 0 0;
+  font-size: 14pt;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.85);
+  font-weight: 400;
+}
+
+.top-right {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+}
+
+.org-logo {
+  width: 4.6in;
+  height: auto;
+  display: block;
+  margin-left: auto;
+}
+
+/* ── Columns ── */
+.poster-columns {
+  display: grid;
+  grid-template-columns: 1fr 1.1fr 1fr;
+  gap: 0.4in;
+  align-items: start;
+  padding: 0.35in 0.5in 0.25in 0.5in;
+}
+
+.poster-column {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25in;
+}
+
+/* ── Section blocks ── */
+.section-block {
+  background: var(--panel-bg);
+  border-radius: var(--panel-radius);
+  padding: 0.25in 0.3in;
+}
+
+.section-block h2 {
+  margin: 0 0 0.1in 0;
+  font-size: 34pt;
+  line-height: 1.05;
+  color: var(--brand-primary);
+  font-weight: 700;
+}
+
+.section-block h2::after {
+  content: "";
+  display: block;
+  width: 100%;
+  height: 0.06in;
+  background: var(--brand-accent);
+  margin-top: 0.08in;
+  border-radius: 0.03in;
+}
+
+.section-block p,
+.section-block li {
+  font-size: 23pt;
+  line-height: 1.28;
+  margin-top: 0.04in;
+  margin-bottom: 0.04in;
+}
+
+.section-block ul,
+.section-block ol {
+  margin: 0.06in 0 0 0.18in;
+  padding-left: 0.22in;
+}
+
+/* ── Code listings ── */
+.code-block pre,
+.code-block div.sourceCode,
+.code-block pre.sourceCode {
+  background: #ffffff;
+  border-left: 0.08in solid var(--brand-accent);
+  border-radius: 0.08in;
+  padding: 0.16in 0.2in;
+  margin: 0.12in 0 0.06in 0;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.code-block code,
+.code-block pre code {
+  font-family: "DejaVu Sans Mono", "Courier New", monospace;
+  font-size: 17pt;
+  line-height: 1.32;
+  color: var(--text);
+  background: transparent;
+  white-space: pre;
+}
+
+/* ── Figures ── */
+.results-block .cell-output-display,
+.results-block figure,
+.results-block p:has(img) {
+  margin: 0.12in 0;
+  background: #ffffff;
+  border-radius: 0.1in;
+  padding: 0.15in;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+.results-block img,
+.results-block svg {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.fig-note {
+  font-size: 15pt;
+  color: var(--muted);
+  margin: 0.02in 0 0 0;
+  line-height: 1.2;
+}
+
+/* ── Results table ── */
+.results-table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 20pt;
+  margin-top: 0.08in;
+}
+
+.results-table thead th {
+  background: var(--brand-primary);
+  color: #ffffff;
+  font-weight: 700;
+  padding: 0.12in 0.1in;
+  text-align: center;
+}
+
+.results-table thead th:first-child {
+  text-align: left;
+}
+
+.results-table tbody td {
+  padding: 0.1in 0.1in;
+  text-align: center;
+  border-bottom: 1px solid #d9e3e6;
+}
+
+.results-table tbody td:first-child {
+  text-align: left;
+  font-weight: 600;
+  color: var(--brand-primary);
+}
+
+.results-table tbody tr:nth-child(even) {
+  background: var(--panel-bg);
+}
+
+.results-table tbody tr.highlight {
+  background: #fdeecb;
+}
+
+.results-table tbody tr.highlight td:first-child {
+  color: #8a5b00;
+}
+
+/* ── Key findings callout ── */
+.key-findings {
+  background: #ffffff;
+  border-left: 0.12in solid var(--brand-accent);
+  border-radius: var(--panel-radius);
+  padding: 0.25in 0.3in;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.06);
+}
+
+.key-findings h2 {
+  margin: 0 0 0.1in 0;
+  font-size: 34pt;
+  line-height: 1.05;
+  color: var(--brand-primary);
+  font-weight: 700;
+}
+
+.key-findings h2::after {
+  display: none;
+}
+
+.key-findings p,
+.key-findings li {
+  font-size: 23pt;
+  line-height: 1.28;
+}
+
+.key-findings .stat-number {
+  font-size: 40pt;
+  font-weight: 800;
+  color: var(--brand-primary);
+  display: block;
+  margin-bottom: 0.02in;
+}
+
+.key-findings .stat-label {
+  font-size: 19pt;
+  color: var(--muted);
+  display: block;
+}
+
+.key-findings ul,
+.key-findings ol {
+  margin: 0.06in 0 0 0.18in;
+  padding-left: 0.22in;
+}
+
+/* ── Top numeric callout strip ── */
+.stat-strip {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.2in;
+  margin: 0 0 0.05in 0;
+}
+
+.stat-strip .stat-cell {
+  background: var(--brand-primary);
+  color: #ffffff;
+  border-radius: var(--panel-radius);
+  padding: 0.2in 0.15in;
+  text-align: center;
+}
+
+.stat-strip .big {
+  font-size: 40pt;
+  font-weight: 800;
+  line-height: 1;
+  color: #ffffff;
+}
+
+.stat-strip .cap {
+  font-size: 19pt;
+  color: var(--brand-accent);
+  display: block;
+  margin-top: 0.07in;
+  font-weight: 700;
+  line-height: 1.2;
+}
+
+/* ── Footer ── */
+.poster-footer {
+  background: var(--brand-primary);
+  padding: 0.2in 0.5in;
+  font-size: 18pt;
+  line-height: 1.2;
+  color: rgba(255, 255, 255, 0.9);
+  text-align: center;
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
+  align-items: center;
+  border-top: 0.06in solid var(--brand-accent);
+}
+
+.poster-footer .footer-left {
+  text-align: left;
+}
+
+.poster-footer .footer-center {
+  text-align: center;
+}
+
+.poster-footer .footer-right {
+  text-align: right;
+}
+
+.poster-footer strong {
+  color: #ffffff;
+}
+
+.poster-footer code {
+  color: var(--brand-accent);
+  background: transparent;
+  font-size: 18pt;
+}
