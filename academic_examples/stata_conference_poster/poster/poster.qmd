@@ -56,7 +56,7 @@ Chris Soria^1^
 ::: {.section-block}
 ## Abstract
 
-Open-ended survey items capture what closed-ended items cannot, and are routinely dropped from analysis because hand-coding them does not scale. `catllm` is a Stata command that codes free-text responses with large language models and returns ordinary Stata indicator variables. It wraps a Python backend (`cat-stack`) behind five verbs — `classify`, `extract`, `explore`, `summarize`, `setup` — and supports OpenAI, Anthropic, Google, and local open-weight models through Ollama. Against human coders, proprietary models agree on **97%** of straightforward items and **88–91%** of complex interpretive ones; a multi-model ensemble reaches **98%** agreement with human consensus.
+Open-ended survey items capture what closed-ended items cannot, and are routinely dropped from analysis because hand-coding them does not scale. `catllm` is a Stata command that codes free-text responses with large language models and returns ordinary Stata indicator variables. It wraps a Python backend (`cat-stack`) behind five verbs: `extract`/`explore` find categories, `classify` applies them, and `summarize`/`setup` close the loop, across OpenAI, Anthropic, Google, or Ollama. Tested on multi-label, multi-class items, proprietary models agree with human coders on **97%** of straightforward items and **88–91%** of complex interpretive ones; a multi-model ensemble reaches **98%** agreement with human consensus.
 :::
 
 ::: {.section-block}
@@ -75,7 +75,7 @@ Open-ended survey items capture what closed-ended items cannot, and are routinel
 ![](figures/fig1_pipeline.png)
 
 ::: {.fig-note}
-`generate()` is a prefix, not a variable name: a five-category scheme returns five 0/1 byte variables. Coding is multi-label by construction, so a move that is both a job move and a cost-of-living move is recorded as both.
+`generate()` is a prefix, not a variable name: a five-category scheme returns five 0/1 byte variables. `extract`'s specificity, iteration count, and category limit are tunable, so discovery matches the research question instead of a fixed default.
 :::
 :::
 

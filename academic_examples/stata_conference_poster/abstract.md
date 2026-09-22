@@ -31,18 +31,19 @@ statistical environment to do it — exporting to CSV, scripting in Python, and
 merging results back, losing the audit trail that makes coding reproducible.
 
 `catllm` puts the whole loop inside Stata. It is a thin `.ado` layer over a
-Python backend (`cat-stack`), exposing five verbs — `classify`, `extract`,
-`explore`, `summarize`, and `setup` — and supporting OpenAI, Anthropic,
-and Google models as well as local open-weight models through Ollama, so that
-restricted-use data need never leave the analyst's machine. `catllm classify`
-takes a string variable and a set of category definitions and returns ordinary
-Stata indicator variables, multi-label by construction and immediately usable in
-`tabulate` or `regress`.
+Python backend (`cat-stack`): `extract`/`explore` discover categories directly
+from the data, `classify` applies a category scheme, hand-written or
+discovered, and returns ordinary Stata indicator variables, multi-label by
+construction and immediately usable in `tabulate` or `regress`, and
+`summarize`/`setup` complete the pipeline. It supports OpenAI, Anthropic, and
+Google models as well as local open-weight models through Ollama, so
+restricted-use data need never leave the analyst's machine.
 
-This poster reports validation against human coders on survey free text:
-proprietary models agree with human annotators on 97% of straightforward items
-and 88–91% of complex interpretive ones, with open-weight models 1–2 points
-behind; a three-model ensemble reaches 98% agreement with human consensus.
+This poster reports validation against human coders on multi-label,
+multi-class survey free text: proprietary models agree with human annotators
+on 97% of straightforward items and 88–91% of complex interpretive ones, with
+open-weight models 1–2 points behind; a three-model ensemble reaches 98%
+agreement with human consensus.
 Across eight models and 25,664 classifications, cost for an identical job varied
 by a factor of 73 and wall-clock time by a factor of 18, with accuracy only
 loosely coupled to price.

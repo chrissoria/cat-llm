@@ -87,21 +87,21 @@ def fig_pipeline():
     ax.set_ylim(0, 1)
     ax.axis("off")
 
-    _box(ax, 0.00, 0.30, 0.225, 0.42, "Stata dataset",
+    _box(ax, 0.00, 0.30, 0.203, 0.42, "Stata dataset",
          "one open-ended\nstring variable", fc=BERK_BLUE, fs=12.5)
-    _box(ax, 0.268, 0.30, 0.245, 0.42, "catllm classify",
+    _box(ax, 0.243, 0.30, 0.218, 0.42, "catllm extract",
+         "discover categories\nfrom the data", fc=BERK_BLUE_2, fs=12.5)
+    _box(ax, 0.501, 0.30, 0.249, 0.42, "catllm classify",
          "categories( ) as\none-sentence definitions", fc=GOLD, tc=INK, fs=12.5)
-    _box(ax, 0.556, 0.30, 0.195, 0.42, "LLM provider",
-         "OpenAI · Anthropic\nGoogle · Ollama", fc=BERK_BLUE_2, fs=12.5)
-    _box(ax, 0.794, 0.30, 0.206, 0.42, "K indicators",
+    _box(ax, 0.790, 0.30, 0.210, 0.42, "K indicators",
          "prefix_cat = 0/1\nready for tab / regress", fc=BERK_BLUE, fs=12.5)
 
-    for x0, x1 in ((0.225, 0.268), (0.513, 0.556), (0.751, 0.794)):
+    for x0, x1 in ((0.203, 0.243), (0.461, 0.501), (0.750, 0.790)):
         _arrow(ax, x0, 0.51, x1, 0.51)
 
     ax.text(0.5, 0.135,
-            "No data leaves Stata's workflow: one command in, one indicator "
-            "variable per category out.",
+            "Categories come from extract or your own list; classify "
+            "returns multi-label indicator variables either way.",
             ha="center", va="center", fontsize=12.5, color=MUTED, style="italic")
     ax.text(0.5, 0.90, "Text goes in as a variable — categories come back as variables",
             ha="center", va="center", fontsize=14, fontweight="bold", color=BERK_BLUE)
