@@ -163,14 +163,14 @@ main.content,
 .poster-column {
   display: flex;
   flex-direction: column;
-  gap: 0.2in;
+  gap: 0.14in;
 }
 
 /* ── Section blocks ── */
 .section-block {
   background: var(--panel-bg);
   border-radius: var(--panel-radius);
-  padding: 0.22in 0.28in;
+  padding: 0.16in 0.28in;
 }
 
 .section-block h2 {

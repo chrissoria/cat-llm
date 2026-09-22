@@ -45,10 +45,7 @@ and 88–91% of complex interpretive ones, with open-weight models 1–2 points
 behind; a three-model ensemble reaches 98% agreement with human consensus.
 Across eight models and 25,664 classifications, cost for an identical job varied
 by a factor of 73 and wall-clock time by a factor of 18, with accuracy only
-loosely coupled to price. `catllm`'s ensemble mode is built on two empirical
-findings: LLMs systematically over-classify ambiguous survey responses, and
-unanimous, cross-provider ensembles correct that over-classification by
-filtering out each model's idiosyncratic errors.
+loosely coupled to price.
 
 A self-contained do-file reproducing every result is distributed with the poster.
 

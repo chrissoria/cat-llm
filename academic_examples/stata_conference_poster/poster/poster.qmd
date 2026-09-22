@@ -56,16 +56,17 @@ Chris Soria^1^
 ::: {.section-block}
 ## Abstract
 
-Open-ended survey items capture what closed-ended items cannot, and are routinely dropped from analysis because hand-coding them does not scale. `catllm` is a Stata command that codes free-text responses with large language models and returns ordinary Stata indicator variables. It wraps a Python backend (`cat-stack`) behind five verbs — `classify`, `extract`, `explore`, `summarize`, `setup` — and supports OpenAI, Anthropic, Google, and local open-weight models through Ollama. Against human coders, proprietary models agree on **97%** of straightforward items and **88–91%** of complex interpretive ones; a multi-model ensemble reaches **98%** agreement with human consensus. `catllm`'s ensemble mode is built on two empirical findings: LLMs systematically over-classify ambiguous survey responses, and unanimous, cross-provider ensembles correct that over-classification by filtering out each model's idiosyncratic errors.
+Open-ended survey items capture what closed-ended items cannot, and are routinely dropped from analysis because hand-coding them does not scale. `catllm` is a Stata command that codes free-text responses with large language models and returns ordinary Stata indicator variables. It wraps a Python backend (`cat-stack`) behind five verbs — `classify`, `extract`, `explore`, `summarize`, `setup` — and supports OpenAI, Anthropic, Google, and local open-weight models through Ollama. Against human coders, proprietary models agree on **97%** of straightforward items and **88–91%** of complex interpretive ones; a multi-model ensemble reaches **98%** agreement with human consensus.
 :::
 
 ::: {.section-block}
 ## The Problem
 
-- A single open-ended item in a 3,000-respondent survey is weeks of RA time to code, and the coding is rarely re-audited once done.
-- The usual response is to drop the item, or to code a subsample and generalize from it.
-- Researchers who do reach for an LLM typically leave their statistical environment: export to CSV, script in Python, re-merge, and lose the audit trail that makes the coding reproducible.
-- **Aim:** put the whole loop inside Stata, so that coding an open-ended item is as reproducible, and as inspectable, as recoding a closed-ended one.
+- Researchers already use LLMs to code open-ended text, but little guidance exists for keeping classifications aligned with intended meaning without skewing conclusions.
+- Model choice is often arbitrary. Researchers overpay for models that excel at general tasks, which rarely predicts coding accuracy.
+- Coding several open-ended items at once means devising a bespoke strategy each time. That risks bias and error, not a documented method.
+- Doing this from Stata isn't supported today: researchers export to CSV, script in Python, re-merge, and lose the audit trail that makes coding reproducible.
+- **Aim:** put the whole loop inside Stata, and tackle over-classification from several evidence-based angles: category definitions, model choice, and cross-provider ensemble consensus.
 :::
 
 ::: {.section-block .results-block}
@@ -106,7 +107,7 @@ Category definitions, not one-word labels: writing each category as a sentence c
 ::: {.section-block}
 ## References
 
-Soria (2026). *CatLLM: A Python package for generating, assigning, and scoring open-ended survey data and images.* | Soria (2026). *High agreement, different stories: how LLM classifiers reshape demographic patterns in survey data.* | Soria (2026). *Model diversity over model size: unanimous LLM ensembles correct over-classification in survey coding.* | Bojic et al. (2025). *Comparing LLM and human annotators.* | Wei et al. (2023). *Chain-of-thought prompting.* | Dhuliawala et al. (2023). *Chain-of-verification.* | Zheng et al. (2024). *Step-back prompting.*
+Soria (2026). *CatLLM: A Python package for generating, assigning, and scoring open-ended survey data and images.* | Soria (2026). *High agreement, different stories.* | Soria (2026). *Model diversity over model size.* | Bojic et al. (2025). *Comparing LLM and human annotators.* | Wei et al. (2023). *Chain-of-thought prompting.* | Dhuliawala et al. (2023). *Chain-of-verification.* | Zheng et al. (2024). *Step-back prompting.*
 :::
 :::
 

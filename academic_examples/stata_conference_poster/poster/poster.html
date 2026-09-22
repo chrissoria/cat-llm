@@ -239,13 +239,13 @@ padding: 0.28in 0.5in 0.1in 0.5in;
 .poster-column {
 display: flex;
 flex-direction: column;
-gap: 0.2in;
+gap: 0.14in;
 }
 
 .section-block {
 background: var(--panel-bg);
 border-radius: var(--panel-radius);
-padding: 0.22in 0.28in;
+padding: 0.16in 0.28in;
 }
 .section-block h2 {
 margin: 0 0 0.1in 0;
@@ -487,15 +487,16 @@ font-size: 18pt;
 <div class="poster-column">
 <section id="abstract" class="section-block">
 <h2>Abstract</h2>
-<p>Open-ended survey items capture what closed-ended items cannot, and are routinely dropped from analysis because hand-coding them does not scale. <code>catllm</code> is a Stata command that codes free-text responses with large language models and returns ordinary Stata indicator variables. It wraps a Python backend (<code>cat-stack</code>) behind five verbs — <code>classify</code>, <code>extract</code>, <code>explore</code>, <code>summarize</code>, <code>setup</code> — and supports OpenAI, Anthropic, Google, and local open-weight models through Ollama. Against human coders, proprietary models agree on <strong>97%</strong> of straightforward items and <strong>88–91%</strong> of complex interpretive ones; a multi-model ensemble reaches <strong>98%</strong> agreement with human consensus. <code>catllm</code>’s ensemble mode is built on two empirical findings: LLMs systematically over-classify ambiguous survey responses, and unanimous, cross-provider ensembles correct that over-classification by filtering out each model’s idiosyncratic errors.</p>
+<p>Open-ended survey items capture what closed-ended items cannot, and are routinely dropped from analysis because hand-coding them does not scale. <code>catllm</code> is a Stata command that codes free-text responses with large language models and returns ordinary Stata indicator variables. It wraps a Python backend (<code>cat-stack</code>) behind five verbs — <code>classify</code>, <code>extract</code>, <code>explore</code>, <code>summarize</code>, <code>setup</code> — and supports OpenAI, Anthropic, Google, and local open-weight models through Ollama. Against human coders, proprietary models agree on <strong>97%</strong> of straightforward items and <strong>88–91%</strong> of complex interpretive ones; a multi-model ensemble reaches <strong>98%</strong> agreement with human consensus.</p>
 </section>
 <section id="the-problem" class="section-block">
 <h2>The Problem</h2>
 <ul>
-<li>A single open-ended item in a 3,000-respondent survey is weeks of RA time to code, and the coding is rarely re-audited once done.</li>
-<li>The usual response is to drop the item, or to code a subsample and generalize from it.</li>
-<li>Researchers who do reach for an LLM typically leave their statistical environment: export to CSV, script in Python, re-merge, and lose the audit trail that makes the coding reproducible.</li>
-<li><strong>Aim:</strong> put the whole loop inside Stata, so that coding an open-ended item is as reproducible, and as inspectable, as recoding a closed-ended one.</li>
+<li>Researchers already use LLMs to code open-ended text, but little guidance exists for keeping classifications aligned with intended meaning without skewing conclusions.</li>
+<li>Model choice is often arbitrary. Researchers overpay for models that excel at general tasks, which rarely predicts coding accuracy.</li>
+<li>Coding several open-ended items at once means devising a bespoke strategy each time. That risks bias and error, not a documented method.</li>
+<li>Doing this from Stata isn’t supported today: researchers export to CSV, script in Python, re-merge, and lose the audit trail that makes coding reproducible.</li>
+<li><strong>Aim:</strong> put the whole loop inside Stata, and tackle over-classification from several evidence-based angles: category definitions, model choice, and cross-provider ensemble consensus.</li>
 </ul>
 </section>
 <section id="the-pipeline" class="section-block results-block">
@@ -527,7 +528,7 @@ font-size: 18pt;
 </section>
 <section id="references" class="section-block">
 <h2>References</h2>
-<p>Soria (2026). <em>CatLLM: A Python package for generating, assigning, and scoring open-ended survey data and images.</em> | Soria (2026). <em>High agreement, different stories: how LLM classifiers reshape demographic patterns in survey data.</em> | Soria (2026). <em>Model diversity over model size: unanimous LLM ensembles correct over-classification in survey coding.</em> | Bojic et al. (2025). <em>Comparing LLM and human annotators.</em> | Wei et al. (2023). <em>Chain-of-thought prompting.</em> | Dhuliawala et al. (2023). <em>Chain-of-verification.</em> | Zheng et al. (2024). <em>Step-back prompting.</em></p>
+<p>Soria (2026). <em>CatLLM: A Python package for generating, assigning, and scoring open-ended survey data and images.</em> | Soria (2026). <em>High agreement, different stories.</em> | Soria (2026). <em>Model diversity over model size.</em> | Bojic et al. (2025). <em>Comparing LLM and human annotators.</em> | Wei et al. (2023). <em>Chain-of-thought prompting.</em> | Dhuliawala et al. (2023). <em>Chain-of-verification.</em> | Zheng et al. (2024). <em>Step-back prompting.</em></p>
 </section>
 </div>
 <div class="poster-column">
