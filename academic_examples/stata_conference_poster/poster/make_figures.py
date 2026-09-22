@@ -25,10 +25,16 @@ Every number plotted here traces to a source in this repository:
                                 where models actually overlap), scored
                                 against the same UCNets gold standard,
                                 unanimous-AND combined per response x
-                                category, then macro F1 per question and
-                                averaged across the 3 questions. See
-                                unanimous_ensemble.R (this directory) for
-                                the exact computation -- run
+                                category, for the top 3 models per tier
+                                (by individual macro F1). Plots pooled
+                                precision and recall
+                                (every response x category cell flattened
+                                into one confusion matrix before scoring,
+                                matching llm_ensemble_paper's
+                                unanimous_vote() pipeline), each averaged
+                                across the 3 questions. Macro and pooled F1
+                                are computed alongside for reference. See unanimous_ensemble.R (this
+                                directory) for the exact computation -- run
                                 `Rscript unanimous_ensemble.R` to
                                 reproduce (needs the source data, not
                                 included here).
@@ -86,11 +92,13 @@ def _box(ax, x, y, w, h, label, sub=None, fc=BERK_BLUE, tc="white", fs=13):
             facecolor=fc,
         )
     )
-    ty = y + h / 2 + (0.035 if sub else 0)
+    # Offsets are in axes fraction, so they shrink with figure height;
+    # sized for the 2.65in-tall pipeline figure (title above, sub below).
+    ty = y + h / 2 + (0.085 if sub else 0)
     ax.text(x + w / 2, ty, label, ha="center", va="center", color=tc,
             fontsize=fs, fontweight="bold", zorder=3)
     if sub:
-        ax.text(x + w / 2, y + h / 2 - 0.055, sub, ha="center", va="center",
+        ax.text(x + w / 2, y + h / 2 - 0.075, sub, ha="center", va="center",
                 color=tc, fontsize=fs - 3.5, zorder=3, linespacing=1.35)
 
 
@@ -106,7 +114,10 @@ def _arrow(ax, x0, y0, x1, y1, color=GOLD_DK):
 
 # ---------------------------------------------------------------- fig 1
 def fig_pipeline():
-    fig, ax = plt.subplots(figsize=(9.2, 3.5))
+    # Height chosen so the saved image keeps a ~3.2:1 aspect with the box
+    # row as the widest element; a taller image scales taller at column
+    # width and overflows the 36in sheet.
+    fig, ax = plt.subplots(figsize=(9.2, 2.65))
     ax.set_xlim(0, 1)
     ax.set_ylim(0, 1)
     ax.axis("off")
@@ -123,10 +134,14 @@ def fig_pipeline():
     for x0, x1 in ((0.203, 0.243), (0.461, 0.501), (0.750, 0.790)):
         _arrow(ax, x0, 0.51, x1, 0.51)
 
-    ax.text(0.5, 0.135,
-            "Categories come from extract or your own list; classify "
-            "returns multi-label indicator variables either way.",
-            ha="center", va="center", fontsize=12.5, color=MUTED, style="italic")
+    # Two lines, narrower than the box row: with bbox_inches="tight" the
+    # widest element sets the image width, and a one-line caption wider
+    # than the boxes made the boxes look inset/cropped on the poster.
+    ax.text(0.5, 0.12,
+            "Categories come from extract or your own list;\n"
+            "classify returns multi-label indicator variables either way.",
+            ha="center", va="center", fontsize=12.5, color=MUTED, style="italic",
+            linespacing=1.3)
     ax.text(0.5, 0.90, "Text goes in as a variable — categories come back as variables",
             ha="center", va="center", fontsize=14, fontweight="bold", color=BERK_BLUE)
     fig.savefig(OUT / "fig1_pipeline.png")
@@ -232,35 +247,66 @@ def fig_local_models():
 
 
 # ---------------------------------------------------------------- fig 4
+def _darken(hex_color, factor=0.68):
+    hex_color = hex_color.lstrip("#")
+    r, g, b = (int(hex_color[i:i + 2], 16) for i in (0, 2, 4))
+    r, g, b = (max(0, int(c * factor)) for c in (r, g, b))
+    return f"#{r:02x}{g:02x}{b:02x}"
+
+
 def fig_unanimous_ensembles():
-    """Unanimous-vote ensemble macro F1 (survey-question-level, mean of the
-    3 per-question F1s), frontier-open tier (6 models, AND-combined) and
-    local tier (4 models, AND-combined), against Claude Fable 5 as a single
-    model. Computed from row-level per-model predictions and the same gold
-    standard as fig2/fig3 (unanimous_ensemble.R, this directory):
-    frontier-open unanimous = 0.8044 (per-q 0.8786/0.9238/0.6107), local
-    unanimous = 0.6693 (per-q 0.7647/0.7728/0.4702), all 175/175 gold rows
-    matched exactly for every question/tier, no fuzzy fallback needed."""
-    fig, ax = plt.subplots(figsize=(9.2, 4.0))
+    """Unanimous-vote ensemble precision and recall (survey-question-level,
+    mean of the 3 per-question values), the top 3 frontier-open models
+    (ranked by individual macro F1, AND-combined), the top 3 local models
+    (same rule), and Claude Fable 5 as a single model. Top-3 rather than
+    the whole tier because "run your three best, require unanimity" is a
+    rule a reader can apply, and because the weakest members were costing
+    recall without adding precision (full-tier numbers are printed by the
+    R script for reference). The trio is chosen on the scored data; the
+    R script also scores every 3-model subset as a robustness check. Both metrics are pooled: every response x category
+    cell flattened into one confusion matrix before scoring, matching
+    llm_ensemble_paper's unanimous_vote() pipeline. Precision is the
+    solid bar, recall the hollow hatched bar in the same color. Unanimity is
+    an over-classification correction, so it shows up as a precision gain
+    paid for in recall; plotting the two side by side shows the trade
+    rather than collapsing it into F1 (both F1 variants are still
+    computed for reference in unanimous_ensemble.R, this directory; see
+    that script's header for the full per-question breakdown). All
+    175/175 gold rows matched exactly for every question/tier, no fuzzy
+    fallback needed."""
+    fig, ax = plt.subplots(figsize=(9.6, 3.7))
 
-    BARS = [
-        ("Frontier open\n(6-model unanimous)", 0.8044, MUTED),
-        ("Local\n(4-model unanimous)", 0.6693, GOLD),
-        ("Claude Fable 5\n(single model)", 0.8132, GOLD_DK),
+    # (label, precision, recall, base color)
+    GROUPS = [
+        ("Frontier open\n(top-3 unanimous)", 0.8509, 0.8450, MUTED),
+        ("Local\n(top-3 unanimous)", 0.8173, 0.6815, GOLD),
+        ("Claude Fable 5\n(single model)", 0.7827, 0.8713, GOLD_DK),
     ]
-    xpos = [0, 1, 2]
+    xpos = list(range(len(GROUPS)))
+    width = 0.32
 
-    for x, (label, val, color) in zip(xpos, BARS):
-        ax.bar(x, val, color=color, width=0.5, zorder=2)
-        ax.text(x, val + 0.02, f"{val:.2f}", ha="center", fontsize=16,
-                fontweight="bold", color=color)
+    for x, (label, prec, rec, color) in zip(xpos, GROUPS):
+        dark = _darken(color)
+        # precision: solid fill. recall: hollow, hatched, same color -- a
+        # shade difference alone was too subtle to read at poster distance.
+        ax.bar(x - width / 2, prec, color=color, width=width, zorder=2,
+               label="Precision" if x == 0 else None)
+        ax.bar(x + width / 2, rec, facecolor="white", edgecolor=color,
+               hatch="///", linewidth=1.6, width=width, zorder=2,
+               label="Recall" if x == 0 else None)
+        ax.text(x - width / 2, prec + 0.018, f"{prec:.2f}", ha="center",
+                fontsize=12.5, fontweight="bold", color=dark)
+        ax.text(x + width / 2, rec + 0.018, f"{rec:.2f}", ha="center",
+                fontsize=12.5, fontweight="bold", color=dark)
 
     ax.set_xticks(xpos)
-    ax.set_xticklabels([b[0] for b in BARS], fontsize=12.5)
-    ax.set_ylim(0, 0.94)
+    ax.set_xticklabels([g[0] for g in GROUPS], fontsize=12.5)
+    ax.set_ylim(0, 1.08)
     ax.set_yticks([0, 0.2, 0.4, 0.6, 0.8])
     ax.yaxis.set_major_formatter(lambda v, pos: f"{v:.1f}")
-    ax.set_ylabel("Macro F1 vs. human consensus", fontsize=13)
+    ax.set_ylabel("vs. human consensus", fontsize=13)
+    ax.legend(loc="upper center", ncol=2, frameon=False, fontsize=11.5,
+              handlelength=1.4, columnspacing=1.3)
 
     for s_ in ("top", "right"):
         ax.spines[s_].set_visible(False)

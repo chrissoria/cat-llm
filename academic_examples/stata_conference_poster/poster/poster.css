@@ -74,7 +74,7 @@ main.content,
 /* ── Header band ── */
 .poster-top {
   display: grid;
-  grid-template-columns: 6in 1fr 5in;
+  grid-template-columns: 6in 1fr 9.6in;
   align-items: center;
   gap: 0.3in;
   background: linear-gradient(100deg, var(--brand-primary) 0%, var(--brand-primary-2) 100%);
@@ -116,23 +116,23 @@ main.content,
 
 .top-center h1 {
   margin: 0;
-  font-size: 42pt;
+  font-size: 68pt;
   line-height: 1.12;
   color: #ffffff;
   font-weight: 700;
 }
 
 .top-center .authors {
-  margin: 0.12in 0 0 0;
-  font-size: 21pt;
+  margin: 0.18in 0 0 0;
+  font-size: 32pt;
   line-height: 1.15;
   color: var(--brand-accent);
   font-weight: 600;
 }
 
 .top-center .affils {
-  margin: 0.06in 0 0 0;
-  font-size: 14pt;
+  margin: 0.08in 0 0 0;
+  font-size: 22pt;
   line-height: 1.2;
   color: rgba(255, 255, 255, 0.85);
   font-weight: 400;
@@ -142,13 +142,20 @@ main.content,
   display: flex;
   justify-content: flex-end;
   align-items: center;
+  gap: 0.5in;
+}
+
+.top-right p {
+  margin: 0;
+  display: flex;
+  align-items: center;
+  gap: 0.5in;
 }
 
 .org-logo {
-  width: 4.6in;
-  height: auto;
+  height: 4.9in;
+  width: auto;
   display: block;
-  margin-left: auto;
 }
 
 /* ── Columns ── */

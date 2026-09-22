@@ -47,7 +47,8 @@ Chris Soria^1^
 :::
 
 ::: {.top-right}
-![](assets/logo.png){.org-logo}
+![](assets/berkeley_seal.png){.org-logo .seal}
+![](assets/catllm_logo_white.png){.org-logo .catllm}
 :::
 ::::
 
@@ -56,7 +57,7 @@ Chris Soria^1^
 ::: {.section-block}
 ## Abstract
 
-Open-ended survey items capture what closed-ended items cannot, and are routinely dropped from analysis because hand-coding them does not scale. `catllm` is a Stata command that codes free-text responses with large language models and returns ordinary Stata indicator variables. It wraps a Python backend (`cat-stack`) behind five verbs: `extract`/`explore` find categories, `classify` applies them, and `summarize`/`setup` close the loop, across OpenAI, Anthropic, Google, or Ollama. Tested on multi-label, multi-class items, proprietary models agree with human coders on **97%** of straightforward items and **88–91%** of complex interpretive ones; a multi-model ensemble reaches **98%** agreement with human consensus.
+Open-ended survey items capture what closed-ended items cannot, and are routinely dropped from analysis because hand-coding them does not scale. `catllm` is a Stata command that codes free-text responses with large language models and returns ordinary Stata indicator variables. It wraps a Python backend (`cat-stack`) behind five verbs: `extract`/`explore` find categories, `classify` applies them, and `summarize`/`setup` close the loop, across eight providers from OpenAI and Anthropic to fully local Ollama. Tested on multi-label, multi-class items, proprietary models agree with human coders on **97%** of straightforward items and **88–91%** of complex interpretive ones. Models tend to over-classify; three frontier-open models under unanimous voting correct for it, lifting precision from **0.78** to **0.85** at little cost in recall: a more balanced classification.
 :::
 
 ::: {.section-block}
@@ -64,9 +65,9 @@ Open-ended survey items capture what closed-ended items cannot, and are routinel
 
 - Researchers already use LLMs to code open-ended text, but little guidance exists for keeping classifications aligned with intended meaning without skewing conclusions.
 - Model choice is often arbitrary. Researchers overpay for models that excel at general tasks, which rarely predicts coding accuracy.
-- Coding several open-ended items at once means devising a bespoke strategy each time. That risks bias and error, not a documented method.
-- Doing this from Stata isn't supported today: researchers export to CSV, script in Python, re-merge, and lose the audit trail that makes coding reproducible.
-- **Aim:** put the whole loop inside Stata, and tackle over-classification from several evidence-based angles: category definitions, model choice, and cross-provider ensemble consensus.
+- **Over-classification** is the dominant error here: with several categories per response, models tend to assign labels too liberally, especially on ambiguous text. Recall looks fine; precision does not.
+- Doing this from Stata usually means exporting to CSV, scripting in Python, and re-merging, which loses the audit trail that makes coding reproducible.
+- **Aim:** put the whole loop inside Stata, and correct over-classification from several evidence-based angles: category definitions, model choice, and cross-provider unanimous consensus.
 :::
 
 ::: {.section-block .results-block}
@@ -91,8 +92,8 @@ local cats                                          ///
 
 catllm classify response,                           ///
     categories(`cats')                              ///
-    apikey($OPENAI_API_KEY)                         ///
-    model("gpt-4o-mini")                            ///
+    apikey($ANTHROPIC_API_KEY)                      ///
+    model("claude-fable-5-1")                       ///
     generate(reason)
 
 tab1 reason_*
@@ -125,10 +126,10 @@ UC Berkeley Social Networks Study validation: macro F1 against human consensus, 
 ::: {.section-block}
 ## What Moves Accuracy
 
-- **Cloud tier spread is narrow.** Frontier-closed, economy-closed, and frontier-open models span just 0.07 of macro F1 (0.75–0.83); Claude Fable 5 lands at 0.81, in line with the top tiers.
-- **Response brevity helps.** Responses under 50 characters are classified 7–11 points more accurately than long ones.
-- **Demographic variation is minimal.** Accuracy is stable across population segments — an essential precondition for using coded output in stratified analysis.
-- **Structured output is not the bottleneck.** Across 8 models × 3,208 responses (25,664 classifications), 100% of successful calls returned valid structured output; the 0–18 failures per model were transient server errors, not parsing failures.
+- **Descriptive categories.** Writing each category as a sentence beats one-word labels on every model tested; `catllm` checks the scheme for terse labels and a missing `Other` before any response is coded.
+- **Ensembles, where they pay.** Unanimous voting over diverse models lifts precision most on interpretive categories and buys little on clear ones; `consensus()` plus per-response agreement scores let you apply it where it helps.
+- **Minimal prompting by default.** Chain-of-thought, step-back, and expert-persona prompts add tokens without improving survey coding in our tests, so they are opt-in flags, not defaults: cheaper runs, same accuracy.
+- **Every tier through one command.** Frontier, economy, open-weight, and local models across eight providers are a `model()` argument away, so switching tiers is a parameter change, not a rewrite.
 :::
 
 ::: {.section-block .results-block}
@@ -147,19 +148,19 @@ Same macro F1 against human consensus as the cloud tiers, for the four laptop-sc
 ```{=html}
 <table>
   <thead>
-    <tr><th>Route</th><th>Cost</th><th>Speed</th><th>Data leaves machine</th></tr>
+    <tr><th>Route</th><th>Cost</th><th>Speed</th><th>Error profile</th><th>Data leaves machine</th></tr>
   </thead>
   <tbody>
-    <tr><td>Frontier proprietary</td><td>High</td><td>Slow</td><td>Yes</td></tr>
-    <tr><td>Small proprietary</td><td>Low</td><td>Fast</td><td>Yes</td></tr>
-    <tr class="highlight"><td>Multi-vendor ensemble</td><td>Sum of parts</td><td>Slowest member</td><td>Yes</td></tr>
-    <tr><td>Local open-weight (Ollama)</td><td>$0</td><td>Hardware-bound</td><td>No</td></tr>
+    <tr><td>Frontier proprietary</td><td>High</td><td>Slow</td><td>Tends to over-classify</td><td>Yes</td></tr>
+    <tr><td>Small proprietary</td><td>Low</td><td>Fast</td><td>Tends to over-classify</td><td>Yes</td></tr>
+    <tr class="highlight"><td>Multi-vendor unanimous ensemble</td><td>Sum of parts</td><td>Slowest member</td><td>Conservative</td><td>Yes</td></tr>
+    <tr><td>Local open-weight (Ollama)</td><td>$0</td><td>Hardware-bound</td><td>Varies by model</td><td>No</td></tr>
   </tbody>
 </table>
 ```
 
 ::: {.fig-note}
-For restricted-use data under an IRB or data-use agreement, the local route is often the only admissible one — and it is the route the package defaults to protecting, auto-starting the local server and enabling JSON recovery for smaller models.
+Single models of every size tend to assign categories too liberally. A unanimous ensemble of three diverse models corrects for it: pick it when a false positive costs more than a missed code, and when the categories are interpretive, where the precision gain is largest. For restricted-use data under an IRB or data-use agreement, the local route is often the only admissible one — and it is the route the package defaults to protecting, auto-starting the local server and enabling JSON recovery for smaller models.
 :::
 :::
 :::
@@ -171,14 +172,14 @@ For restricted-use data under an IRB or data-use agreement, the local route is o
 ![](figures/fig4_unanimous.png)
 
 ::: {.fig-note}
-`consensus("unanimous")` requires every model in the ensemble to agree before a category is assigned. Combining all 6 frontier-open models this way nearly matches Claude Fable 5's single-model score; combining all 4 local models falls well short — unanimity can't make up for weaker members.
+`consensus("unanimous")` assigns a category only if all models agree. Fable 5 assigns 38% more labels than coders on the hardest question. The three best frontier-open models beat it on precision (0.85 vs. 0.78) and F1 (0.85 vs. 0.82) for 3 points of recall: a more balanced coder. The best local trio matches that precision and reaches 0.74 F1 at $0, 8 behind Fable 5; weak members cost recall.
 :::
 :::
 
 ```{=html}
 <div class="stat-strip">
-  <div class="stat-cell"><span class="big">98%</span><span class="cap">ensemble vs.<br>human consensus</span></div>
-  <div class="stat-cell"><span class="big">25,664</span><span class="cap">benchmark<br>classifications</span></div>
+  <div class="stat-cell"><span class="big">+38%</span><span class="cap">labels vs. human coders,<br>best single model</span></div>
+  <div class="stat-cell"><span class="big">0.85</span><span class="cap">precision, top-3 frontier-open<br>unanimous ensemble</span></div>
   <div class="stat-cell"><span class="big">$0</span><span class="cap">fully local<br>route</span></div>
 </div>
 ```
@@ -186,9 +187,9 @@ For restricted-use data under an IRB or data-use agreement, the local route is o
 ::: {.key-findings}
 ## Key Findings
 
-- [0.75–0.83]{.stat-number} [Macro F1 against human consensus across cloud tiers; vendor and tier matter far less than the local-vs-cloud choice covered in Choosing a Route]{.stat-label}
-- [98%]{.stat-number} [A three-model ensemble agrees with human consensus more often than any single model in it — disagreement between models is informative, not noise]{.stat-label}
-- [0.62–0.77]{.stat-number} [Macro F1 across the four local Ollama models — more than double the cloud tiers' spread, so which local model you pick matters a lot]{.stat-label}
+- [1 command]{.stat-number} [**Code text without leaving Stata.** `catllm classify` turns a string variable into 0/1 indicators ready for `tab` and `regress`; `extract` discovers the categories first, so the codebook comes from the data, not a guess]{.stat-label}
+- [0.85 vs. 0.78]{.stat-number} [**Run an ensemble with one option.** `consensus("unanimous")` over three diverse models lifts precision from 0.78 to 0.85 and beats the best single model on F1, correcting for over-classification with no hand-merging]{.stat-label}
+- [8 providers]{.stat-number} [**Choose the route your data allows.** One command runs on OpenAI, Anthropic, Google, Mistral, xAI, HuggingFace, Perplexity, or fully local Ollama at $0, where the package auto-starts the server and recovers JSON from small models]{.stat-label}
 :::
 
 ::: {.section-block .code-block}
@@ -213,8 +214,8 @@ The file walks the full pipeline: classify, analyze the resulting indicators, co
 
 - **Concordance with human coders is not validity.** Where humans systematically misread a response, an agreeing model does too; agreement measures replication of a benchmark, not correctness.
 - **Validation is strongest on English-language survey text** of the kind studied here. Performance on other languages, registers, and domains needs separate checking on your own data.
-- **Models are moving targets.** A model version can be deprecated or silently updated, so the version string belongs in your methods section alongside the seed.
-- **Smaller local models are less tested.** The published benchmarks use high-end models; the low end warrants its own validation before use in production coding.
+- **Unanimity trades recall for precision.** On the most interpretive question the top-3 ensemble gives up 11 points of recall against Fable 5 to gain 11 of precision; weak local members triple that cost. Choose by what a false positive versus a missed code costs you.
+- **The ensemble evidence here is small.** Three questions at 175 responses each, one interpretive, and the trio was picked on the data it is scored on (17 of 20 trios still beat Fable 5 on F1). The pattern replicates on 3,208 responses and 16 earlier models in Soria (2026), *Model diversity*.
 :::
 
 :::
@@ -222,11 +223,11 @@ The file walks the full pipeline: classify, analyze the resulting indicators, co
 
 :::: {.poster-footer}
 ::: {.footer-left}
-**Funding:** UC Berkeley Mentored Research Award; CEDA P30AG012839
+&nbsp;
 :::
 
 ::: {.footer-center}
-github.com/chrissoria/cat-llm · `ssc install catllm`
+github.com/chrissoria/cat-llm · `net install catllm` from the repo (see Reproduce This)
 :::
 
 ::: {.footer-right}

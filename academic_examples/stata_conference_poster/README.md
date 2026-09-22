@@ -90,7 +90,7 @@ the mapping in its module docstring.
 | 97% straightforward / 88–91% complex ("Tested on multi-label, multi-class items..." in the Abstract) | [`../README.md`](../README.md) (UCNETS validation) |
 | 98% vs. human consensus | [root `README.md`](../../README.md) |
 | 8 models, 3,208 responses, 25,664 classifications, 100% valid structured output | [`../paper.md`](../paper.md) |
-| Cloud-tier and local-model macro F1 (fig2, fig3), unanimous-ensemble macro F1 (fig4) | an unpublished companion benchmark, not included in this repository — see `make_figures.py`'s module docstring and `unanimous_ensemble.R`'s header for the exact computation |
+| Cloud-tier and local-model macro F1 (fig2, fig3), top-3 unanimous-ensemble precision and recall (fig4) | an unpublished companion benchmark, not included in this repository — see `make_figures.py`'s module docstring and `unanimous_ensemble.R`'s header for the exact computation |
 
 `fig1_pipeline` is a schematic and encodes no data.
 
