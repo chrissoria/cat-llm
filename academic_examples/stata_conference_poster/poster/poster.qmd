@@ -57,7 +57,7 @@ Chris Soria^1^
 ::: {.section-block}
 ## Abstract
 
-Open-ended survey items capture what closed-ended items cannot, and are routinely dropped from analysis because hand-coding them does not scale. `catllm` is a Stata command that codes free-text responses with large language models and returns ordinary Stata indicator variables. It wraps a Python backend (`cat-stack`) behind five verbs: `extract`/`explore` find categories, `classify` applies them, and `summarize`/`setup` close the loop, across eight providers from OpenAI and Anthropic to fully local Ollama. Tested on multi-label, multi-class items, proprietary models agree with human coders on **97%** of straightforward items and **88–91%** of complex interpretive ones. Models tend to over-classify; three frontier-open models under unanimous voting correct for it, lifting precision from **0.78** to **0.85** at little cost in recall: a more balanced classification.
+Open-ended survey items capture what closed-ended items cannot, and are routinely dropped from analysis because hand-coding them does not scale. `catllm` is a Stata command that codes free-text responses with large language models and returns ordinary Stata indicator variables. It wraps a Python backend (`cat-stack`) behind five verbs: `extract`/`explore` find categories, `classify` applies them, and `summarize`/`setup` close the loop, across eight providers from OpenAI and Anthropic to fully local Ollama. Tested on multi-label, multi-class items, proprietary models agree with human coders on **97%** of straightforward items and **88–91%** of complex interpretive ones. Models tend to over-classify; three frontier-open models under unanimous voting correct for it, reaching **0.85** precision against Claude Fable 5's **0.78** at little cost in recall: a more balanced classification.
 :::
 
 ::: {.section-block}
@@ -65,9 +65,9 @@ Open-ended survey items capture what closed-ended items cannot, and are routinel
 
 - Researchers already use LLMs to code open-ended text, but little guidance exists for keeping classifications aligned with intended meaning without skewing conclusions.
 - Model choice is often arbitrary. Researchers overpay for models that excel at general tasks, which rarely predicts coding accuracy.
-- **Over-classification** is the dominant error here: with several categories per response, models tend to assign labels too liberally, especially on ambiguous text. Recall looks fine; precision does not.
+- **Over-classification** is the dominant error: with several categories per response, models tend to assign labels too liberally, especially on ambiguous text. Recall looks fine; precision does not.
 - Doing this from Stata usually means exporting to CSV, scripting in Python, and re-merging, which loses the audit trail that makes coding reproducible.
-- **Aim:** put the whole loop inside Stata, and correct over-classification from several evidence-based angles: category definitions, model choice, and cross-provider unanimous consensus.
+- **Aim:** put the whole loop inside Stata, with evidence-based levers on accuracy and over-classification: category definitions, model choice, and cross-provider unanimous consensus.
 :::
 
 ::: {.section-block .results-block}
@@ -101,7 +101,7 @@ regress reason_Housing_cost age female
 ```
 
 ::: {.fig-note}
-Category definitions, not one-word labels: writing each category as a sentence classifies several percentage points better on every model tested. An explicit `Other` category is required, not optional — without it the model must guess on responses that genuinely fit nothing.
+Each category is a full sentence and `Other` is explicit. `catllm` warns on terse labels and offers to add a missing `Other` before coding: without a catch-all, the model must guess on responses that fit nothing.
 :::
 :::
 
@@ -138,7 +138,7 @@ UC Berkeley Social Networks Study validation: macro F1 against human consensus, 
 ![](figures/fig3_local.png)
 
 ::: {.fig-note}
-Same macro F1 against human consensus as the cloud tiers, for the four laptop-scale Ollama models. The spread here (0.62–0.77) is more than double the cloud tiers' (0.75–0.83) — picking well matters far more once you're local.
+Same macro F1 against human consensus as the cloud tiers, for the four laptop-scale Ollama models. The spread here (0.62–0.77) is about double the cloud tiers' (0.76–0.83): picking well matters far more once you're local.
 :::
 :::
 
@@ -153,14 +153,14 @@ Same macro F1 against human consensus as the cloud tiers, for the four laptop-sc
   <tbody>
     <tr><td>Frontier proprietary</td><td>High</td><td>Slow</td><td>Tends to over-classify</td><td>Yes</td></tr>
     <tr><td>Small proprietary</td><td>Low</td><td>Fast</td><td>Tends to over-classify</td><td>Yes</td></tr>
-    <tr class="highlight"><td>Multi-vendor unanimous ensemble</td><td>Sum of parts</td><td>Slowest member</td><td>Conservative</td><td>Yes</td></tr>
+    <tr class="highlight"><td>Multi-vendor unanimous ensemble</td><td>Sum of parts</td><td>Slowest member</td><td>Conservative</td><td>Unless all local</td></tr>
     <tr><td>Local open-weight (Ollama)</td><td>$0</td><td>Hardware-bound</td><td>Varies by model</td><td>No</td></tr>
   </tbody>
 </table>
 ```
 
 ::: {.fig-note}
-Single models of every size tend to assign categories too liberally. A unanimous ensemble of three diverse models corrects for it: pick it when a false positive costs more than a missed code, and when the categories are interpretive, where the precision gain is largest. For restricted-use data under an IRB or data-use agreement, the local route is often the only admissible one — and it is the route the package defaults to protecting, auto-starting the local server and enabling JSON recovery for smaller models.
+Single models of every size tend to assign categories too liberally. A unanimous ensemble of three diverse models corrects for it: pick it when a false positive costs more than a missed code, and when the categories are interpretive, where the precision gain is largest. For restricted-use data under an IRB or data-use agreement, the local route is often the only admissible one, and `catllm` treats it as a first-class route: any Ollama model goes in `model()`, the server starts on demand, and JSON recovery covers the smaller models.
 :::
 :::
 :::
@@ -178,7 +178,7 @@ Single models of every size tend to assign categories too liberally. A unanimous
 
 ```{=html}
 <div class="stat-strip">
-  <div class="stat-cell"><span class="big">+38%</span><span class="cap">labels vs. human coders,<br>best single model</span></div>
+  <div class="stat-cell"><span class="big">+38%</span><span class="cap">extra labels on the hardest<br>question, Claude Fable 5</span></div>
   <div class="stat-cell"><span class="big">0.85</span><span class="cap">precision, top-3 frontier-open<br>unanimous ensemble</span></div>
   <div class="stat-cell"><span class="big">$0</span><span class="cap">fully local<br>route</span></div>
 </div>
@@ -188,14 +188,14 @@ Single models of every size tend to assign categories too liberally. A unanimous
 ## Key Findings
 
 - [1 command]{.stat-number} [**Code text without leaving Stata.** `catllm classify` turns a string variable into 0/1 indicators ready for `tab` and `regress`; `extract` discovers the categories first, so the codebook comes from the data, not a guess]{.stat-label}
-- [0.85 vs. 0.78]{.stat-number} [**Run an ensemble with one option.** `consensus("unanimous")` over three diverse models lifts precision from 0.78 to 0.85 and beats the best single model on F1, correcting for over-classification with no hand-merging]{.stat-label}
+- [0.85 vs. 0.78]{.stat-number} [**Run an ensemble with one option.** `consensus("unanimous")` over three diverse models reaches 0.85 precision against 0.78 for Claude Fable 5 and beats it on F1, correcting for over-classification with no hand-merging]{.stat-label}
 - [8 providers]{.stat-number} [**Choose the route your data allows.** One command runs on OpenAI, Anthropic, Google, Mistral, xAI, HuggingFace, Perplexity, or fully local Ollama at $0, where the package auto-starts the server and recovers JSON from small models]{.stat-label}
 :::
 
 ::: {.section-block .code-block}
 ## Reproduce This
 
-Everything on this poster runs from one self-contained do-file — no data downloads, no file paths, guarded so it completes with a single API key or with none at all:
+Everything on this poster runs from one self-contained do-file: no data downloads, no file paths, guarded so it completes with a single API key or with none at all.
 
 ```stata
 net install catllm, ///
@@ -206,7 +206,7 @@ catllm setup
 do catllm_stata_conference.do
 ```
 
-The file walks the full pipeline: classify, analyze the resulting indicators, compare three providers, run an ensemble with agreement scores, discover a coding scheme with `extract`, and repeat the whole thing locally at zero cost. Eight further worked examples ship with the package.
+The file walks the full pipeline: classify, analyze the resulting indicators, compare three providers, run an ensemble with agreement scores, discover a coding scheme with `extract`, and repeat the whole thing locally at zero cost. Nine further worked examples ship with the package.
 :::
 
 ::: {.section-block}
