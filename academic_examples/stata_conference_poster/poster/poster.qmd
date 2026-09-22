@@ -166,12 +166,12 @@ For restricted-use data under an IRB or data-use agreement, the local route is o
 
 ::: {.poster-column}
 ::: {.section-block .results-block}
-## Ensemble & Consensus Voting
+## Unanimous Ensembles
 
-![](figures/fig4_ensemble.png)
+![](figures/fig4_unanimous.png)
 
 ::: {.fig-note}
-`models()` takes several model/provider pairs; `consensus()` sets the bar for assigning a category. Cloud and local models can be mixed freely in one ensemble. Alongside each label the package returns an agreement score, so the rows where models split are identifiable rather than silently averaged away.
+`consensus("unanimous")` requires every model in the ensemble to agree before a category is assigned. Combining all 6 frontier-open models this way nearly matches Claude Fable 5's single-model score; combining all 4 local models falls well short — unanimity can't make up for weaker members.
 :::
 :::
 

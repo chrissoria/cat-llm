@@ -13,6 +13,8 @@ stata_conference_poster/
     ├── poster.qmd                  poster source (Quarto)
     ├── poster.css                  48 x 36 in landscape stylesheet
     ├── make_figures.py             regenerates figures/ from source numbers
+    ├── unanimous_ensemble.R        unanimous-vote ensemble F1s for fig4 (needs an
+    │                                 external companion benchmark -- see its header)
     ├── build.py                    pandoc-only fallback if you lack Quarto
     ├── render_pdf.py               poster.html -> print-ready PDF
     ├── assets/                     QR code, logo
@@ -85,14 +87,14 @@ the mapping in its module docstring.
 
 | Poster claim | Source |
 |---|---|
-| 97% straightforward / 88–91% complex; 95–96% and 87% open-weight; brevity effect | [`../README.md`](../README.md) (UCNETS validation) |
+| 97% straightforward / 88–91% complex ("Tested on multi-label, multi-class items..." in the Abstract) | [`../README.md`](../README.md) (UCNETS validation) |
 | 98% vs. human consensus | [root `README.md`](../../README.md) |
-| 8 models, 3,208 responses, 25,664 classifications, 100% valid structured output, $0.38–$27.85, 23 min–7 hr | [`../paper.md`](../paper.md) |
+| 8 models, 3,208 responses, 25,664 classifications, 100% valid structured output | [`../paper.md`](../paper.md) |
+| Cloud-tier and local-model macro F1 (fig2, fig3), unanimous-ensemble macro F1 (fig4) | an unpublished companion benchmark, not included in this repository — see `make_figures.py`'s module docstring and `unanimous_ensemble.R`'s header for the exact computation |
 
-Two figures (`fig1_pipeline`, `fig4_ensemble`) are schematics and encode no data.
+`fig1_pipeline` is a schematic and encodes no data.
 
-The cost and runtime figure plots only the published endpoints, because only the
-endpoints are published. If the full per-model benchmark table exists somewhere,
-a per-model scatter of cost against accuracy would be a stronger panel than the
-range bars currently there — that is the one place on the poster where better
-data would visibly improve it.
+Note: the Abstract's headline numbers and fig2/fig3/fig4 come from two different
+studies (different metric too — raw agreement vs. macro F1) that happen to sit
+next to each other on the poster. They're not in tension, but a reader comparing
+them closely may notice the numbers don't obviously reconcile.

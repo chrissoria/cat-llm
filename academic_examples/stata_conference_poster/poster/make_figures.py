@@ -2,24 +2,38 @@
 
 Every number plotted here traces to a source in this repository:
 
-  * Accuracy bands (fig2)    -- ../../closed_vs_open_llm/plots_tables/
-                                leaderboard.csv, question == "all" rows
-                                (macro_f1 there is already the mean of the
-                                3 per-question macro-F1s -- verified equal
-                                to hand-averaging a19i/a19f/e1b for all 18
-                                models, since each question has the same
-                                category count). Tier ranges = min/max
-                                macro_f1 across the models in that tier.
-                                Claude Fable 5's point from
-                                fable5_reference.csv, question == "all".
-                                Local/laptop models excluded from fig2 --
-                                shown separately in fig3 instead.
-  * Local models (fig3)      -- ../../closed_vs_open_llm/plots_tables/
-                                leaderboard.csv, tier == "local", question
-                                == "all". Same macro-F1 metric and gold
-                                standard as fig2.
+  * Accuracy bands (fig2)    -- an unpublished companion benchmark (18
+                                models, 4 access tiers, not included in
+                                this repository): survey-question-level
+                                macro F1 (mean of the 3 per-question
+                                macro-F1s -- verified equal to hand-
+                                averaging a19i/a19f/e1b for every model,
+                                since each question has the same category
+                                count) against the same UCNets gold
+                                standard used elsewhere on this poster.
+                                Tier ranges = min/max macro_f1 across the
+                                models in that tier. Claude Fable 5 scored
+                                the same way, same gold standard. Local/
+                                laptop models excluded from fig2 -- shown
+                                separately in fig3 instead.
+  * Local models (fig3)      -- same companion benchmark, local tier only.
+                                Same macro-F1 metric and gold standard as
+                                fig2.
+  * Unanimous ensembles      -- same companion benchmark's row-level
+    (fig4)                     per-model predictions (not aggregate
+                                stats -- unanimous-AND requires knowing
+                                where models actually overlap), scored
+                                against the same UCNets gold standard,
+                                unanimous-AND combined per response x
+                                category, then macro F1 per question and
+                                averaged across the 3 questions. See
+                                unanimous_ensemble.R (this directory) for
+                                the exact computation -- run
+                                `Rscript unanimous_ensemble.R` to
+                                reproduce (needs the source data, not
+                                included here).
 
-fig1 and fig4 are schematics and encode no data.
+fig1 is a schematic and encodes no data.
 
 Usage:  python make_figures.py
 """
@@ -218,40 +232,42 @@ def fig_local_models():
 
 
 # ---------------------------------------------------------------- fig 4
-def fig_ensemble():
-    fig, ax = plt.subplots(figsize=(9.2, 4.1))
-    ax.set_xlim(0, 1)
-    ax.set_ylim(0, 1)
-    ax.axis("off")
+def fig_unanimous_ensembles():
+    """Unanimous-vote ensemble macro F1 (survey-question-level, mean of the
+    3 per-question F1s), frontier-open tier (6 models, AND-combined) and
+    local tier (4 models, AND-combined), against Claude Fable 5 as a single
+    model. Computed from row-level per-model predictions and the same gold
+    standard as fig2/fig3 (unanimous_ensemble.R, this directory):
+    frontier-open unanimous = 0.8044 (per-q 0.8786/0.9238/0.6107), local
+    unanimous = 0.6693 (per-q 0.7647/0.7728/0.4702), all 175/175 gold rows
+    matched exactly for every question/tier, no fuzzy fallback needed."""
+    fig, ax = plt.subplots(figsize=(9.2, 4.0))
 
-    _box(ax, 0.0, 0.40, 0.155, 0.30, "response",
-         "one row of text", fc=BERK_BLUE, fs=12.5)
-
-    models = [
-        ("gpt-4o-mini", "openai", 0.715),
-        ("claude-haiku", "anthropic", 0.435),
-        ("qwen2.5:14b", "ollama (local)", 0.155),
+    BARS = [
+        ("Frontier open\n(6-model unanimous)", 0.8044, MUTED),
+        ("Local\n(4-model unanimous)", 0.6693, GOLD),
+        ("Claude Fable 5\n(single model)", 0.8132, GOLD_DK),
     ]
-    for name, prov, y in models:
-        _box(ax, 0.255, y, 0.245, 0.185, name, prov, fc=BERK_BLUE_2, fs=12.5)
-        _arrow(ax, 0.155, 0.55, 0.255, y + 0.0925)
+    xpos = [0, 1, 2]
 
-    _box(ax, 0.575, 0.34, 0.185, 0.42, "consensus\nvote",
-         None, fc=GOLD, tc=INK, fs=13.5)
-    for _, _, y in models:
-        _arrow(ax, 0.500, y + 0.0925, 0.575, 0.55)
+    for x, (label, val, color) in zip(xpos, BARS):
+        ax.bar(x, val, color=color, width=0.5, zorder=2)
+        ax.text(x, val + 0.02, f"{val:.2f}", ha="center", fontsize=16,
+                fontweight="bold", color=color)
 
-    _box(ax, 0.815, 0.40, 0.185, 0.30, "one label",
-         "+ agreement score", fc=BERK_BLUE, fs=12.5)
-    _arrow(ax, 0.760, 0.55, 0.815, 0.55)
+    ax.set_xticks(xpos)
+    ax.set_xticklabels([b[0] for b in BARS], fontsize=12.5)
+    ax.set_ylim(0, 0.94)
+    ax.set_yticks([0, 0.2, 0.4, 0.6, 0.8])
+    ax.yaxis.set_major_formatter(lambda v, pos: f"{v:.1f}")
+    ax.set_ylabel("Macro F1 vs. human consensus", fontsize=13)
 
-    ax.text(0.5, 0.045,
-            "Thresholds:  unanimous  ·  two-thirds  ·  majority  ·  any value in [0, 1]",
-            ha="center", va="center", fontsize=12.5, color=MUTED, style="italic")
-    ax.text(0.5, 0.965,
-            "Disagreement between models is recorded, not hidden",
-            ha="center", va="center", fontsize=14, fontweight="bold", color=BERK_BLUE)
-    fig.savefig(OUT / "fig4_ensemble.png")
+    for s_ in ("top", "right"):
+        ax.spines[s_].set_visible(False)
+    ax.tick_params(axis="x", length=0)
+    ax.grid(axis="y", color="#dfe7ea", linewidth=1)
+    ax.set_axisbelow(True)
+    fig.savefig(OUT / "fig4_unanimous.png")
     plt.close(fig)
 
 
@@ -259,5 +275,5 @@ if __name__ == "__main__":
     fig_pipeline()
     fig_accuracy()
     fig_local_models()
-    fig_ensemble()
+    fig_unanimous_ensembles()
     print(f"Wrote 4 figures to {OUT}")
