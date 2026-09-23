@@ -9,12 +9,17 @@ description = "The CatLLM ecosystem — LLM-powered classification for text, ima
 readme = "README.md"
 requires-python = ">=3.9"
 license = "GPL-3.0-or-later"
-keywords = ["llm", "classification", "text analysis", "survey", "social media", "academic", "cognitive assessment"]
+keywords = ["llm", "classification", "text analysis", "survey", "survey research", "social media", "academic", "cognitive assessment", "content analysis", "qualitative coding", "open-ended survey", "nlp", "openai", "anthropic", "gemini", "ollama"]
 authors = [
   { name = "Chris Soria", email = "chrissoria@berkeley.edu" },
 ]
 classifiers = [
   "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+  "Topic :: Scientific/Engineering :: Information Analysis",
+  "Topic :: Text Processing :: Linguistic",
+  "Natural Language :: English",
   "Programming Language :: Python",
   "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
@@ -45,6 +50,7 @@ formatter = ["cat-stack[formatter]"]
 codex = ["cat-claws[codex]>=0.3.1"]
 
 [project.urls]
+Homepage = "https://catllm.com"
 Documentation = "https://github.com/chrissoria/cat-llm#readme"
 Issues = "https://github.com/chrissoria/cat-llm/issues"
 Source = "https://github.com/chrissoria/cat-llm"
