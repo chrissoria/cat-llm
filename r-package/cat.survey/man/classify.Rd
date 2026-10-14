@@ -49,6 +49,7 @@ classify(
   batch_poll_interval = 30,
   batch_timeout = 86400,
   system_prompt = "",
+  json_formatter = NULL,
   prompt_tune = NULL,
   tune_iterations = 1L,
   tune_ui = "browser",
@@ -146,6 +147,14 @@ job to complete. Default \code{86400.0} (24 hours).}
 every classification call, for example the instructions given to human
 coders or a prompt returned by \code{cat.stack::prompt_tune()}. Takes
 precedence over \code{context_prompt}. Default \code{""}.}
+
+\item{json_formatter}{Logical or \code{NULL}. Local JSON-repair model that
+rescues a reply cat-stack cannot use (no category coded 0/1) before the
+row is marked failed; it never runs on usable replies, sparse ones
+included. \code{TRUE} turns it on, \code{FALSE} off, and \code{NULL} (default) keeps the
+engine's own default (on for Ollama models, otherwise it asks on the
+first unusable reply in an interactive session). Synchronous calls only;
+batch jobs do not use it.}
 
 \item{prompt_tune}{Integer or \code{NULL}. Rows sampled per APO correction round. Default \code{NULL}.}
 

@@ -10,4 +10,6 @@ test_that("classify() exposes the batch and system-prompt arguments", {
                     "system_prompt") %in% args))
   expect_false(formals(classify)$batch_mode)
   expect_identical(formals(classify)$system_prompt, "")
+  expect_true("json_formatter" %in% args)
+  expect_null(formals(classify)$json_formatter)
 })

@@ -1,3 +1,9 @@
+# cat.survey 0.1.4
+
+* `classify()` now forwards `json_formatter` to the Python engine, so R users
+  can turn on the local JSON-repair fallback (it runs only on replies the
+  engine cannot use, never on usable or sparse ones).
+
 # cat.survey 0.1.3
 
 * `classify()` now forwards `batch_mode`, `batch_poll_interval`,
