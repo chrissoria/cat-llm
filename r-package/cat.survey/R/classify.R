@@ -43,6 +43,18 @@
 #' @param row_delay Numeric. Default `0.0`.
 #' @param pdf_dpi Integer. Default `150L`.
 #' @param auto_download Logical. Default `FALSE`.
+#' @param batch_mode Logical. If `TRUE`, use async batch APIs for ~50%
+#'   cost savings and higher rate limits. Supported providers: OpenAI,
+#'   Anthropic, Google, Mistral, xAI. HuggingFace / Perplexity / Ollama
+#'   fall back to synchronous calls. Text input only. Default `FALSE`.
+#' @param batch_poll_interval Numeric. Seconds between batch-job status
+#'   polls when `batch_mode = TRUE`. Default `30.0`.
+#' @param batch_timeout Numeric. Maximum seconds to wait for a batch
+#'   job to complete. Default `86400.0` (24 hours).
+#' @param system_prompt Character. Custom system-level instruction prepended to
+#'   every classification call, for example the instructions given to human
+#'   coders or a prompt returned by `cat.stack::prompt_tune()`. Takes
+#'   precedence over `context_prompt`. Default `""`.
 #' @param prompt_tune Integer or `NULL`. Rows sampled per APO correction round. Default `NULL`.
 #' @param tune_iterations Integer. APO optimization passes. Default `1L`.
 #' @param tune_ui Character. Correction UI: `"browser"` or `"terminal"`. Default `"browser"`.
@@ -103,6 +115,10 @@ classify <- function(
     row_delay            = 0.0,
     pdf_dpi              = 150L,
     auto_download        = FALSE,
+    batch_mode           = FALSE,
+    batch_poll_interval  = 30.0,
+    batch_timeout        = 86400.0,
+    system_prompt        = "",
     prompt_tune          = NULL,
     tune_iterations      = 1L,
     tune_ui              = "browser",
@@ -158,6 +174,10 @@ classify <- function(
     row_delay             = as.double(row_delay),
     pdf_dpi               = cat.stack::.as_py_int(pdf_dpi),
     auto_download         = auto_download,
+    batch_mode            = batch_mode,
+    batch_poll_interval   = as.double(batch_poll_interval),
+    batch_timeout         = as.double(batch_timeout),
+    system_prompt         = system_prompt,
     prompt_tune           = reticulate::r_to_py(prompt_tune),
     tune_iterations       = cat.stack::.as_py_int(tune_iterations),
     tune_ui               = tune_ui,

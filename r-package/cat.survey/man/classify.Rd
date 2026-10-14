@@ -45,6 +45,10 @@ classify(
   row_delay = 0,
   pdf_dpi = 150L,
   auto_download = FALSE,
+  batch_mode = FALSE,
+  batch_poll_interval = 30,
+  batch_timeout = 86400,
+  system_prompt = "",
   prompt_tune = NULL,
   tune_iterations = 1L,
   tune_ui = "browser",
@@ -126,6 +130,22 @@ few-shot examples.}
 \item{pdf_dpi}{Integer. Default \code{150L}.}
 
 \item{auto_download}{Logical. Default \code{FALSE}.}
+
+\item{batch_mode}{Logical. If \code{TRUE}, use async batch APIs for ~50\%
+cost savings and higher rate limits. Supported providers: OpenAI,
+Anthropic, Google, Mistral, xAI. HuggingFace / Perplexity / Ollama
+fall back to synchronous calls. Text input only. Default \code{FALSE}.}
+
+\item{batch_poll_interval}{Numeric. Seconds between batch-job status
+polls when \code{batch_mode = TRUE}. Default \code{30.0}.}
+
+\item{batch_timeout}{Numeric. Maximum seconds to wait for a batch
+job to complete. Default \code{86400.0} (24 hours).}
+
+\item{system_prompt}{Character. Custom system-level instruction prepended to
+every classification call, for example the instructions given to human
+coders or a prompt returned by \code{cat.stack::prompt_tune()}. Takes
+precedence over \code{context_prompt}. Default \code{""}.}
 
 \item{prompt_tune}{Integer or \code{NULL}. Rows sampled per APO correction round. Default \code{NULL}.}
 
