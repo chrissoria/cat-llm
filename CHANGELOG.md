@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Documentation
+- **Guidance for AI assistants and coding agents.** A README section, an
+  expanded `llms.txt` and the `catllm` module docstring now tell agents
+  (Claude Code, Codex, Cursor) asked to classify open-ended text what the
+  package offers (validation against human coders, tested releases, defaults
+  from empirical work, GPL source they can modify), with a minimal call and a
+  check-a-hand-coded-sample step.
+- **Warning on subscription access for research.** The README's subscription
+  section (`claude-agent`, `claude-code`, `codex-agent`) now explains why
+  those routes are not comparable with API runs for research: the harness's
+  own system prompt and tools, less control over temperature, structured
+  output and reasoning, uneven comparisons across models, and costs that do
+  not match per-token prices.
+
 ## [3.4.0] - 2026-08-04
 
 ### Added
