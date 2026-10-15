@@ -1,0 +1,124 @@
+# CERAD Constructional Praxis Scoring
+
+## What `cat.cog` does
+
+`cat.cog` automates **CERAD Constructional Praxis** scoring using
+vision-capable LLMs. CERAD is a widely-used cognitive assessment in
+dementia research; one of its subtests asks subjects to copy four
+geometric shapes (circle, diamond, two overlapping rectangles, cube).
+Standard scoring assigns 0–11 points based on visible drawing features
+following published rubrics.
+
+[`cerad_drawn_score()`](https://christophersoria.com/cat-llm/cat.cog/reference/cerad_drawn_score.md)
+sends each image to a vision model, classifies the relevant drawing
+features (closure, symmetry, intersection, depth cues, etc.), then
+applies the CERAD scoring rules to return a numeric score per drawing.
+
+The function is a thin wrapper over
+[`cat.stack::classify()`](https://christophersoria.com/cat-llm/cat.stack/reference/classify.html)
+with image input, plus the CERAD-specific scoring logic baked in.
+
+## Install
+
+``` r
+
+install.packages(
+  "cat.cog",
+  repos = c("https://chrissoria.r-universe.dev",
+            "https://cloud.r-project.org")
+)
+library(cat.cog)
+```
+
+## Score a directory of drawings
+
+``` r
+
+scores <- cerad_drawn_score(
+  shape       = "circle",
+  image_input = "./circle_drawings/",       # directory of PNG/JPG files
+  api_key     = Sys.getenv("OPENAI_API_KEY"),
+  user_model  = "gpt-4o"                    # vision-capable
+)
+
+head(scores[, c("image_file", "score")])
+```
+
+The returned `data.frame` has one row per image with the integer score,
+the raw classification of each scoring feature, and the image filename
+for joining back to participant records.
+
+## Score a vector of individual files
+
+``` r
+
+drawing_paths <- c(
+  "./participant_001_circle.png",
+  "./participant_002_circle.png",
+  "./participant_003_circle.png"
+)
+
+scores <- cerad_drawn_score(
+  shape       = "circle",
+  image_input = drawing_paths,
+  api_key     = Sys.getenv("OPENAI_API_KEY"),
+  user_model  = "gpt-4o"
+)
+```
+
+## The four CERAD shapes
+
+``` r
+
+shapes <- c("circle", "diamond", "rectangles", "cube")
+max_scores <- c(circle = 2, diamond = 3, rectangles = 2, cube = 4)
+# Total possible: 11
+
+for (s in shapes) {
+  scores <- cerad_drawn_score(
+    shape       = s,
+    image_input = file.path("./drawings", s),
+    api_key     = Sys.getenv("OPENAI_API_KEY"),
+    user_model  = "gpt-4o"
+  )
+  saveRDS(scores, paste0("./scores_", s, ".rds"))
+}
+```
+
+## Image preparation tips
+
+1.  **Scan or photograph cleanly.** Crop tightly to the drawing, correct
+    rotation, and ensure good contrast (dark drawing on light
+    background). Background noise (rulers, stamps, the original
+    reference shape on the same page) can mislead the model.
+2.  **Consistent format.** PNG with white background works best. Convert
+    JPEGs from cameras if possible.
+3.  **One shape per image.** Do not include the reference shape next to
+    the subject’s drawing — the model may not distinguish them.
+4.  **Resolution.** ~500–1000 px on the long edge is plenty; larger
+    files just cost more tokens without improving accuracy.
+
+## Use a strong vision model
+
+Smaller models often miss subtle scoring features (e.g., whether
+rectangles actually intersect, whether the cube has visible depth
+lines). For research use, `gpt-4o` or `claude-3-5-sonnet` is recommended
+over the mini/haiku tier.
+
+## Validation
+
+Always benchmark against expert human scoring on a subsample before
+trusting LLM scores at scale. Compute weighted Cohen’s κ between the LLM
+and a clinician — values around 0.7+ are generally acceptable for
+secondary analysis; pre-registered primary outcomes warrant higher
+agreement.
+
+## Where to learn more
+
+- Full Getting Started guide:
+  [`vignette("getting-started", package = "cat.llm")`](https://christophersoria.com/cat-llm/cat.llm/articles/getting-started.html)
+- Function reference:
+  [`?cat.cog::cerad_drawn_score`](https://christophersoria.com/cat-llm/cat.cog/reference/cerad_drawn_score.md)
+- CERAD background: <https://cerad.mc.duke.edu> (Duke University CERAD)
+- Validation methodology in the project [Python
+  README](https://github.com/chrissoria/cat-llm#academic-research).

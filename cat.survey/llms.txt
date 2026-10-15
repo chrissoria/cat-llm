@@ -1,0 +1,96 @@
+# cat.survey
+
+Survey response classification with LLMs. A domain wrapper around
+[cat.stack](https://christophersoria.com/cat-llm/cat.stack/) that adds
+`survey_question` context for open-ended survey response analysis.
+
+`cat.survey` wraps the Python
+[cat-survey](https://pypi.org/project/cat-survey/) package via
+[reticulate](https://rstudio.github.io/reticulate/).
+
+## Installation
+
+``` r
+
+# From R-universe (recommended)
+install.packages("cat.survey",
+                 repos = c("https://chrissoria.r-universe.dev",
+                          "https://cloud.r-project.org"))
+
+# Or from a local clone
+devtools::install("path/to/cat.stack")
+devtools::install("path/to/cat.survey")
+
+# Install the Python backend (one-time setup)
+# pip install cat-survey
+```
+
+## Quick Start
+
+### Classify survey responses
+
+``` r
+
+library(cat.survey)
+
+results <- classify(
+  input_data      = df$responses,
+  categories      = c("Economic", "Family", "Education", "Other"),
+  survey_question = "Why did you move to this city?",
+  api_key         = Sys.getenv("OPENAI_API_KEY")
+)
+```
+
+### Extract categories
+
+``` r
+
+result <- extract(
+  input_data      = df$responses,
+  survey_question = "What do you like about your neighborhood?",
+  api_key         = Sys.getenv("OPENAI_API_KEY")
+)
+print(result$top_categories)
+```
+
+### Explore raw categories
+
+``` r
+
+raw_cats <- explore(
+  input_data      = df$responses,
+  survey_question = "Why did you move?",
+  api_key         = Sys.getenv("OPENAI_API_KEY"),
+  iterations      = 3L
+)
+```
+
+## Functions
+
+| Function | Description |
+|----|----|
+| [`classify()`](https://christophersoria.com/cat-llm/cat.survey/reference/classify.md) | Classify survey responses into categories |
+| [`extract()`](https://christophersoria.com/cat-llm/cat.survey/reference/extract.md) | Discover and extract categories from survey data |
+| [`explore()`](https://christophersoria.com/cat-llm/cat.survey/reference/explore.md) | Get raw category extractions for saturation analysis |
+
+## License
+
+MIT
+
+# Package index
+
+## Classify & extract survey responses
+
+- [`classify()`](https://christophersoria.com/cat-llm/cat.survey/reference/classify.md)
+  : Classify survey responses using LLMs
+- [`extract()`](https://christophersoria.com/cat-llm/cat.survey/reference/extract.md)
+  : Extract categories from survey responses using LLMs
+- [`explore()`](https://christophersoria.com/cat-llm/cat.survey/reference/explore.md)
+  : Explore raw categories in survey response data
+
+# Articles
+
+### All vignettes
+
+- [Classifying Open-Ended Survey
+  Responses](https://christophersoria.com/cat-llm/cat.survey/articles/classifying-survey-responses.md):

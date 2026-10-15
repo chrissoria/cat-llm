@@ -1,0 +1,105 @@
+# cat.ademic
+
+Academic paper classification with LLMs. A domain wrapper around
+[cat.stack](https://christophersoria.com/cat-llm/cat.stack/) that adds
+journal and topic sourcing parameters for classifying, extracting,
+exploring, and summarizing academic literature.
+
+`cat.ademic` wraps the Python
+[catademic](https://pypi.org/project/catademic/) package via
+[reticulate](https://rstudio.github.io/reticulate/).
+
+## Installation
+
+``` r
+
+# From R-universe (recommended)
+install.packages("cat.ademic",
+                 repos = c("https://chrissoria.r-universe.dev",
+                          "https://cloud.r-project.org"))
+
+# Or from a local clone
+devtools::install("path/to/cat.stack")
+devtools::install("path/to/cat.ademic")
+
+# Install the Python backend (one-time setup)
+# pip install cat-ademic
+```
+
+## Quick Start
+
+### Classify papers by journal
+
+``` r
+
+library(cat.ademic)
+
+results <- classify(
+  categories   = c("Quantitative", "Qualitative", "Mixed Methods"),
+  journal_name = "American Sociological Review",
+  paper_limit  = 100L,
+  polite_email = "you@university.edu",
+  api_key      = Sys.getenv("OPENAI_API_KEY")
+)
+```
+
+### Extract categories by topic
+
+``` r
+
+result <- extract(
+  topic_name   = "climate change adaptation",
+  paper_limit  = 200L,
+  polite_email = "you@university.edu",
+  api_key      = Sys.getenv("OPENAI_API_KEY")
+)
+print(result$top_categories)
+```
+
+### Summarize papers
+
+``` r
+
+results <- summarize(
+  input_data   = df$abstracts,
+  description  = "Sociology journal abstracts",
+  instructions = "Summarize the key findings in 2 sentences",
+  api_key      = Sys.getenv("OPENAI_API_KEY")
+)
+```
+
+## Functions
+
+| Function | Description |
+|----|----|
+| [`classify()`](https://christophersoria.com/cat-llm/cat.ademic/reference/classify.md) | Classify academic papers into categories |
+| [`extract()`](https://christophersoria.com/cat-llm/cat.ademic/reference/extract.md) | Discover and extract categories from paper data |
+| [`explore()`](https://christophersoria.com/cat-llm/cat.ademic/reference/explore.md) | Get raw category extractions for saturation analysis |
+| [`summarize()`](https://christophersoria.com/cat-llm/cat.ademic/reference/summarize.md) | Summarize academic papers |
+
+## License
+
+MIT
+
+# Package index
+
+## Classify & extract academic papers
+
+- [`classify()`](https://christophersoria.com/cat-llm/cat.ademic/reference/classify.md)
+  : Classify academic papers using LLMs
+- [`extract()`](https://christophersoria.com/cat-llm/cat.ademic/reference/extract.md)
+  : Extract categories from academic papers using LLMs
+- [`explore()`](https://christophersoria.com/cat-llm/cat.ademic/reference/explore.md)
+  : Explore raw categories in academic paper data
+
+## Summarize academic papers
+
+- [`summarize()`](https://christophersoria.com/cat-llm/cat.ademic/reference/summarize.md)
+  : Summarize academic papers using LLMs
+
+# Articles
+
+### All vignettes
+
+- [Classifying Academic
+  Papers](https://christophersoria.com/cat-llm/cat.ademic/articles/classifying-academic-papers.md):
