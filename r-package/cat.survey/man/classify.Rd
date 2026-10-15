@@ -53,7 +53,8 @@ classify(
   prompt_tune = NULL,
   tune_iterations = 1L,
   tune_ui = "browser",
-  tune_optimize = "balanced"
+  tune_optimize = "balanced",
+  ...
 )
 }
 \arguments{
@@ -163,6 +164,8 @@ batch jobs do not use it.}
 \item{tune_ui}{Character. Correction UI: \code{"browser"} or \code{"terminal"}. Default \code{"browser"}.}
 
 \item{tune_optimize}{Character. Metric to optimize: \code{"balanced"}, \code{"sensitivity"}, or \code{"precision"}. Default \code{"balanced"}.}
+
+\item{...}{Advanced arguments passed through to catstack.classify().}
 }
 \value{
 A \code{data.frame} with classification results.

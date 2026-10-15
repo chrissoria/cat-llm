@@ -1,3 +1,9 @@
+# cat.survey 0.1.5
+
+* `classify()` now takes `...` and forwards it to the Python engine, so
+  arguments the R wrapper does not name (including diagnostic ones such as
+  `test = TRUE`, which needs cat-stack >= 2.6.6) reach `catstack.classify()`.
+
 # cat.survey 0.1.4
 
 * `classify()` now forwards `json_formatter` to the Python engine, so R users

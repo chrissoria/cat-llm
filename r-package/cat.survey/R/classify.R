@@ -66,6 +66,7 @@
 #' @param tune_iterations Integer. APO optimization passes. Default `1L`.
 #' @param tune_ui Character. Correction UI: `"browser"` or `"terminal"`. Default `"browser"`.
 #' @param tune_optimize Character. Metric to optimize: `"balanced"`, `"sensitivity"`, or `"precision"`. Default `"balanced"`.
+#' @param ... Advanced arguments passed through to catstack.classify().
 #'
 #' @return A `data.frame` with classification results.
 #' @examples
@@ -130,7 +131,8 @@ classify <- function(
     prompt_tune          = NULL,
     tune_iterations      = 1L,
     tune_ui              = "browser",
-    tune_optimize        = "balanced"
+    tune_optimize        = "balanced",
+    ...
 ) {
   mod <- .get_cat_survey()
 
@@ -190,7 +192,8 @@ classify <- function(
     prompt_tune           = reticulate::r_to_py(prompt_tune),
     tune_iterations       = cat.stack::.as_py_int(tune_iterations),
     tune_ui               = tune_ui,
-    tune_optimize         = tune_optimize
+    tune_optimize         = tune_optimize,
+    ...
   )
 
   cat.stack::.check_classify_schema(reticulate::py_to_r(result))

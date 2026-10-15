@@ -13,3 +13,10 @@ test_that("classify() exposes the batch and system-prompt arguments", {
   expect_true("json_formatter" %in% args)
   expect_null(formals(classify)$json_formatter)
 })
+
+test_that("classify() passes extra arguments through to the engine", {
+  args <- names(formals(classify))
+  expect_identical(args[length(args)], "...")
+  body_txt <- paste(deparse(body(classify)), collapse = "\n")
+  expect_match(body_txt, "tune_optimize = tune_optimize, ...", fixed = TRUE)
+})
